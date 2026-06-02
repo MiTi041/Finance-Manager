@@ -89,6 +89,18 @@ function startBackend() {
       ...process.env,
       FINANCE_DB_FILE: path.join(dbDir, "finance.db"),
       FINANCE_CREDENTIALS_KEY_FILE: path.join(dbDir, ".credentials.key"),
+      PRODUCT_ID:
+        process.env.PRODUCT_ID ||
+        (() => {
+          try {
+            const envPath = path.join(__dirname, "../backend/.env");
+            const content = fs.readFileSync(envPath, "utf-8");
+            const match = content.match(/^PRODUCT_ID=(.+)$/m);
+            return match?.[1] ?? "";
+          } catch {
+            return "";
+          }
+        })(),
     },
   });
 

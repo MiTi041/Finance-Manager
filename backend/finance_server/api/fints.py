@@ -3,6 +3,7 @@ import hashlib
 import json
 import logging
 import os
+import sys
 import threading
 import time
 from decimal import Decimal
@@ -40,9 +41,13 @@ logging.getLogger("fints").setLevel(logging.ERROR)
 
 router = APIRouter()
 
-BASE_DIR = Path(__file__).resolve().parents[2]
+if getattr(sys, "frozen", False):
+    BASE_DIR = Path(sys._MEIPASS)
+else:
+    BASE_DIR = Path(__file__).resolve().parents[2]
 WORKSPACE_DIR = BASE_DIR.parent
 load_dotenv(BASE_DIR / ".env")
+
 def get_env(name: str) -> str:
     value = os.environ.get(name)
     if not value:
@@ -64,7 +69,13 @@ _sync_state: dict[str, Any] = {"current": None, "progress": [], "last_run": None
 
 # --- HARTCODIERTE DEFAULTS ---
 # Hier kannst du deine feste Produkt-ID eintragen, falls vorhanden.
-PRODUCT_ID = os.environ.get("PRODUCT_ID")
+PRODUCT_ID = os.environ.get("PRODUCT_ID") or os.environ.get("VITE_PRODUCT_ID")
+
+if not PRODUCT_ID:
+    logging.warning(
+        "PRODUCT_ID nicht gesetzt – FinTS-Bankabruf wird fehlschlagen. "
+        "Setze PRODUCT_ID in backend/.env oder als Umgebungsvariable."
+    )
 
 class AccountsRequest(BaseModel):
     credentials: BankCredentials | None = None
