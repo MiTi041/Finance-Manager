@@ -77,6 +77,66 @@ jobs:
       - name: Build frontend
         run: pnpm --dir frontend build
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: |
+          pip install -r backend/requirements.txt pyinstaller
+
+      - name: Build backend
+        shell: bash
+        run: |
+          cd backend
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            SEP=";"
+          else
+            SEP=":"
+          fi
+          pyinstaller --clean --noconfirm --onedir \
+            --name finance_server_bin \
+            --add-data "finance_server/assets${SEP}finance_server/assets" \
+            --hidden-import finance_server \
+            --hidden-import finance_server.api \
+            --hidden-import finance_server.api.transactions \
+            --hidden-import finance_server.api.fints \
+            --hidden-import finance_server.api.bank_credentials \
+            --hidden-import finance_server.api.reference_data \
+            --hidden-import finance_server.api.categories \
+            --hidden-import finance_server.db \
+            --hidden-import finance_server.db.connection \
+            --hidden-import finance_server.db.credentials \
+            --hidden-import finance_server.db.paths \
+            --hidden-import finance_server.db.references \
+            --hidden-import finance_server.db.schema \
+            --hidden-import finance_server.db.transactions \
+            --hidden-import finance_server.db.categories \
+            --hidden-import finance_server.db.utils \
+            --hidden-import finance_server.banks \
+            --hidden-import finance_server.models \
+            --hidden-import uvicorn \
+            --hidden-import uvicorn.logging \
+            --hidden-import uvicorn.loops \
+            --hidden-import uvicorn.loops.auto \
+            --hidden-import uvicorn.protocols \
+            --hidden-import uvicorn.protocols.http \
+            --hidden-import uvicorn.protocols.http.auto \
+            --hidden-import uvicorn.protocols.websockets \
+            --hidden-import uvicorn.protocols.websockets.auto \
+            --hidden-import fastapi \
+            --hidden-import pydantic \
+            --hidden-import dotenv \
+            --hidden-import cryptography \
+            --hidden-import cryptography.fernet \
+            --hidden-import fints \
+            --hidden-import fints.client \
+            --hidden-import fints.exceptions \
+            --hidden-import fints.utils \
+            --hidden-import fints.formals \
+            run_server.py
+
       - name: Build and publish
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
