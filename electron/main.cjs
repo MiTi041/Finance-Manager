@@ -213,7 +213,7 @@ function setupAutoUpdater() {
       })
       .then(({ response }) => {
         if (response === 0)
-          setImmediate(() => autoUpdater.quitAndInstall(false, true));
+          setImmediate(() => autoUpdater.quitAndInstall());
       });
   });
 
