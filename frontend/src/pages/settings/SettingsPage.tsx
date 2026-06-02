@@ -30,6 +30,7 @@ const INITIAL_FORM_STATE: SettingsFormState = {
 const SETTINGS_TAB_VALUES = [
   "banking",
   "kontoinhaber",
+  "recipients",
   "categories",
   "recipients",
 ] as const;

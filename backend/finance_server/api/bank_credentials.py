@@ -4,6 +4,9 @@ from typing import Any
 
 from fastapi import APIRouter, Body, HTTPException, Path, Query
 from pydantic import BaseModel, Field
+import logging
+
+logger = logging.getLogger(__name__)
 
 from finance_server.banks import list_bank_definitions, get_bank_definition
 from finance_server.api.fints import fetch_account_balance
@@ -62,24 +65,44 @@ def get_bank_credentials_status() -> dict[str, Any]:
 
 @router.post("/bank-credentials")
 def upsert_bank_credentials(credentials: BankCredentials) -> dict[str, Any]:
-    normalized_bank_key = normalize_text(credentials.bank_key).lower()
-    normalized_username = normalize_text(credentials.username).lower()
+    try:
+        normalized_bank_key = normalize_text(credentials.bank_key).lower()
+        normalized_username = normalize_text(credentials.username).lower()
 
-    for existing in list_bank_credentials():
-        if (
-            normalize_text(existing.get("bank_key")).lower() == normalized_bank_key
-            and normalize_text(existing.get("username")).lower() == normalized_username
-        ):
-            raise HTTPException(
-                status_code=409,
-                detail={
-                    "code": "BANK_CREDENTIALS_ALREADY_STORED",
-                    "message": "Diese Anmeldedaten sind bereits hinterlegt.",
-                },
-            )
+        for existing in list_bank_credentials():
+            if (
+                normalize_text(existing.get("bank_key")).lower() == normalized_bank_key
+                and normalize_text(existing.get("username")).lower() == normalized_username
+            ):
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "BANK_CREDENTIALS_ALREADY_STORED",
+                        "message": "Diese Anmeldedaten sind bereits hinterlegt.",
+                    },
+                )
 
-    scope = save_bank_credentials(credentials.model_dump())
-    return _public_status(load_bank_credentials(scope))
+        scope = save_bank_credentials(credentials.model_dump())
+        return _public_status(load_bank_credentials(scope))
+
+    except HTTPException:
+        # Falls es sich um den bereits definierten 409-Fehler handelt, 
+        # werfen wir ihn einfach weiter, ohne ihn als 500er zu maskieren.
+        raise
+
+    except Exception as e:
+        # Logge den echten Stacktrace für dich im Hintergrund
+        logger.exception("Fehler beim Speichern der Bank-Credentials")
+        
+        # Gib den Fehler an den Client weiter
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "INTERNAL_SERVER_ERROR",
+                "message": "Ein unerwarteter Fehler ist aufgetreten.",
+                "error": str(e)  # Hier steht drin, was genau schiefgelaufen ist
+            },
+        )
 
 
 @router.delete("/bank-credentials")

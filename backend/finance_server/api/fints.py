@@ -85,7 +85,7 @@ class TransferRequest(BaseModel):
     recipient_bic: str | None = Field(default=None, max_length=11)
     tan: str | None = None
     sender_iban: str | None = None
-    sender_name: str = Field(default="Finance Local", description="Name des Absenders auf dem Beleg")
+    sender_name: str = Field(default="Finance-Manager", description="Name des Absenders auf dem Beleg")
 
 class TanRequired(Exception):
     def __init__(self, challenge: str | None, decoupled: bool):
