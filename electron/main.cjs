@@ -61,18 +61,19 @@ function getDbPath() {
 }
 
 // ─── Backend lifecycle ────────────────────────────────────────────────────────
+function getBackendBinaryName() {
+  const base = "finance_server_bin";
+  return process.platform === "win32" ? `${base}.exe` : base;
+}
+
+function getBackendBinaryDir() {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, "finance_server_bin")
+    : path.join(__dirname, "../backend/dist/finance_server_bin");
+}
+
 function startBackend() {
-  const binaryPath = app.isPackaged
-    ? path.join(
-        process.resourcesPath,
-        "finance_server_bin",
-        "finance_server_bin",
-      )
-    : path.join(
-        __dirname,
-        "../backend/dist/finance_server_bin",
-        "finance_server_bin",
-      );
+  const binaryPath = path.join(getBackendBinaryDir(), getBackendBinaryName());
 
   if (!fs.existsSync(binaryPath)) {
     log.error(`Backend not found: ${binaryPath}`);
@@ -142,7 +143,11 @@ function waitForBackend(retries = 30, interval = 1000) {
 
 function stopBackend() {
   if (pythonProcess) {
-    pythonProcess.kill("SIGTERM");
+    if (process.platform === "win32") {
+      spawn("taskkill", ["/pid", String(pythonProcess.pid), "/f", "/t"]);
+    } else {
+      pythonProcess.kill("SIGTERM");
+    }
     pythonProcess = null;
   }
 }
@@ -212,14 +217,62 @@ function setupAutoUpdater() {
         cancelId: 1,
       })
       .then(({ response }) => {
-        if (response === 0)
-          setImmediate(() => autoUpdater.quitAndInstall());
+        if (response === 0) setImmediate(() => autoUpdater.quitAndInstall());
       });
   });
 
   autoUpdater.on("error", (err) => {
     log.error("Updater error:", err);
-    sendToRenderer("update:error", { message: err.message });
+
+    const isCodeSignError =
+      err.message?.includes("Code signature") ||
+      err.message?.includes("code signature");
+
+    if (isCodeSignError && !app.isPackaged) {
+      // Dev mode — not relevant
+      return;
+    }
+
+    sendToRenderer("update:error", {
+      message: isCodeSignError
+        ? "Update konnte nicht automatisch installiert werden."
+        : err.message,
+      manualInstall: isCodeSignError,
+    });
+
+    if (isCodeSignError) {
+      dialog
+        .showMessageBox(getMainWindow(), {
+          type: "info",
+          title: "Update verfügbar",
+          message: "Ein Update wurde heruntergeladen, aber die automatische Installation ist fehlgeschlagen.",
+          detail:
+            "Lade die neueste Version manuell von GitHub herunter und ersetze die App.",
+          buttons: ["Zu GitHub", "Schließen"],
+          defaultId: 0,
+          cancelId: 1,
+        })
+        .then(({ response }) => {
+          if (response === 0)
+            shell.openExternal(
+              "https://github.com/MiTi041/Finance-Manager/releases/latest",
+            );
+        });
+    }
+
+    // Clear broken pending update cache on macOS to prevent retry loops
+    if (process.platform === "darwin") {
+      const shipItCache = path.join(
+        app.getPath("cache"),
+        "com.finance-manager.app.ShipIt",
+      );
+      try {
+        fs.rmSync(shipItCache, { recursive: true, force: true });
+        log.info("Cleared ShipIt cache after updater error");
+      } catch (e) {
+        log.warn("Could not clear ShipIt cache:", e.message);
+      }
+    }
   });
 
   // Delay initial check — window must be visible first
