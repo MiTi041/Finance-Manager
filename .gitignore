@@ -60,6 +60,8 @@ env/
 
 .fints_state
 **/.fints_state
+**/.fints_state*
+backend/state/
 
 # Database / State (local dev only, not in repo)
 **/db/state/
