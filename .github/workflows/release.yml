@@ -40,7 +40,7 @@ jobs:
     if: needs.check-version.outputs.tag_exists == 'false'
     strategy:
       matrix:
-        os: [macos-13, windows-latest]
+        os: [macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
