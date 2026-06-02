@@ -243,36 +243,6 @@ def create_categories_table(connection: sqlite3.Connection) -> None:
         ON kategorien (parent_id)
         """
     )
-
-
-def _seed_reference_table(
-    connection: sqlite3.Connection,
-    table_name: str,
-    csv_text: str,
-    columns: tuple[str, ...],
-) -> None:
-    reader = csv.DictReader(io.StringIO(csv_text))
-    rows: list[dict[str, Any]] = []
-
-    for row in reader:
-        normalized_row: dict[str, Any] = {}
-        for column in columns:
-            value = (row.get(column) or "").strip()
-            if column in {"id", "f_kontoinhaber_id"}:
-                normalized_row[column] = int(value)
-            else:
-                normalized_row[column] = value
-        rows.append(normalized_row)
-
-    if not rows:
-        return
-
-    column_list = ", ".join(columns)
-    placeholder_list = ", ".join(f":{column}" for column in columns)
-    connection.executemany(
-        f"INSERT OR IGNORE INTO {table_name} ({column_list}) VALUES ({placeholder_list})",
-        rows,
-    )
     
 
 def initialize_database(connection: sqlite3.Connection) -> None:

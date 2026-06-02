@@ -1,5 +1,12 @@
-const { app, BrowserWindow, dialog } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain } = require("electron");
+
+app.name = "Finance-Manager";
+
+app.setName("Finance-Manager");
+
 const path = require("path");
+app.setPath("userData", path.join(app.getPath("appData"), "Finance-Manager"));
+
 const { spawn } = require("child_process");
 const fs = require("fs");
 const http = require("http");
@@ -48,7 +55,7 @@ function setupAutoUpdater() {
 
   autoUpdater.on("download-progress", (progress) => {
     log.info(
-      `Download progress: ${Math.round(progress.percent)}% (${progress.bytesPerSecond} B/s)`
+      `Download progress: ${Math.round(progress.percent)}% (${progress.bytesPerSecond} B/s)`,
     );
   });
 
@@ -73,17 +80,33 @@ function setupAutoUpdater() {
   autoUpdater.checkForUpdatesAndNotify();
 }
 
+function getDbDir() {
+  return app.isPackaged
+    ? path.join(app.getPath("userData"), "db")
+    : path.join(__dirname, "../backend/finance_server/db/state");
+}
+
+function getDbPath() {
+  return path.join(getDbDir(), "finance.db");
+}
+
 function startBackend() {
   let binaryPath;
   if (app.isPackaged) {
-    binaryPath = path.join(process.resourcesPath, "finance_server_bin", "finance_server_bin");
+    binaryPath = path.join(
+      process.resourcesPath,
+      "finance_server_bin",
+      "finance_server_bin",
+    );
   } else {
-    binaryPath = path.join(__dirname, "../backend/dist/finance_server_bin", "finance_server_bin");
+    binaryPath = path.join(
+      __dirname,
+      "../backend/dist/finance_server_bin",
+      "finance_server_bin",
+    );
   }
 
-  const dbDir = app.isPackaged
-    ? path.join(app.getPath("userData"), "db")
-    : path.join(__dirname, "../backend/finance_server/db/state");
+  const dbDir = getDbDir();
 
   if (!fs.existsSync(binaryPath)) {
     console.error(`Backend binary not found at: ${binaryPath}`);
@@ -155,10 +178,72 @@ function waitForBackend(retries = 30, interval = 1000) {
   });
 }
 
+function stopBackend() {
+  if (pythonProcess) {
+    pythonProcess.kill("SIGTERM");
+    pythonProcess = null;
+  }
+}
+
+// -------------------------------------------------
+// IPC Handlers – Database Export / Import
+// -------------------------------------------------
+ipcMain.handle("db:export", async () => {
+  const dbPath = getDbPath();
+  if (!fs.existsSync(dbPath)) {
+    return { success: false, error: "Keine Datenbank gefunden" };
+  }
+
+  const { canceled, filePath } = await dialog.showSaveDialog({
+    title: "Datenbank exportieren",
+    defaultPath: `Finance-Manager-backup-${new Date().toISOString().slice(0, 10)}.db`,
+    filters: [{ name: "SQLite Database", extensions: ["db"] }],
+  });
+  if (canceled || !filePath) return { success: false, error: "Abgebrochen" };
+
+  stopBackend();
+  try {
+    fs.copyFileSync(dbPath, filePath);
+    log.info(`Database exported to: ${filePath}`);
+    return { success: true };
+  } catch (err) {
+    log.error("Export failed:", err);
+    return { success: false, error: err.message };
+  } finally {
+    startBackend();
+  }
+});
+
+ipcMain.handle("db:import", async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    title: "Datenbank importieren",
+    filters: [{ name: "SQLite Database", extensions: ["db"] }],
+    properties: ["openFile"],
+  });
+  if (canceled || filePaths.length === 0)
+    return { success: false, error: "Abgebrochen" };
+
+  if (!fs.existsSync(filePaths[0])) {
+    return { success: false, error: "Datei nicht gefunden" };
+  }
+
+  stopBackend();
+  try {
+    fs.copyFileSync(filePaths[0], getDbPath());
+    log.info(`Database imported from: ${filePaths[0]}`);
+    return { success: true };
+  } catch (err) {
+    log.error("Import failed:", err);
+    return { success: false, error: err.message };
+  } finally {
+    startBackend();
+  }
+});
+
 function createWindow() {
   const mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: 1440,
+    height: 900,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
