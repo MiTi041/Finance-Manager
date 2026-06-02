@@ -1,35 +1,88 @@
-# Finance-Manager
+# Finance Manager
 
-Personal finance management application with automatic bank synchronization via FinTS/EBICS, built with Electron + React + Python.
+Personal finance management app with automatic bank synchronization via FinTS/EBICS.  
+Built with **Electron + React + Python** — runs on macOS and Windows.
+
+---
+
+## Features
+
+- **Bank account synchronization** via FinTS (HBCI) — supports ING, Sparkasse and all German FinTS-enabled banks
+- **Transaction overview** with filtering, sorting and category management
+- **Automatic categorization** — assign categories to transactions, group by parent category
+- **Bank credential management** — encrypted storage for multiple bank accounts
+- **Reference data** — resolves account holder names, IBANs, beneficiary accounts automatically
+- **Export / Import** — backup and restore your database via the UI
+- **Auto-updater** — built-in updates via GitHub Releases (electron-updater)
+- **Cross-platform** — macOS (DMG/ZIP) and Windows (NSIS installer)
+
+---
+
+## Screenshots
+
+> *Coming soon*
+
+---
 
 ## Architecture
 
 ```
-├── frontend/          # React + Vite + TypeScript (UI)
-├── backend/           # Python FastAPI server (FinTS sync, REST API)
-├── electron/          # Electron main process (auto-updater, backend lifecycle)
-├── build/             # App icons (icns, ico)
-├── .github/workflows/ # CI/CD – auto-build & release via GitHub Actions
+├── frontend/           React + Vite + TypeScript (UI)
+├── backend/            Python FastAPI server (FinTS sync, REST API)
+├── electron/           Electron main process (auto-updater, backend lifecycle)
+├── build/              App icons
+└── .github/workflows/  CI/CD — auto-build & release via GitHub Actions
 ```
+
+The backend runs as a PyInstaller-bundled binary, spawned by Electron on startup.  
+The frontend communicates with the backend via REST API (`http://127.0.0.1:8112`).
+
+---
 
 ## Development
 
+### Prerequisites
+
+- [Node.js](https://nodejs.org) ≥ 20
+- [pnpm](https://pnpm.io) (install via `npm i -g pnpm`)
+- [Python](https://python.org) ≥ 3.11
+
+### Setup
+
 ```bash
-pnpm install
-pnpm run dev           # Starts frontend (Vite) + backend (uvicorn) concurrently
-pnpm run start         # Full stack + Electron window
+pnpm install              # Install JS dependencies (root + frontend)
+pip install -r backend/requirements.txt  # Install Python dependencies
 ```
+
+### Run for development
+
+```bash
+pnpm run dev              # Starts frontend (Vite) + backend (uvicorn) concurrently
+```
+
+Or with the Electron shell:
+
+```bash
+pnpm run start            # Full stack + Electron window
+```
+
+---
 
 ## Build & Release
 
 ```bash
-pnpm run electron:build  # Builds frontend + PyInstaller backend + Electron package
+pnpm run electron:build   # Builds frontend + PyInstaller backend + Electron package
 ```
 
-On push to `main`, GitHub Actions automatically:
-- Builds signed Electron packages for macOS and Windows
-- Publishes them as a GitHub Release
+On every push to `main`, GitHub Actions automatically:
+
+- Builds Electron packages for **macOS** (`.dmg`, `.zip`) and **Windows** (`.exe` installer)
+- Publishes them as a **GitHub Release**
 - Tags the release with the version from `package.json`
+
+Existing installations receive the update automatically via `electron-updater`.
+
+---
 
 ## Tech Stack
 
@@ -41,3 +94,16 @@ On push to `main`, GitHub Actions automatically:
 | Desktop   | Electron, electron-builder          |
 | Database  | SQLite (via Python)                 |
 | CI/CD     | GitHub Actions, electron-updater    |
+
+---
+
+## Security
+
+- Bank credentials are encrypted at rest using **Fernet (symmetric encryption)**
+- The FinTS session state and encryption keys are stored locally and **never leave your machine**
+- No cloud service — all data stays on your device
+- The application is self-contained with no telemetry or analytics
+
+If you discover a security vulnerability, please open a [GitHub Issue](https://github.com/MiTi041/Finance-Manager/issues).
+
+
