@@ -1,60 +1,43 @@
-# Finance
+# Finance-Manager
 
-Kurz: Ein persönliches Finanz-Frontend + Backend (lokal entwickeltes Projekt).
+Personal finance management application with automatic bank synchronization via FinTS/EBICS, built with Electron + React + Python.
 
-Ziel dieser Dokumentation
+## Architecture
 
-- Das Projekt so strukturieren und beschreiben, dass Neulinge sich leicht zurechtfinden.
-- Schnellstart-Anleitung für lokale Entwicklung und Hinweise zu wichtigen Ordnern.
+```
+├── frontend/          # React + Vite + TypeScript (UI)
+├── backend/           # Python FastAPI server (FinTS sync, REST API)
+├── electron/          # Electron main process (auto-updater, backend lifecycle)
+├── build/             # App icons (icns, ico)
+├── .github/workflows/ # CI/CD – auto-build & release via GitHub Actions
+```
 
-Schnellstart (lokal)
-
-Voraussetzungen
-
-- Node.js (16+ empfohlen)
-- pnpm
-- Python (nur für bestimmte Server-Skripte, falls benötigt)
-
-Installieren
+## Development
 
 ```bash
-cd Finance
 pnpm install
+pnpm run dev           # Starts frontend (Vite) + backend (uvicorn) concurrently
+pnpm run start         # Full stack + Electron window
 ```
 
-Entwicklung starten
+## Build & Release
 
 ```bash
-# im Projekt-Root
-pnpm run dev
+pnpm run electron:build  # Builds frontend + PyInstaller backend + Electron package
 ```
 
-Hauptstruktur (kurze Übersicht)
+On push to `main`, GitHub Actions automatically:
+- Builds signed Electron packages for macOS and Windows
+- Publishes them as a GitHub Release
+- Tags the release with the version from `package.json`
 
-- `client/` – Frontend (Vite/React). Hier liegen UI-Komponenten, Seiten, Assets.
-- `server/` – Backend-Module (Python/Node). Enthält die Finanz-APIs und Sync-Logik.
-- `state/` – Persistenter globaler Zustand / Datenbankdateien (lokal)
-- `ecosystem.config.js` – PM2 / Prozessdefinitionen
+## Tech Stack
 
-Detaillierte Projektstruktur, Setup und Entwicklerhinweise findest du in `docs/PROJECT_STRUCTURE.md` und `docs/DEV_SETUP.md`.
-
-Wichtige Pfade
-
-- Frontend-Entrypoint: `client/src/main.jsx` oder `client/src/App.jsx`
-- Backend-Entrypoint: `server/` (je nach Implementierung z. B. `server/app.py` oder `server/finance_server`)
-
-Contributing
-
-- Öffne Issues oder Pull Requests mit klarer Beschreibung.
-- Schreibe kurze PR-Notes: was geändert wurde und warum.
-
-Support
-
-- Für lokale Probleme: `pnpm install` erneut ausführen, Node-Version prüfen.
-
----
-
-Weitere Dokumente:
-
-- [Projektstruktur](./docs/PROJECT_STRUCTURE.md)
-- [Entwicklungs-Setup](./docs/DEV_SETUP.md)
+| Layer     | Technology                          |
+|-----------|-------------------------------------|
+| Frontend  | React, TypeScript, Vite, Tailwind   |
+| Backend   | Python, FastAPI, Uvicorn            |
+| Banking   | FinTS protocol via `fints` library  |
+| Desktop   | Electron, electron-builder          |
+| Database  | SQLite (via Python)                 |
+| CI/CD     | GitHub Actions, electron-updater    |

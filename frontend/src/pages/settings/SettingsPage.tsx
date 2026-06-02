@@ -19,6 +19,7 @@ import {
   saveBankCredentials,
 } from "@/lib/bank-credentials";
 import { hasFreshCache } from "@/lib/fetch-cache";
+import { FINTS_SYNC_REQUEST_EVENT } from "@/lib/sync-events";
 
 const INITIAL_FORM_STATE: SettingsFormState = {
   bank_key: "",
@@ -150,8 +151,11 @@ export default function SettingsPage() {
       });
 
       setForm(INITIAL_FORM_STATE);
-      setCheckMessage("");
       setCheckDialogOpen(false);
+      setCheckMessage("");
+
+      window.dispatchEvent(new CustomEvent(FINTS_SYNC_REQUEST_EVENT));
+
       await loadData({ forceRefresh: true });
     } catch (error) {
       const message =

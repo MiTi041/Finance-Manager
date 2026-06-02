@@ -19,7 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { CheckCircle2, Loader2, ShieldCheck, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, ShieldCheck, X } from "lucide-react";
 
 type BankAccessTabProps = {
   form: SettingsFormState;
@@ -130,9 +130,18 @@ export function BankAccessTab({
             </DialogDescription>
           </DialogHeader>
           {!checkError ? (
-            <div className="flex items-center gap-3 rounded-lg border bg-muted/40 p-4 text-sm">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>{checkMessage || "Verbindung wird getestet ..."}</span>
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 rounded-lg border bg-muted/40 p-4 text-sm">
+                <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                <span>{checkMessage || "Verbindung wird getestet ..."}</span>
+              </div>
+              <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>
+                  Möglicherweise musst du die Verbindung in deiner
+                  Banking-App oder per TAN-Generator bestätigen.
+                </span>
+              </div>
             </div>
           ) : null}
           <div className="flex justify-end">
