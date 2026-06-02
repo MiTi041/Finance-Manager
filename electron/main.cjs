@@ -28,12 +28,21 @@ function setupAutoUpdater() {
     return;
   }
 
+  const { BrowserWindow } = require("electron");
+
+  function sendToRenderer(channel, data) {
+    const win = BrowserWindow.getAllWindows()[0];
+    if (win) win.webContents.send(channel, data);
+  }
+
   autoUpdater.on("checking-for-update", () => {
     log.info("Checking for updates...");
+    sendToRenderer("update:checking", null);
   });
 
   autoUpdater.on("update-available", (info) => {
     log.info("Update available:", info);
+    sendToRenderer("update:available", info);
     dialog
       .showMessageBox({
         type: "info",
@@ -44,6 +53,7 @@ function setupAutoUpdater() {
       })
       .then(({ response }) => {
         if (response === 0) {
+          sendToRenderer("update:downloading", { percent: 0 });
           autoUpdater.downloadUpdate();
         }
       });
@@ -57,10 +67,17 @@ function setupAutoUpdater() {
     log.info(
       `Download progress: ${Math.round(progress.percent)}% (${progress.bytesPerSecond} B/s)`,
     );
+    sendToRenderer("update:downloading", {
+      percent: Math.round(progress.percent),
+      bytesPerSecond: progress.bytesPerSecond,
+      transferred: progress.transferred,
+      total: progress.total,
+    });
   });
 
   autoUpdater.on("update-downloaded", (info) => {
     log.info("Update downloaded:", info);
+    sendToRenderer("update:downloaded", info);
     dialog
       .showMessageBox({
         type: "info",
@@ -75,6 +92,7 @@ function setupAutoUpdater() {
 
   autoUpdater.on("error", (err) => {
     log.error("Auto-updater error:", err);
+    sendToRenderer("update:error", { message: err.message });
   });
 
   autoUpdater.checkForUpdatesAndNotify();

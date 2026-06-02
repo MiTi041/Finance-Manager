@@ -8,7 +8,14 @@ contextBridge.exposeInMainWorld("api", {
     }
   },
   receive: (channel, func) => {
-    const validChannels = ["fromMain"];
+    const validChannels = [
+      "fromMain",
+      "update:checking",
+      "update:available",
+      "update:downloading",
+      "update:downloaded",
+      "update:error",
+    ];
     if (validChannels.includes(channel)) {
       ipcRenderer.removeAllListeners(channel);
       ipcRenderer.on(channel, (event, ...args) => func(...args));
