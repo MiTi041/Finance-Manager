@@ -75,6 +75,18 @@ At minimum you need a **PRODUCT_ID** for FinTS bank synchronization —
 
 ---
 
+## Workflow
+
+```
+dev  ─── daily development (push any time)
+   \
+    └── main ─── only for releases (triggers CI build)
+```
+
+- **`dev` branch** — all day-to-day work, no CI release
+- **`main` branch** — merge `dev` → `main` only when you want to publish a release
+- **Version bump** — `package.json` version is the release version; update it on `dev` before merging
+
 ## Build & Release
 
 ```bash
