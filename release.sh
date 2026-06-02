@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if ! git diff --quiet; then
+  echo "📦 Committe uncommitted changes..."
+  git add -A
+  git commit -m "dev commit"
+fi
+
 if ! git diff --quiet -- package.json; then
-  echo "❌ package.json hat uncommitted changes — commit oder stash sie zuerst."
+  echo "❌ package.json hat nach dem Commit immer noch uncommitted changes."
   exit 1
 fi
 

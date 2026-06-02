@@ -13,6 +13,7 @@ export function AutoUpdateToast() {
   const toastId = useRef<string | number | null>(null);
 
   useEffect(() => {
+    if (!window.api) return;
     window.api.receive("update:checking", () => {
       toastId.current = toast.loading("Suche nach Updates...");
     });

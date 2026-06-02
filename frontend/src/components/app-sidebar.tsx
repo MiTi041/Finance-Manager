@@ -385,7 +385,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             >
               <div className="flex min-w-0 items-center gap-3 group-data-[collapsible=icon]:justify-center">
                 {activeAccountIban === "all" ? (
-                  <div className="flex size-12 items-center justify-center rounded-lg bg-muted text-muted-foreground border">
+                  <div className="flex size-12 group-data-[collapsible=icon]:size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground border">
                     <Landmark className="size-4" />
                   </div>
                 ) : (
@@ -396,7 +396,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       activeAccount?.accountName ??
                       "Bank"
                     }
-                    sizeClassName="size-12"
+                    sizeClassName="size-12 group-data-[collapsible=icon]:size-8"
                     className="p-1"
                     imgNoPadding={false}
                     backgroundClassName="bg-muted/70"
