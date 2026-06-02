@@ -52,6 +52,7 @@ The frontend communicates with the backend via REST API (`http://127.0.0.1:8112`
 ```bash
 pnpm install              # Install JS dependencies (root + frontend)
 pip install -r backend/requirements.txt  # Install Python dependencies
+cp backend/.env.example backend/.env      # Configure environment (see below)
 ```
 
 ### Run for development
@@ -65,6 +66,12 @@ Or with the Electron shell:
 ```bash
 pnpm run start            # Full stack + Electron window
 ```
+
+### Configuration
+
+Copy `backend/.env.example` to `backend/.env` and fill in the values.
+At minimum you need a **PRODUCT_ID** for FinTS bank synchronization —
+[register for free](https://www.fints.org/de/hersteller/produktregistrierung) at the Deutsche Kreditwirtschaft.
 
 ---
 
