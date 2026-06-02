@@ -17,6 +17,8 @@ dist_electron/
 backend/build/
 backend/dist/
 
+release.sh
+
 # Electron specific
 electron-builder-logs.txt
 
