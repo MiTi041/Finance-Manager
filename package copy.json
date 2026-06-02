@@ -1,0 +1,19 @@
+{
+  "name": "frontend",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -n client,server -c cyan,magenta \"pnpm --dir client dev\" \"pnpm --dir server dev\"",
+    "build": "concurrently -n client,server -c cyan,magenta \"pnpm --dir client build\" \"pnpm --dir server build\"",
+    "start": "concurrently --kill-others=false -n client,server -c cyan,magenta \"pnpm --dir client preview\" \"pnpm --dir server start\"",
+    "start": "concurrently \"npm run start-backend\" \"npm run start-frontend\" \"npm run start-electron\"",
+    "start-backend": "cd backend && uvicorn main:app --reload --host localhost --port 8000",
+    "start-frontend": "cd frontend && vite",
+    "start-electron": "electron electron/main.cjs"
+  },
+  "devDependencies": {
+    "vite": "^5.2.0",
+    "concurrently": "^9.2.1"
+  }
+}

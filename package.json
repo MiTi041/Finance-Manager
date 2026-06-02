@@ -1,0 +1,55 @@
+{
+  "name": "finance",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Finance Management Application",
+  "author": "Michael Tissen",
+  "type": "commonjs",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "concurrently -n client,server -c cyan,magenta \"VITE_PORT=8111 VITE_API_URL=http://localhost:8110/api pnpm --dir frontend dev\" \"pnpm --dir backend dev\"",
+    "build": "concurrently -n client,server -c cyan,magenta \"pnpm --dir frontend build\" \"pnpm --dir backend build\"",
+    "start": "concurrently -n frontend,backend,electron -c cyan,magenta,yellow \"VITE_PORT=8113 VITE_API_URL=http://localhost:8112/api pnpm --dir frontend dev\" \"pnpm --dir backend start\" \"wait-on http://127.0.0.1:8113 && electron .\"",
+    "electron:build": "pnpm --dir frontend build && (cd backend && pyinstaller --onefile --name finance_server_bin run_server.py) && electron-builder"
+  },
+  "dependencies": {
+    "concurrently": "^9.1.2",
+    "wait-on": "^9.0.10"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^26.8.1"
+  },
+  "build": {
+    "appId": "com.finance.app",
+    "productName": "Finance App",
+    "directories": {
+      "output": "dist_electron"
+    },
+    "files": [
+      "electron/**/*",
+      "frontend/dist/**/*",
+      "backend/dist/finance_server_bin"
+    ],
+    "extraResources": [
+      {
+        "from": "backend/dist/finance_server_bin",
+        "to": "finance_server_bin"
+      }
+    ],
+    "mac": {
+      "icon": "build/icon.icns",
+      "category": "Finance",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        "nsis"
+      ]
+    }
+  }
+}

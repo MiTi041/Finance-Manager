@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+fints
+cryptography
+python-multipart
