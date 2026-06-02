@@ -1,0 +1,79 @@
+from __future__ import annotations
+
+from typing import Any
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
+from finance_server.db import (
+    create_category_record,
+    delete_category_record,
+    list_categories,
+    update_category_record,
+    update_transaction_category,
+)
+
+router = APIRouter()
+
+
+class TransactionCategoryUpdateRequest(BaseModel):
+    category_id: int | None = None
+
+
+class CategoryCreateRequest(BaseModel):
+    name: str
+    typ: str
+    parent_id: int | None = None
+    personal_expense: bool = False
+
+
+class CategoryUpdateRequest(BaseModel):
+    name: str | None = None
+    typ: str | None = None
+    parent_id: int | None = None
+    personal_expense: bool | None = None
+
+
+@router.get("/db/categories")
+def get_categories() -> dict[str, Any]:
+    categories = list_categories()
+    return {"count": len(categories), "categories": categories}
+
+
+@router.post("/db/categories")
+def create_category(request: CategoryCreateRequest) -> dict[str, Any]:
+    try:
+        return create_category_record(request.model_dump())
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
+
+
+@router.patch("/db/categories/{category_id}")
+def patch_category(category_id: int, request: CategoryUpdateRequest) -> dict[str, Any]:
+    try:
+        updated = update_category_record(category_id, request.model_dump(exclude_unset=True))
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
+
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Kategorie nicht gefunden")
+
+    return updated
+
+
+@router.delete("/db/categories/{category_id}")
+def delete_category(category_id: int) -> dict[str, Any]:
+    deleted = delete_category_record(category_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Kategorie nicht gefunden")
+
+    return {"deleted": True}
+
+
+@router.patch("/db/transactions/{transaction_id}/category")
+def set_transaction_category(
+    transaction_id: int,
+    request: TransactionCategoryUpdateRequest,
+) -> dict[str, Any]:
+    update_transaction_category(transaction_id, request.category_id)
+    return {"transaction_id": transaction_id, "category_id": request.category_id}
