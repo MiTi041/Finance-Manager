@@ -245,6 +245,17 @@ def create_categories_table(connection: sqlite3.Connection) -> None:
     )
     
 
+def create_app_settings_table(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS app_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+
 def initialize_database(connection: sqlite3.Connection) -> None:
     create_umsaetze_table(connection)
     create_bank_credentials_table(connection)
@@ -260,3 +271,4 @@ def initialize_database(connection: sqlite3.Connection) -> None:
     create_reference_tables(connection)
     migrate_reference_tables(connection)
     create_categories_table(connection)
+    create_app_settings_table(connection)

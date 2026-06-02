@@ -20,6 +20,7 @@ import {
 } from "@/lib/bank-credentials";
 import { hasFreshCache } from "@/lib/fetch-cache";
 import { FINTS_SYNC_REQUEST_EVENT } from "@/lib/sync-events";
+import { ProductIdSettings } from "@/components/product-id-settings";
 
 const INITIAL_FORM_STATE: SettingsFormState = {
   bank_key: "",
@@ -32,7 +33,7 @@ const SETTINGS_TAB_VALUES = [
   "kontoinhaber",
   "recipients",
   "categories",
-  "recipients",
+  "productId",
 ] as const;
 type SettingsTabValue = (typeof SETTINGS_TAB_VALUES)[number];
 
@@ -209,6 +210,7 @@ export default function SettingsPage() {
           <TabsTrigger value="kontoinhaber">Kontoinhaber</TabsTrigger>
           <TabsTrigger value="recipients">Empfängerkonten</TabsTrigger>
           <TabsTrigger value="categories">Kategorien</TabsTrigger>
+          <TabsTrigger value="productId">Produkt-ID</TabsTrigger>
         </TabsList>
 
         <TabsContent value="banking" className="pt-4">
@@ -242,6 +244,10 @@ export default function SettingsPage() {
 
         <TabsContent value="categories" className="pt-4">
           <CategoriesTab />
+        </TabsContent>
+
+        <TabsContent value="productId" className="pt-4">
+          <ProductIdSettings />
         </TabsContent>
       </Tabs>
     </div>

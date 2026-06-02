@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .connection import get_connection
+from .settings import get_setting, set_setting, delete_setting
 from .credentials import (
     bank_credentials_configured,
     build_credentials_scope,
@@ -47,6 +48,8 @@ __all__ = [
     "delete_bank_account",
     "delete_bank_credentials",
     "delete_category_record",
+    "delete_setting",
+    "get_setting",
     "delete_transaction",
     "delete_empfaengerkonto_record",
     "create_kontoinhaber_record",
@@ -71,6 +74,7 @@ __all__ = [
     "load_bank_credentials",
     "row_to_dict",
     "save_bank_credentials",
+    "set_setting",
     "update_category_record",
     "update_empfaengerkonto_record",
     "update_bank_account",

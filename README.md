@@ -51,8 +51,9 @@ The frontend communicates with the backend via REST API (`http://127.0.0.1:8112`
 
 ```bash
 pnpm install              # Install JS dependencies (root + frontend)
-pip install -r backend/requirements.txt  # Install Python dependencies
-cp backend/.env.example backend/.env      # Configure environment (see below)
+python3 -m venv backend/.venv             # Create Python virtual environment
+source backend/.venv/bin/activate         # Activate it
+pip install -r backend/requirements.txt   # Install Python dependencies
 ```
 
 ### Run for development
@@ -67,11 +68,20 @@ Or with the Electron shell:
 pnpm run start            # Full stack + Electron window
 ```
 
-### Configuration
+### ⚠️ Wichtiger Hinweis: FinTS-Produkt-ID erforderlich
 
-Copy `backend/.env.example` to `backend/.env` and fill in the values.
-At minimum you need a **PRODUCT_ID** for FinTS bank synchronization —
-[register for free](https://www.fints.org/de/hersteller/produktregistrierung) at the Deutsche Kreditwirtschaft.
+Diese Anwendung kann **ohne eine persönliche Produkt-ID nicht genutzt werden**.
+
+Beim ersten Start erscheint ein Setup-Bildschirm, der die Eingabe einer **FinTS-Produkt-ID** zwingend erfordert. Erst danach werden die restlichen Funktionen freigeschaltet.
+
+**So erhältst du deine Produkt-ID:**
+
+1. Rufe [fints.org/de/hersteller/produktregistrierung](https://www.fints.org/de/hersteller/produktregistrierung) auf
+2. Registriere die Anwendung **kostenfrei** (vorgeschrieben von der Deutschen Kreditwirtschaft)
+3. Nach erfolgreicher Registrierung erhältst du eine Produkt-ID (z.B. `7FD7RCC1CP14CE8B35C59DD07`)
+4. Trage diese ID im Setup-Bildschirm der App ein
+
+> Die Produkt-ID wird ausschließlich **lokal in der Datenbank** gespeichert und ist nicht im Release enthalten. Jeder Nutzer muss seine eigene ID registrieren.
 
 ## Build & Release
 

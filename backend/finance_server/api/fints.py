@@ -19,8 +19,10 @@ import fints.formals as fints_formals
 from fints.utils import minimal_interactive_cli_bootstrap
 
 from finance_server.db import (
+    get_setting,
     load_bank_credentials,
     list_bank_credentials,
+    set_setting,
     fetch_latest_transaction as fetch_local_latest_transaction,
     fetch_transactions as fetch_local_transactions,
     insert_transactions as insert_local_transactions,
@@ -67,15 +69,19 @@ _sync_status_lock = threading.Lock()
 # sync status: { 'current': scope|None, 'progress': [{scope,status,message}], 'last_run': iso }
 _sync_state: dict[str, Any] = {"current": None, "progress": [], "last_run": None}
 
-# --- HARTCODIERTE DEFAULTS ---
-# Hier kannst du deine feste Produkt-ID eintragen, falls vorhanden.
-PRODUCT_ID = os.environ.get("PRODUCT_ID") or os.environ.get("VITE_PRODUCT_ID")
+# --- Product-ID (in DB persistiert, via UI setzbar) ---
+_SETTINGS_KEY = "product_id"
 
-if not PRODUCT_ID:
-    logging.warning(
-        "PRODUCT_ID nicht gesetzt – FinTS-Bankabruf wird fehlschlagen. "
-        "Setze PRODUCT_ID in backend/.env oder als Umgebungsvariable."
-    )
+def get_product_id() -> str | None:
+    return get_setting(_SETTINGS_KEY)
+
+def set_product_id(value: str | None) -> None:
+    if value:
+        set_setting(_SETTINGS_KEY, value)
+        logging.info("PRODUCT_ID gespeichert")
+    else:
+        from finance_server.db import delete_setting as _delete
+        _delete(_SETTINGS_KEY)
 
 class AccountsRequest(BaseModel):
     credentials: BankCredentials | None = None
@@ -223,6 +229,18 @@ def should_retry_without_state(err: Exception) -> bool:
 def bootstrap_client(client: FinTS3PinTanClient) -> None:
     minimal_interactive_cli_bootstrap(client)
 
+def resolve_product_id() -> str:
+    pid = get_product_id()
+    if not pid:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "PRODUCT_ID_REQUIRED",
+                "message": "Keine PRODUCT_ID konfiguriert. Bitte in den Einstellungen hinterlegen.",
+            },
+        )
+    return pid
+
 def make_client(creds: BankCredentials, from_data: bytes | None) -> FinTS3PinTanClient:
     bank = get_bank_definition(creds.bank_key)
     return FinTS3PinTanClient(
@@ -230,7 +248,7 @@ def make_client(creds: BankCredentials, from_data: bytes | None) -> FinTS3PinTan
         user_id=creds.username,
         pin=creds.pin,
         server=bank.fints_url,
-        product_id=PRODUCT_ID,
+        product_id=resolve_product_id(),
         customer_id=creds.username,
         from_data=from_data,
     )
@@ -839,6 +857,19 @@ def get_transactions(request: TransactionsRequest) -> dict[str, Any]:
     except TanRequired as err: raise HTTPException(status_code=409, detail={"code": "TAN_REQUIRED", "challenge": err.challenge, "decoupled": err.decoupled})
     except TanTimeout as err: raise HTTPException(status_code=408, detail=str(err))
     except FinTSClientError as err: raise HTTPException(status_code=502, detail=f"FinTS-Initialisierung fehlgeschlagen. Originalfehler: {err}")
+
+class ProductIdRequest(BaseModel):
+    product_id: str = Field(min_length=1)
+
+@router.put("/product-id")
+def update_product_id(request: ProductIdRequest) -> dict[str, Any]:
+    set_product_id(request.product_id)
+    return {"status": "ok"}
+
+@router.get("/product-id")
+def get_product_id_status() -> dict[str, Any]:
+    pid = get_product_id()
+    return {"configured": bool(pid)}
 
 @router.post("/transfer")
 def create_transfer(request: TransferRequest) -> dict[str, Any]:
