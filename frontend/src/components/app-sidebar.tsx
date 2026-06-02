@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { Link } from "react-router-dom";
 import {
   ChevronsUpDown,
   FileText,
@@ -473,16 +474,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
             <DropdownMenuSeparator />
 
-            <DropdownMenuItem>
-              <a
-                href="/settings?tab=bank-access"
+            <DropdownMenuItem asChild>
+              <Link
+                to="/settings?tab=bank-access"
                 className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-full"
               >
                 <Settings className="size-4 shrink-0" />
                 <span className="group-data-[collapsible=icon]:hidden">
                   Konten verwalten
                 </span>
-              </a>
+              </Link>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -543,15 +544,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               asChild
               className="text-muted-foreground hover:text-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-9 group-data-[collapsible=icon]:p-0"
             >
-              <a
-                href="/settings"
+              <Link
+                to="/settings"
                 className="group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-full"
               >
                 <Settings className="size-4 shrink-0" />
                 <span className="group-data-[collapsible=icon]:hidden">
                   Einstellungen
                 </span>
-              </a>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

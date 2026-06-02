@@ -1,8 +1,8 @@
 {
-  "name": "finance",
+  "name": "finance-manager",
   "private": true,
   "version": "0.0.1",
-  "description": "Finance Management Application",
+  "description": "Finance Manager – Personal Finance Management",
   "author": "Michael Tissen",
   "type": "commonjs",
   "main": "electron/main.cjs",
@@ -10,10 +10,16 @@
     "dev": "concurrently -n client,server -c cyan,magenta \"VITE_PORT=8111 VITE_API_URL=http://localhost:8110/api pnpm --dir frontend dev\" \"pnpm --dir backend dev\"",
     "build": "concurrently -n client,server -c cyan,magenta \"pnpm --dir frontend build\" \"pnpm --dir backend build\"",
     "start": "concurrently -n frontend,backend,electron -c cyan,magenta,yellow \"VITE_PORT=8113 VITE_API_URL=http://localhost:8112/api pnpm --dir frontend dev\" \"pnpm --dir backend start\" \"wait-on http://127.0.0.1:8113 && electron .\"",
-    "electron:build": "pnpm --dir frontend build && (cd backend && pyinstaller --onefile --name finance_server_bin run_server.py) && electron-builder"
+    "electron:build": "pnpm --dir frontend build && (cd backend && pyinstaller --clean --noconfirm --onedir --name finance_server_bin --add-data '.env:.' --add-data 'finance_server/assets:finance_server/assets' --hidden-import 'finance_server' --hidden-import 'finance_server.api' --hidden-import 'finance_server.api.transactions' --hidden-import 'finance_server.api.fints' --hidden-import 'finance_server.api.bank_credentials' --hidden-import 'finance_server.api.reference_data' --hidden-import 'finance_server.api.categories' --hidden-import 'finance_server.db' --hidden-import 'finance_server.db.connection' --hidden-import 'finance_server.db.credentials' --hidden-import 'finance_server.db.paths' --hidden-import 'finance_server.db.references' --hidden-import 'finance_server.db.schema' --hidden-import 'finance_server.db.transactions' --hidden-import 'finance_server.db.categories' --hidden-import 'finance_server.db.utils' --hidden-import 'finance_server.banks' --hidden-import 'finance_server.models' --hidden-import 'uvicorn' --hidden-import 'uvicorn.logging' --hidden-import 'uvicorn.loops' --hidden-import 'uvicorn.loops.auto' --hidden-import 'uvicorn.protocols' --hidden-import 'uvicorn.protocols.http' --hidden-import 'uvicorn.protocols.http.auto' --hidden-import 'uvicorn.protocols.websockets' --hidden-import 'uvicorn.protocols.websockets.auto' --hidden-import 'fastapi' --hidden-import 'pydantic' --hidden-import 'dotenv' --hidden-import 'cryptography' --hidden-import 'cryptography.fernet' --hidden-import 'fints' --hidden-import 'fints.client' --hidden-import 'fints.exceptions' --hidden-import 'fints.utils' --hidden-import 'fints.formals' run_server.py) && electron-builder"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MiTi041/Finance-Manager.git"
   },
   "dependencies": {
     "concurrently": "^9.1.2",
+    "electron-log": "^5.1.1",
+    "electron-updater": "^6.3.9",
     "wait-on": "^9.0.10"
   },
   "devDependencies": {
@@ -21,15 +27,14 @@
     "electron-builder": "^26.8.1"
   },
   "build": {
-    "appId": "com.finance.app",
-    "productName": "Finance App",
+    "appId": "com.finance-manager.app",
+    "productName": "Finance-Manager",
     "directories": {
       "output": "dist_electron"
     },
     "files": [
       "electron/**/*",
-      "frontend/dist/**/*",
-      "backend/dist/finance_server_bin"
+      "frontend/dist/**/*"
     ],
     "extraResources": [
       {
@@ -37,6 +42,12 @@
         "to": "finance_server_bin"
       }
     ],
+    "publish": {
+      "provider": "github",
+      "owner": "MiTi041",
+      "repo": "Finance-Manager",
+      "releaseType": "release"
+    },
     "mac": {
       "icon": "build/icon.icns",
       "category": "Finance",

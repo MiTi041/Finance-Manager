@@ -1,5 +1,5 @@
 {
-  "name": "finance-server",
+  "name": "finance-manager-server",
   "private": true,
   "version": "0.0.1",
   "scripts": {

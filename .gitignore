@@ -14,8 +14,8 @@ node_modules/
 dist/
 **/dist/
 dist_electron/
-build/
-**/build/
+backend/build/
+backend/dist/
 
 # Electron specific
 electron-builder-logs.txt
@@ -57,8 +57,6 @@ env/
 # Python build artifacts
 *.exe
 *.bin
-backend/dist/
-backend/build/
 
 .fints_state
 **/.fints_state
