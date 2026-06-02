@@ -142,20 +142,3 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: npx electron-builder --publish always
         shell: bash
-
-  create-tag:
-    needs: [check-version, build]
-    if: success() && needs.check-version.outputs.tag_exists == 'false'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Create and push git tag
-        run: |
-          VERSION="${{ needs.check-version.outputs.version }}"
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git tag "v$VERSION"
-          git push origin "v$VERSION"
