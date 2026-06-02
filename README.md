@@ -20,7 +20,7 @@ Built with **Electron + React + Python** — runs on macOS and Windows.
 
 ## Screenshots
 
-> *Coming soon*
+> _Coming soon_
 
 ---
 
@@ -75,18 +75,6 @@ At minimum you need a **PRODUCT_ID** for FinTS bank synchronization —
 
 ---
 
-## Workflow
-
-```
-dev  ─── daily development (push any time)
-   \
-    └── main ─── only for releases (triggers CI build)
-```
-
-- **`dev` branch** — all day-to-day work, no CI release
-- **`main` branch** — merge `dev` → `main` only when you want to publish a release
-- **Version bump** — `package.json` version is the release version; update it on `dev` before merging
-
 ## Build & Release
 
 ```bash
@@ -105,14 +93,14 @@ Existing installations receive the update automatically via `electron-updater`.
 
 ## Tech Stack
 
-| Layer     | Technology                          |
-|-----------|-------------------------------------|
-| Frontend  | React, TypeScript, Vite, Tailwind   |
-| Backend   | Python, FastAPI, Uvicorn            |
-| Banking   | FinTS protocol via `fints` library  |
-| Desktop   | Electron, electron-builder          |
-| Database  | SQLite (via Python)                 |
-| CI/CD     | GitHub Actions, electron-updater    |
+| Layer    | Technology                         |
+| -------- | ---------------------------------- |
+| Frontend | React, TypeScript, Vite, Tailwind  |
+| Backend  | Python, FastAPI, Uvicorn           |
+| Banking  | FinTS protocol via `fints` library |
+| Desktop  | Electron, electron-builder         |
+| Database | SQLite (via Python)                |
+| CI/CD    | GitHub Actions, electron-updater   |
 
 ---
 
@@ -124,5 +112,3 @@ Existing installations receive the update automatically via `electron-updater`.
 - The application is self-contained with no telemetry or analytics
 
 If you discover a security vulnerability, please open a [GitHub Issue](https://github.com/MiTi041/Finance-Manager/issues).
-
-
