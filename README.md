@@ -75,19 +75,34 @@ At minimum you need a **PRODUCT_ID** for FinTS bank synchronization —
 
 ---
 
-## Build & Release
+## Workflow
+
+```
+dev  ─── daily development (commit any time)
+   \
+    └── main ─── only for releases (triggers CI build)
+```
+
+- **`dev`** — all day-to-day work, no release
+- **`main`** — merge `dev` → `main` only when publishing a release
+
+### Release a new version
+
+```bash
+# 1. Bump version (on dev)
+git add package.json && git commit -m "chore: bump version to 0.0.7"
+
+# 2. Merge to main and push
+git checkout main && git merge dev --no-edit && git push && git checkout dev && git merge main --no-edit
+```
+
+On push to `main`, GitHub Actions builds macOS + Windows packages and publishes them as a GitHub Release. Existing installations update automatically via `electron-updater`.
+
+## Build locally
 
 ```bash
 pnpm run electron:build   # Builds frontend + PyInstaller backend + Electron package
 ```
-
-On every push to `main`, GitHub Actions automatically:
-
-- Builds Electron packages for **macOS** (`.dmg`, `.zip`) and **Windows** (`.exe` installer)
-- Publishes them as a **GitHub Release**
-- Tags the release with the version from `package.json`
-
-Existing installations receive the update automatically via `electron-updater`.
 
 ---
 
