@@ -1,14 +1,6 @@
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 
-declare global {
-  interface Window {
-    api: {
-      receive: (channel: string, func: (...args: unknown[]) => void) => void;
-    };
-  }
-}
-
 export function AutoUpdateToast() {
   const toastId = useRef<string | number | null>(null);
 

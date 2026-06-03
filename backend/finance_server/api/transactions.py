@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from finance_server.db import (
     delete_transaction,
+    delete_transactions_batch,
     fetch_latest_transaction,
     fetch_transactions,
     insert_transactions,
@@ -22,6 +23,10 @@ class TransactionImportRequest(BaseModel):
 
 class TransactionNoteUpdateRequest(BaseModel):
     note: str | None = None
+
+
+class BatchIdsRequest(BaseModel):
+    transaction_ids: list[int]
 
 
 @router.get("/db/transactions")
@@ -52,6 +57,12 @@ def get_latest_transaction(iban: str | None = None, blz: str | None = None) -> d
 @router.post("/db/transactions/import")
 def import_transactions(request: TransactionImportRequest) -> dict[str, Any]:
     return insert_transactions(request.rows)
+
+
+@router.post("/db/transactions/batch-delete")
+def remove_transactions_batch(request: BatchIdsRequest) -> dict[str, Any]:
+    deleted = delete_transactions_batch(request.transaction_ids)
+    return {"deleted": deleted}
 
 
 @router.delete("/db/transactions/{transaction_id}")

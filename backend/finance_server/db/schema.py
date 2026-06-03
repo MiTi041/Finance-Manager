@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import csv
-import io
 import sqlite3
 from typing import Any
+
+from .seed_data import SEED_CATEGORIES_SQL
 
 
 
@@ -222,7 +222,6 @@ def migrate_reference_tables(connection: sqlite3.Connection) -> None:
         },
     )
 
-
 def create_categories_table(connection: sqlite3.Connection) -> None:
     connection.execute(
         """
@@ -232,6 +231,7 @@ def create_categories_table(connection: sqlite3.Connection) -> None:
             typ TEXT NOT NULL,
             parent_id INTEGER,
             personal_expense INTEGER NOT NULL DEFAULT 0,
+            icon TEXT,
             FOREIGN KEY (parent_id) REFERENCES kategorien (id) ON DELETE SET NULL
         )
         """
@@ -271,4 +271,9 @@ def initialize_database(connection: sqlite3.Connection) -> None:
     create_reference_tables(connection)
     migrate_reference_tables(connection)
     create_categories_table(connection)
+
+    row_count = connection.execute("SELECT COUNT(*) FROM kategorien").fetchone()[0]
+    if row_count == 0:
+        connection.executescript(SEED_CATEGORIES_SQL)
+
     create_app_settings_table(connection)

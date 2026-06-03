@@ -49,6 +49,20 @@ export type AccountBalanceAdjustmentResult = {
   ignored: number;
 };
 
+export class TanRequiredError extends Error {
+  constructor(
+    public readonly challenge: string | null,
+    public readonly decoupled: boolean,
+  ) {
+    super(
+      decoupled
+        ? "Bitte bestätige die Verbindung in deiner Banking-App."
+        : "TAN erforderlich für die Verbindung.",
+    );
+    this.name = "TanRequiredError";
+  }
+}
+
 export type BankAccountDiscoveryResponse = {
   count: number;
   accounts: Array<{
@@ -133,7 +147,25 @@ export async function fetchBankAccounts(
     body: JSON.stringify({ credentials }),
   });
 
-  return parseJsonResponse(response);
+  const payload = await response.json().catch(() => ({}));
+
+  if (response.status === 409 && payload?.detail?.code === "TAN_REQUIRED") {
+    throw new TanRequiredError(
+      payload.detail.challenge,
+      payload.detail.decoupled ?? false,
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      payload?.detail?.message ??
+        payload?.detail ??
+        payload?.message ??
+        "Bankdaten konnten nicht geladen werden",
+    );
+  }
+
+  return payload;
 }
 
 export async function saveBankCredentials(

@@ -36,9 +36,10 @@ from .categories import (
     list_categories,
     update_category_record,
     update_transaction_category,
+    update_transactions_category_batch,
 )
 from .schema import initialize_database
-from .transactions import delete_transaction, fetch_latest_transaction, fetch_transaction_balance, fetch_transactions, insert_balance_adjustment, insert_transactions, row_to_dict, to_row_payload, update_transaction_note
+from .transactions import delete_transaction, delete_transactions_batch, fetch_latest_transaction, fetch_transaction_balance, fetch_transactions, insert_balance_adjustment, insert_transactions, row_to_dict, to_row_payload, update_transaction_note
 
 __all__ = [
     "bank_credentials_configured",
@@ -51,6 +52,7 @@ __all__ = [
     "delete_setting",
     "get_setting",
     "delete_transaction",
+    "delete_transactions_batch",
     "delete_empfaengerkonto_record",
     "create_kontoinhaber_record",
     "delete_kontoinhaber_record",
@@ -81,6 +83,7 @@ __all__ = [
     "update_kontoinhaber_iban_mapping",
     "update_kontoinhaber_record",
     "update_transaction_category",
+    "update_transactions_category_batch",
     "update_transaction_note",
     "upsert_bank_accounts",
     "to_row_payload",

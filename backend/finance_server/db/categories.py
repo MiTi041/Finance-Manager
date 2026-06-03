@@ -14,6 +14,7 @@ def _serialize_category_row(row: Any) -> dict[str, Any]:
         "parent_id": row["parent_id"],
         "parent_name": row["parent_name"],
         "personal_expense": bool(row["personal_expense"]),
+        "icon": row["icon"],
     }
 
 
@@ -77,7 +78,8 @@ def list_categories() -> list[dict[str, Any]]:
                 c.typ,
                 c.parent_id,
                 parent.name AS parent_name,
-                c.personal_expense
+                c.personal_expense,
+                c.icon
             FROM kategorien c
             LEFT JOIN kategorien parent ON parent.id = c.parent_id
             ORDER BY c.typ ASC, c.parent_id IS NOT NULL ASC, c.parent_id ASC, c.name ASC, c.id ASC
@@ -97,7 +99,8 @@ def get_category_record(category_id: int) -> dict[str, Any] | None:
                 c.typ,
                 c.parent_id,
                 parent.name AS parent_name,
-                c.personal_expense
+                c.personal_expense,
+                c.icon
             FROM kategorien c
             LEFT JOIN kategorien parent ON parent.id = c.parent_id
             WHERE c.id = ?
@@ -116,6 +119,7 @@ def create_category_record(payload: dict[str, Any]) -> dict[str, Any]:
     typ = _normalize_category_type(payload.get("typ"))
     parent_id_raw = payload.get("parent_id")
     personal_expense = 1 if bool(payload.get("personal_expense")) else 0
+    icon = payload.get("icon")
 
     if not name:
         raise ValueError("Kategoriename fehlt.")
@@ -125,7 +129,7 @@ def create_category_record(payload: dict[str, Any]) -> dict[str, Any]:
     parent_id = None
     if parent_id_raw not in {None, "", 0, "0"}:
         try:
-            parent_id = int(parent_id_raw)
+            parent_id = int(parent_id_raw) # type: ignore
         except (TypeError, ValueError) as error:
             raise ValueError("Parent-Kategorie ist ungültig.") from error
 
@@ -134,12 +138,12 @@ def create_category_record(payload: dict[str, Any]) -> dict[str, Any]:
 
         cursor = connection.execute(
             """
-            INSERT INTO kategorien (name, typ, parent_id, personal_expense)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO kategorien (name, typ, parent_id, personal_expense, icon)
+            VALUES (?, ?, ?, ?, ?)
             """,
-            (name, typ, parent_id, personal_expense),
+            (name, typ, parent_id, personal_expense, icon),
         )
-        category_id = int(cursor.lastrowid)
+        category_id = int(cursor.lastrowid) # type: ignore
 
     record = get_category_record(category_id)
     if record is None:
@@ -150,6 +154,7 @@ def create_category_record(payload: dict[str, Any]) -> dict[str, Any]:
             "parent_id": parent_id,
             "parent_name": None,
             "personal_expense": bool(personal_expense),
+            "icon": icon,
         }
 
     return record
@@ -185,7 +190,7 @@ def update_category_record(
         parent_id = None
         if parent_id_raw not in {None, "", 0, "0"}:
             try:
-                parent_id = int(parent_id_raw)
+                parent_id = int(parent_id_raw) # type: ignore
             except (TypeError, ValueError) as error:
                 raise ValueError("Parent-Kategorie ist ungültig.") from error
 
@@ -198,6 +203,10 @@ def update_category_record(
     if "personal_expense" in payload:
         fields.append("personal_expense = ?")
         params.append(1 if bool(payload.get("personal_expense")) else 0)
+
+    if "icon" in payload:
+        fields.append("icon = ?")
+        params.append(payload.get("icon"))
 
     if not fields:
         return current
@@ -231,3 +240,15 @@ def update_transaction_category(transaction_id: int, category_id: int | None) ->
             "UPDATE umsaetze SET kategorie = ? WHERE id = ?",
             (category_id, transaction_id),
         )
+
+
+def update_transactions_category_batch(transaction_ids: list[int], category_id: int | None) -> int:
+    if not transaction_ids:
+        return 0
+    placeholders = ",".join("?" for _ in transaction_ids)
+    with get_connection() as connection:
+        cursor = connection.execute(
+            f"UPDATE umsaetze SET kategorie = ? WHERE id IN ({placeholders})",
+            [category_id] + transaction_ids,
+        )
+        return cursor.rowcount

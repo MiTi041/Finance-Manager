@@ -84,6 +84,7 @@ export interface TransactionDto {
   note: string | null;
 
   created_at: Date;
+  bank_deleted: boolean;
 }
 
 /**
@@ -197,6 +198,8 @@ export interface Transaction {
     fundsCode: string;
 
     settlementTag: string;
+
+    bankDeleted: boolean;
   };
 }
 
@@ -331,6 +334,8 @@ export function mapTransaction(dto: TransactionDto): Transaction {
       fundsCode: dto.funds_code,
 
       settlementTag: dto.settlement_tag,
+
+      bankDeleted: dto.bank_deleted,
     },
   };
 }

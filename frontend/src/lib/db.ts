@@ -415,6 +415,20 @@ export async function deleteTransaction(transactionId: number): Promise<void> {
   await parseJsonResponse(response);
 }
 
+export async function deleteTransactionsBatch(
+  transactionIds: number[],
+): Promise<{ deleted: number }> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/db/transactions/batch-delete`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transaction_ids: transactionIds }),
+    },
+  );
+  return parseJsonResponse(response);
+}
+
 export async function updateTransactionNote(
   transactionId: number,
   note: string | null,

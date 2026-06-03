@@ -1,8 +1,19 @@
 import { type KeyboardEvent, useEffect, useState } from "react";
-import { Check, Loader2, Pencil, Trash2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import {
+  AlertCircle,
+  Check,
+  Loader2,
+  Pencil,
+  Sparkles,
+  Trash2,
+  TriangleAlert,
+} from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 
 import { BankLogo, BrandIcon } from "@/components/bank-logo";
 import { Button } from "@/components/ui/button";
+import { CategoryCombobox } from "@/components/category-combobox";
 import {
   Select,
   SelectContent,
@@ -22,11 +33,15 @@ import {
 } from "./transactions.utils";
 import { type KontoinhaberRecord } from "@/lib/db";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 type TransactionRowProps = {
   transaction: Transaction;
   isExpanded: boolean;
   isUnassigned: boolean;
+  isSelected: boolean;
+  predictedCategoryId: number | null;
+  predictedSimilarity: number | null;
   accountBank: SelectedBankOption | null;
   partnerBank: SelectedBankOption | null;
   selectedBank: SelectedBankOption | null;
@@ -36,9 +51,10 @@ type TransactionRowProps = {
   unknownIban: string | null;
   onToggleRow: (transactionId: number) => void;
   onRowKeyDown: (
-    event: KeyboardEvent<HTMLElement>,
+    event: KeyboardEvent<Element>,
     transactionId: number,
   ) => void;
+  onSelectChange: (transactionId: number, selected: boolean) => void;
   onSaveCategory: (transactionId: number, categoryId: number | null) => void;
   onSaveNote: (transactionId: number, note: string | null) => Promise<void>;
   onLinkIbanToKontoinhaber: (
@@ -55,6 +71,9 @@ export function TransactionRow({
   transaction,
   isExpanded,
   isUnassigned,
+  isSelected,
+  predictedCategoryId,
+  predictedSimilarity,
   accountBank,
   partnerBank,
   selectedBank,
@@ -64,6 +83,7 @@ export function TransactionRow({
   unknownIban,
   onToggleRow,
   onRowKeyDown,
+  onSelectChange,
   onSaveCategory,
   onSaveNote,
   onLinkIbanToKontoinhaber,
@@ -77,6 +97,10 @@ export function TransactionRow({
   const [newKontoinhaberName, setNewKontoinhaberName] = useState("");
   const [savingNote, setSavingNote] = useState(false);
   const [savingIbanMapping, setSavingIbanMapping] = useState(false);
+
+  const predictedSimilarityPercent = Math.round(
+    (predictedSimilarity ?? 0) * 100,
+  );
 
   const purpose = transaction.texte.verwendungszweck || "";
   const additionalPurpose = transaction.texte.zusatzVerwendungszweck || "";
@@ -107,6 +131,27 @@ export function TransactionRow({
     setSelectedKontoinhaberId("");
     setNewKontoinhaberName("");
   }, [transaction.id, unknownIban]);
+
+  useEffect(() => {
+    if (!isExpanded || currentCategoryId != null || predictedCategoryId == null)
+      return;
+
+    const handler = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== "g" && e.key !== "G") return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      e.preventDefault();
+      onSaveCategory(transaction.id, predictedCategoryId);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [
+    isExpanded,
+    currentCategoryId,
+    predictedCategoryId,
+    transaction.id,
+    onSaveCategory,
+  ]);
 
   const saveNote = async () => {
     if (!noteChanged || savingNote) return;
@@ -145,28 +190,50 @@ export function TransactionRow({
   return (
     <div className="w-full">
       {/* ── Collapsed row ── */}
-      <button
-        type="button"
-        onClick={() => onToggleRow(transaction.id)}
-        onKeyDown={(event) => onRowKeyDown(event, transaction.id)}
-        className="flex w-full cursor-pointer items-center gap-4 border-b border-muted/60 bg-background px-4 py-3 text-left transition-colors hover:bg-muted/40"
+      <div
+        className={cn(
+          "flex w-full items-center border-b border-muted/60 bg-background text-left transition-colors hover:bg-muted/40",
+          transaction.technisch.bankDeleted &&
+            "bg-red-400/5 hover:bg-red-400/10",
+        )}
       >
+        <div className="flex items-center pl-3">
+          <Checkbox
+            checked={isSelected}
+            onCheckedChange={(checked) =>
+              onSelectChange(transaction.id, checked === true)
+            }
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+            aria-label="Transaktion auswählen"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => onToggleRow(transaction.id)}
+          onKeyDown={(event) => onRowKeyDown(event, transaction.id)}
+          className="flex w-full cursor-pointer items-center gap-4 px-4 py-3"
+        >
         {!selectedBank ? (
-          accountBank ? (
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
+            {accountBank ? (
               <BankLogo
                 src={accountBank.bankLogo || undefined}
                 alt={accountBank.accountName || accountBank.bankName || "Bank"}
                 sizeClassName="size-12 shrink-0 p-1"
                 backgroundClassName="bg-muted/70"
               />
-              <span className="ml-2 h-6 w-px shrink-0 bg-border/70" />
-            </div>
-          ) : (
-            <div className="flex size-12 shrink-0 items-center justify-center rounded-md border bg-muted text-[10px] font-semibold text-muted-foreground">
-              {transaction.konto.iban?.slice(0, 2) ?? "—"}
-            </div>
-          )
+            ) : transaction.technisch.bankDeleted ? (
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-lg border bg-red-500/15 text-red-600 dark:text-red-400 text-[10px] font-semibold">
+                <TriangleAlert size={16} />
+              </div>
+            ) : (
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-lg border bg-muted text-[10px] font-semibold text-muted-foreground">
+                {transaction.konto.iban?.slice(0, 2) ?? "—"}
+              </div>
+            )}
+            <span className="ml-2 h-6 w-px shrink-0 bg-border/70" />
+          </div>
         ) : null}
 
         <div className="min-w-0 flex-1">
@@ -296,284 +363,297 @@ export function TransactionRow({
           </span>
         </div>
       </button>
+      </div>
 
       {/* ── Expanded panel ── */}
       {isExpanded ? (
-        <div className="border-b border-muted/60 bg-muted/20 text-sm">
+        <div className={cn("border-b border-muted/60 bg-muted/20 text-sm")}>
           {/* Top 3-column detail grid */}
-          <div className="grid grid-cols-1 divide-y divide-border/60 border-b border-muted sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-            {/* Zahlungspartner */}
-            <div className="flex flex-col gap-0 divide-y divide-border/60">
-              <div className="space-y-3 px-5 py-4">
-                <p className="mb-3 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
-                  Zahlungspartner
-                </p>
+          <div className="flex flex-col w-full">
+            {transaction.technisch.bankDeleted && (
+              <div className="flex items-center gap-2 border-b border-red-200 bg-red-50 px-4 py-1.5 text-xs font-medium text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-400">
+                <AlertCircle className="size-3.5 shrink-0" />
+                <span>Bankzugang nicht mehr verfügbar</span>
+              </div>
+            )}
+            <div className="grid grid-cols-1 divide-y divide-border/60 border-b border-muted sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+              {/* Zahlungspartner */}
+              <div className="flex flex-col gap-0 divide-y divide-border/60">
+                <div className="space-y-3 px-5 py-4">
+                  <p className="mb-3 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
+                    Zahlungspartner
+                  </p>
 
-                <p className="font-medium leading-tight text-foreground flex flex-col gap-0 items-start">
-                  {transaction.zahlungspartner.name || "–"}
-                  {deviateApplicant !== transaction.zahlungspartner.name &&
-                  deviateApplicant ? (
-                    <span className="text-xs text-muted-foreground">
-                      {deviateApplicant}
-                    </span>
-                  ) : null}
-                </p>
-
-                <div className="flex flex-col items-start gap-0 pt-1">
-                  {partnerBank ? (
-                    <p className="text-xs text-muted-foreground">
-                      {partnerBank.accountName || "–"}
-                    </p>
-                  ) : null}
-                  <div className="flex items-center gap-2 pt-1">
-                    {partnerBank ? (
-                      <BankLogo
-                        src={partnerBank.bankLogo || undefined}
-                        alt={
-                          partnerBank.accountName ||
-                          partnerBank.bankName ||
-                          "Bank"
-                        }
-                        sizeClassName="size-12 shrink-0 p-1"
-                        kind="company"
-                      />
+                  <p className="font-medium leading-tight text-foreground flex flex-col gap-0 items-start">
+                    {transaction.zahlungspartner.name || "–"}
+                    {deviateApplicant !== transaction.zahlungspartner.name &&
+                    deviateApplicant ? (
+                      <span className="text-xs text-muted-foreground">
+                        {deviateApplicant}
+                      </span>
                     ) : null}
-                    <div className="space-y-1">
-                      {transaction.zahlungspartner.iban ? (
-                        <p className="font-mono text-xs text-muted-foreground">
-                          {transaction.zahlungspartner.iban}
-                        </p>
+                  </p>
+
+                  <div className="flex flex-col items-start gap-0 pt-1">
+                    {partnerBank ? (
+                      <p className="text-xs text-muted-foreground">
+                        {partnerBank.accountName || "–"}
+                      </p>
+                    ) : null}
+                    <div className="flex items-center gap-2 pt-1">
+                      {partnerBank ? (
+                        <BankLogo
+                          src={partnerBank.bankLogo || undefined}
+                          alt={
+                            partnerBank.accountName ||
+                            partnerBank.bankName ||
+                            "Bank"
+                          }
+                          sizeClassName="size-12 shrink-0 p-1"
+                          kind="company"
+                        />
                       ) : null}
-                      {transaction.zahlungspartner.bic ? (
-                        <p className="font-mono text-xs text-muted-foreground">
-                          {transaction.zahlungspartner.bic}
-                        </p>
-                      ) : null}
+                      <div className="space-y-1">
+                        {transaction.zahlungspartner.iban ? (
+                          <p className="font-mono text-xs text-muted-foreground">
+                            {transaction.zahlungspartner.iban}
+                          </p>
+                        ) : null}
+                        {transaction.zahlungspartner.bic ? (
+                          <p className="font-mono text-xs text-muted-foreground">
+                            {transaction.zahlungspartner.bic}
+                          </p>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-              <div className="space-y-3 px-5 py-4">
-                {ownerId ? (
-                  <>
-                    <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
-                      Kontoinhaber
-                    </p>
-                    <a
-                      href={`/settings?tab=kontoinhaber&ownerId=${ownerId}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                      }}
-                    >
-                      <div className="flex items-center gap-2 p-2 rounded-md bg-muted/70 rounded-lg hover:bg-muted/40 transition-colors justify-between">
-                        <div className="flex items-center gap-2">
-                          <BrandIcon
-                            src={partnerLogoSrc}
-                            alt={
-                              transaction.zahlungspartner.datenbankName ||
-                              transaction.zahlungspartner.name ||
-                              "Bank"
-                            }
-                            sizeClassName="size-12 shrink-0"
-                            backgroundClassName={
-                              transaction.zahlungspartner.logoWhiteBackground
-                                ? "bg-white"
-                                : "bg-zinc-900"
-                            }
-                            kind={
-                              transaction.zahlungspartner.isCompany
-                                ? "company"
-                                : "person"
-                            }
-                            className="rounded-[5px]"
-                            imgNoPadding={
-                              !transaction.zahlungspartner.logoPadding
-                            }
-                          />
-                          <div className="space-y-1">
-                            {transaction.zahlungspartner.datenbankName ? (
-                              <p className="font-mono text-xs text-muted-foreground">
-                                {transaction.zahlungspartner.datenbankName}
-                              </p>
-                            ) : null}
+                <div className="space-y-3 px-5 py-4">
+                  {ownerId ? (
+                    <>
+                      <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
+                        Kontoinhaber
+                      </p>
+                      <Link
+                        to={`/settings?tab=kontoinhaber&ownerId=${ownerId}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                        }}
+                      >
+                        <div className="flex items-center gap-2 p-2 rounded-md bg-muted/70 rounded-lg hover:bg-muted/40 transition-colors justify-between">
+                          <div className="flex items-center gap-2">
+                            <BrandIcon
+                              src={partnerLogoSrc}
+                              alt={
+                                transaction.zahlungspartner.datenbankName ||
+                                transaction.zahlungspartner.name ||
+                                "Bank"
+                              }
+                              sizeClassName="size-12 shrink-0"
+                              backgroundClassName={
+                                transaction.zahlungspartner.logoWhiteBackground
+                                  ? "bg-white"
+                                  : "bg-zinc-900"
+                              }
+                              kind={
+                                transaction.zahlungspartner.isCompany
+                                  ? "company"
+                                  : "person"
+                              }
+                              className="rounded-[5px]"
+                              imgNoPadding={
+                                !transaction.zahlungspartner.logoPadding
+                              }
+                            />
+                            <div className="space-y-1">
+                              {transaction.zahlungspartner.datenbankName ? (
+                                <p className="font-mono text-xs text-muted-foreground">
+                                  {transaction.zahlungspartner.datenbankName}
+                                </p>
+                              ) : null}
+                            </div>
+                          </div>
+                          <Pencil className="size-4 mx-2 text-muted-foreground" />
+                        </div>
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
+                        Unbekannte IBAN
+                      </p>
+                      <div className="flex flex-col gap-4 ">
+                        {/* Link to existing owner */}
+                        <div className="flex flex-col gap-2">
+                          <p className="text-xs text-muted-foreground">
+                            Bestehenden Kontoinhaber verknüpfen
+                          </p>
+                          <div className="flex gap-2 flex-wrap items-center">
+                            <Select
+                              value={selectedKontoinhaberId}
+                              onValueChange={setSelectedKontoinhaberId}
+                            >
+                              <SelectTrigger className="flex-1 text-xs shadow-none">
+                                <SelectValue placeholder="Kontoinhaber wählen …" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {kontoinhaberOptions.map((owner) => (
+                                  <SelectItem
+                                    key={owner.id}
+                                    value={String(owner.id)}
+                                  >
+                                    {owner.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={
+                                !selectedKontoinhaberId || savingIbanMapping
+                              }
+                              onClick={() => void linkUnknownIban()}
+                            >
+                              {savingIbanMapping && selectedKontoinhaberId ? (
+                                <Loader2 className="size-3.5 animate-spin" />
+                              ) : (
+                                <Check className="size-3.5" />
+                              )}
+                              Verknüpfen
+                            </Button>
                           </div>
                         </div>
-                        <Pencil className="size-4 mx-2 text-muted-foreground" />
-                      </div>
-                    </a>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
-                      Unbekannte IBAN
-                    </p>
-                    <div className="flex flex-col gap-4 ">
-                      {/* Link to existing owner */}
-                      <div className="flex flex-col gap-2">
-                        <p className="text-xs text-muted-foreground">
-                          Bestehenden Kontoinhaber verknüpfen
-                        </p>
-                        <div className="flex gap-2">
-                          <Select
-                            value={selectedKontoinhaberId}
-                            onValueChange={setSelectedKontoinhaberId}
-                          >
-                            <SelectTrigger className="flex-1 text-xs shadow-none">
-                              <SelectValue placeholder="Kontoinhaber wählen …" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {kontoinhaberOptions.map((owner) => (
-                                <SelectItem
-                                  key={owner.id}
-                                  value={String(owner.id)}
-                                >
-                                  {owner.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Button
-                            type="button"
-                            size="sm"
-                            disabled={
-                              !selectedKontoinhaberId || savingIbanMapping
-                            }
-                            onClick={() => void linkUnknownIban()}
-                          >
-                            {savingIbanMapping && selectedKontoinhaberId ? (
-                              <Loader2 className="size-3.5 animate-spin" />
-                            ) : (
-                              <Check className="size-3.5" />
-                            )}
-                            Verknüpfen
-                          </Button>
+
+                        <div className="flex items-center gap-3 pt-2">
+                          <div className="h-px flex-1 bg-border/60" />
+                          <span className="hidden shrink-0 self-start text-xs text-muted-foreground/40 sm:inline">
+                            Oder
+                          </span>
+                          <div className="h-px flex-1 bg-border/60" />
+                        </div>
+
+                        {/* Create new owner */}
+                        <div className="space-y-2">
+                          <p className="text-xs text-muted-foreground">
+                            Neuen Kontoinhaber anlegen
+                          </p>
+                          <div className="flex gap-2 flex-wrap items-center">
+                            <Input
+                              value={newKontoinhaberName}
+                              onChange={(event) =>
+                                setNewKontoinhaberName(event.target.value)
+                              }
+                              onKeyDown={(event) => event.stopPropagation()}
+                              placeholder="Name …"
+                              className="h-8 min-w-30 flex-1 rounded-md border border-input bg-background px-3 text-xs text-foreground shadow-xs outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                            />
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={
+                                !newKontoinhaberName.trim() || savingIbanMapping
+                              }
+                              onClick={() => void createOwnerForUnknownIban()}
+                            >
+                              {savingIbanMapping &&
+                              newKontoinhaberName.trim() ? (
+                                <Loader2 className="size-3.5 animate-spin" />
+                              ) : (
+                                <Check className="size-3.5" />
+                              )}
+                              Anlegen
+                            </Button>
+                          </div>
                         </div>
                       </div>
-
-                      <div className="flex items-center gap-3 pt-2">
-                        <div className="h-px flex-1 bg-border/60" />
-                        <span className="hidden shrink-0 self-start text-xs text-muted-foreground/40 sm:inline">
-                          Oder
-                        </span>
-                        <div className="h-px flex-1 bg-border/60" />
-                      </div>
-
-                      {/* Create new owner */}
-                      <div className="space-y-2">
-                        <p className="text-xs text-muted-foreground">
-                          Neuen Kontoinhaber anlegen
-                        </p>
-                        <div className="flex gap-2">
-                          <Input
-                            value={newKontoinhaberName}
-                            onChange={(event) =>
-                              setNewKontoinhaberName(event.target.value)
-                            }
-                            onKeyDown={(event) => event.stopPropagation()}
-                            placeholder="Name …"
-                            className="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-xs text-foreground shadow-xs outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                          />
-                          <Button
-                            type="button"
-                            size="sm"
-                            disabled={
-                              !newKontoinhaberName.trim() || savingIbanMapping
-                            }
-                            onClick={() => void createOwnerForUnknownIban()}
-                          >
-                            {savingIbanMapping && newKontoinhaberName.trim() ? (
-                              <Loader2 className="size-3.5 animate-spin" />
-                            ) : (
-                              <Check className="size-3.5" />
-                            )}
-                            Anlegen
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Verwendungszweck */}
-            <div className="space-y-2 px-5 py-4">
-              <p className="mb-3 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
-                Verwendungszweck
-              </p>
-
-              {purpose ? (
-                <p className="whitespace-normal leading-relaxed text-foreground">
-                  {purpose}
-                </p>
-              ) : null}
-
-              {additionalPurpose && additionalPurpose !== purpose ? (
-                <div
-                  className={
-                    purpose
-                      ? "flex flex-col gap-0.5 border-t border-border/50 pt-2"
-                      : ""
-                  }
-                >
-                  {purpose ? (
-                    <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/50">
-                      Zusatz
-                    </span>
-                  ) : null}
-                  <p className="whitespace-normal leading-relaxed text-foreground">
-                    {additionalPurpose}
-                  </p>
+                    </>
+                  )}
                 </div>
-              ) : null}
+              </div>
 
-              {!purpose && !additionalPurpose ? (
-                <p className="text-muted-foreground">–</p>
-              ) : null}
-
-              {transaction.texte.buchungstext ? (
-                <p className="pt-1 font-mono text-xs text-muted-foreground">
-                  {transaction.texte.buchungstext}
+              {/* Verwendungszweck */}
+              <div className="space-y-2 px-5 py-4">
+                <p className="mb-3 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
+                  Verwendungszweck
                 </p>
-              ) : null}
-              {transaction.daten.wertstellungsdatum &&
-              transaction.daten.wertstellungsdatum !==
-                transaction.daten.buchungsdatum ? (
-                <p className="pt-1 text-xs text-muted-foreground">
-                  Wertstellung:{" "}
-                  {formatDate(transaction.daten.wertstellungsdatum)}
-                </p>
-              ) : null}
-            </div>
 
-            {/* Kategorie */}
-            <div
-              className="space-y-2 px-5 py-4"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <p className="mb-3 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
-                Kategorie
-              </p>
-              <Select
-                value={
-                  currentCategoryId === null || currentCategoryId === undefined
-                    ? UNASSIGNED_CATEGORY_VALUE
-                    : String(currentCategoryId)
-                }
-                onValueChange={(value) => {
-                  onSaveCategory(
-                    transaction.id,
-                    value === UNASSIGNED_CATEGORY_VALUE ? null : Number(value),
-                  );
-                }}
+                {purpose ? (
+                  <p className="whitespace-normal leading-relaxed text-foreground">
+                    {purpose}
+                  </p>
+                ) : null}
+
+                {additionalPurpose && additionalPurpose !== purpose ? (
+                  <div
+                    className={
+                      purpose
+                        ? "flex flex-col gap-0.5 border-t border-border/50 pt-2"
+                        : ""
+                    }
+                  >
+                    {purpose ? (
+                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/50">
+                        Zusatz
+                      </span>
+                    ) : null}
+                    <p className="whitespace-normal leading-relaxed text-foreground">
+                      {additionalPurpose}
+                    </p>
+                  </div>
+                ) : null}
+
+                {!purpose && !additionalPurpose ? (
+                  <p className="text-muted-foreground">–</p>
+                ) : null}
+
+                {transaction.texte.buchungstext ? (
+                  <p className="pt-1 font-mono text-xs text-muted-foreground">
+                    {transaction.texte.buchungstext}
+                  </p>
+                ) : null}
+                {transaction.daten.wertstellungsdatum &&
+                transaction.daten.wertstellungsdatum !==
+                  transaction.daten.buchungsdatum ? (
+                  <p className="pt-1 text-xs text-muted-foreground">
+                    Wertstellung:{" "}
+                    {formatDate(transaction.daten.wertstellungsdatum)}
+                  </p>
+                ) : null}
+              </div>
+
+              {/* Kategorie */}
+              <div
+                className="space-y-2 px-5 py-4"
+                onClick={(event) => event.stopPropagation()}
               >
-                <SelectTrigger
-                  ref={categoryTriggerRef}
+                <p className="mb-3 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
+                  Kategorie
+                </p>
+                <CategoryCombobox
+                  value={
+                    currentCategoryId === null ||
+                    currentCategoryId === undefined
+                      ? UNASSIGNED_CATEGORY_VALUE
+                      : String(currentCategoryId)
+                  }
+                  onValueChange={(value) => {
+                    onSaveCategory(
+                      transaction.id,
+                      value === UNASSIGNED_CATEGORY_VALUE
+                        ? null
+                        : Number(value),
+                    );
+                  }}
+                  options={categoryOptions}
+                  showNoneOption
+                  noneValue={UNASSIGNED_CATEGORY_VALUE}
+                  placeholder="Kategorie wählen"
+                  triggerRef={categoryTriggerRef}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") {
                       event.preventDefault();
                       event.stopPropagation();
-                      event.currentTarget.click();
                       return;
                     }
                     onRowKeyDown(event, transaction.id);
@@ -584,20 +664,95 @@ export function TransactionRow({
                       ? "h-8 w-full border-orange-500/40 !bg-orange-500/10 text-xs text-orange-500 shadow-none"
                       : "h-8 w-full text-xs shadow-none"
                   }
-                >
-                  <SelectValue placeholder="Kategorie wählen" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={UNASSIGNED_CATEGORY_VALUE}>
-                    Keine Kategorie
-                  </SelectItem>
-                  {categoryOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      <span className="whitespace-pre">{option.label}</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                />
+
+                <style>{`
+                    .ai-icon-glow::after {
+                        content: ''; position: absolute; inset: -3px; border-radius: 12px;
+                        background: radial-gradient(circle, rgba(124,58,237,.2) 0%, transparent 70%);
+                        animation: ai-icon-pulse 3s ease-in-out infinite; z-index: -1;
+                    }
+                    @keyframes ai-icon-pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.4; transform:scale(.8); } }
+
+                    .ai-sparkle-icon {
+                        animation: ai-sparkle-bright 2s ease-in-out infinite;
+                    }
+                    @keyframes ai-sparkle-bright { 0%,100% { filter:brightness(1); } 50% { filter:brightness(1.4); } }
+
+                    .ai-pulse-dot { animation: ai-dot 2s ease-in-out infinite; }
+                    @keyframes ai-dot {
+                        0%,100% { opacity:1; box-shadow: 0 0 0 0 rgba(124,58,237,.4); }
+                        50% { opacity:.5; box-shadow: 0 0 0 4px rgba(124,58,237,0); }
+                    }
+                `}</style>
+
+                {currentCategoryId == null && predictedCategoryId != null && (
+                  <div className="relative rounded-[12px]">
+                    {/* Inner card */}
+                    <div className="relative z-10 rounded-[11px] overflow-hidden border border-violet-500/15 bg-violet-500/[0.03] dark:bg-violet-500/[0.06]">
+                      {/* Subtle top radial glow */}
+                      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(124,58,237,0.08),transparent_70%)]" />
+
+                      {/* Header */}
+                      <div className="flex items-center gap-2.5 px-3.5 pt-3 pb-2">
+                        <div className="ai-icon-glow relative flex size-8 shrink-0 items-center justify-center rounded-lg border border-violet-500/25 bg-gradient-to-br from-violet-500/18 to-blue-500/18">
+                          <Sparkles className="ai-sparkle-icon size-3.5 text-violet-600 dark:text-violet-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
+                            <span className="ai-pulse-dot inline-block size-[5px] rounded-full bg-violet-500" />
+                            KI-Vorschlag
+                          </p>
+                          {(() => {
+                            const predicted = categoryOptions.find(
+                              (o) => o.value === String(predictedCategoryId),
+                            );
+                            return (
+                              <p className="truncate text-lg font-medium">
+                                {predicted?.icon ? (
+                                  <span className="mr-1.5">{predicted.icon}</span>
+                                ) : null}
+                                {predicted?.label.replace(/^\s+/, "") ?? "Unbekannt"}
+                              </p>
+                            );
+                          })()}
+                        </div>
+                      </div>
+
+                      {/* Confidence bar */}
+                      <div className="flex items-center gap-2 px-3.5 pb-2.5">
+                        <div className="h-[2.5px] flex-1 overflow-hidden rounded-full bg-violet-500/12">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-violet-500 via-indigo-500 to-blue-500 transition-all duration-700"
+                            style={{ width: `${predictedSimilarityPercent}%` }}
+                          />
+                        </div>
+                        <span className="text-[10px] text-muted-foreground">
+                          {predictedSimilarityPercent}%
+                        </span>
+                      </div>
+
+                      {/* Action */}
+                      <div className="px-2.5 pb-2.5">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="h-[26px] w-full !rounded-[5px] border border-violet-500/30 bg-transparent text-[11.5px] font-medium hover:border-violet-500/55 hover:bg-violet-500/8 hover:text-violet-600 dark:hover:text-violet-400"
+                          onClick={() =>
+                            onSaveCategory(transaction.id, predictedCategoryId)
+                          }
+                        >
+                          <Check className="mr-1 size-3" />
+                          Übernehmen
+                          <kbd className="ml-1.5 rounded-[3px] border border-current/20 px-1 py-[0.5px] text-[10px]">
+                            G
+                          </kbd>
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

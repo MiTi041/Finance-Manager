@@ -180,6 +180,7 @@ export interface VirtualizedListProps<T> {
   csvExport?: boolean;
   filterItems?: ReactNode[];
   toolbarActions?: ReactNode[];
+  footerActions?: ReactNode[];
   className?: string;
   searchPlaceholder?: string;
   filterItem?: (item: T, query: string) => boolean;
@@ -212,6 +213,7 @@ function VirtualizedListInner<T>(
     csvExport = false,
     filterItems,
     toolbarActions,
+    footerActions,
     className,
     searchPlaceholder = "Suchen...",
     filterItem,
@@ -551,39 +553,56 @@ function VirtualizedListInner<T>(
             })()}
         </div>
 
+        {footerActions?.map((item, index) => (
+          <div
+            className={cn(
+              "flex items-center justify-between gap-3 border border-t-0 px-4 py-2 bg-primary/5 border-primary/20",
+            )}
+          >
+            <React.Fragment key={index}>{item}</React.Fragment>
+          </div>
+        ))}
+
         {/* Footer — row count, pinned below the table */}
-        <div className="flex items-center justify-between gap-3 rounded-b-md border border-t-0 border-muted bg-muted/30 px-4 py-2">
-          {loading ? (
-            <span className="text-xs text-muted-foreground">Lädt…</span>
-          ) : (
-            <span className="text-xs text-muted-foreground">
-              {visibleItems.length !== items.length ? (
-                <>
-                  <span className="font-medium text-foreground">
-                    {visibleItems.length}
-                  </span>
-                  {" von "}
-                  <span className="font-medium text-foreground">
-                    {items.length}
-                  </span>
-                  {" Zeilen"}
-                </>
-              ) : (
-                <>
-                  <span className="font-medium text-foreground">
-                    {items.length}
-                  </span>
-                  {" Zeilen"}
-                </>
-              )}
-            </span>
+        <div
+          className={cn(
+            "flex items-center justify-between gap-3 rounded-b-md border border-t-0 px-4 py-2 bg-muted/30 border-muted",
           )}
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            {loading ? (
+              <span className="text-xs text-muted-foreground">Lädt…</span>
+            ) : (
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                {visibleItems.length !== items.length ? (
+                  <>
+                    <span className="font-medium text-foreground">
+                      {visibleItems.length}
+                    </span>
+                    {" von "}
+                    <span className="font-medium text-foreground">
+                      {items.length}
+                    </span>
+                    {" Zeilen"}
+                  </>
+                ) : (
+                  <>
+                    <span className="font-medium text-foreground">
+                      {items.length}
+                    </span>
+                    {" Zeilen"}
+                  </>
+                )}
+              </span>
+            )}
+          </div>
           {!loading && visibleItems.length > 0 && csvExport ? (
             <Button
               type="button"
               variant="outline"
               onClick={handleExportCsv}
-              className="ml-auto"
+              className="ml-auto shrink-0"
+              height={10}
             >
               <Download className="size-4" />
               CSV exportieren

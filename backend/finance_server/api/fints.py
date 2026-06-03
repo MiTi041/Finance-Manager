@@ -795,6 +795,12 @@ def get_accounts(request: AccountsRequest) -> dict[str, Any]:
         else:
             credentials = resolve_bank_credentials(None)
         return fetch_accounts(credentials)
+    except TanRequired as err:
+        raise HTTPException(status_code=409, detail={
+            "code": "TAN_REQUIRED",
+            "challenge": err.challenge,
+            "decoupled": err.decoupled
+        })
     except FinTSClientError as err: raise HTTPException(status_code=502, detail=f"FinTS-Initialisierung fehlgeschlagen. Originalfehler: {err}")
 
 @router.post("/transactions")

@@ -16,11 +16,16 @@ app.setName("Finance-Manager");
 const path = require("path");
 app.setPath("userData", path.join(app.getPath("appData"), "Finance-Manager"));
 
-const { spawn } = require("child_process");
+const { spawn, exec } = require("child_process");
 const fs = require("fs");
 const http = require("http");
+const https = require("https");
 const { autoUpdater } = require("electron-updater");
 const log = require("electron-log");
+
+// ─── Config ────────────────────────────────────────────────────
+const APPLE_DEVELOPER = false;
+let pendingUpdateVersion = null;
 
 // ─── Single-instance lock ────────────────────────────────────────────────────
 const gotLock = app.requestSingleInstanceLock();
@@ -167,23 +172,8 @@ function setupAutoUpdater() {
 
   autoUpdater.on("update-available", (info) => {
     log.info("Update available:", info.version);
+    pendingUpdateVersion = info.version;
     sendToRenderer("update:available", info);
-    dialog
-      .showMessageBox(getMainWindow(), {
-        type: "info",
-        title: "Update verfügbar",
-        message: `Version ${info.version} ist verfügbar`,
-        detail: "Möchten Sie das Update jetzt herunterladen?",
-        buttons: ["Herunterladen", "Später"],
-        defaultId: 0,
-        cancelId: 1,
-      })
-      .then(({ response }) => {
-        if (response === 0) {
-          sendToRenderer("update:downloading", { percent: 0 });
-          autoUpdater.downloadUpdate();
-        }
-      });
   });
 
   autoUpdater.on("update-not-available", (info) => {
@@ -206,19 +196,6 @@ function setupAutoUpdater() {
   autoUpdater.on("update-downloaded", (info) => {
     log.info("Update downloaded:", info.version);
     sendToRenderer("update:downloaded", info);
-    dialog
-      .showMessageBox(getMainWindow(), {
-        type: "info",
-        title: "Update bereit",
-        message: `Version ${info.version} wurde heruntergeladen`,
-        detail: "Die App wird neu gestartet und das Update installiert.",
-        buttons: ["Jetzt neu starten", "Beim nächsten Start"],
-        defaultId: 0,
-        cancelId: 1,
-      })
-      .then(({ response }) => {
-        if (response === 0) setImmediate(() => autoUpdater.quitAndInstall());
-      });
   });
 
   autoUpdater.on("error", (err) => {
@@ -352,8 +329,27 @@ ipcMain.handle("app:checkForUpdates", () => {
   return { status: "checking" };
 });
 
-ipcMain.handle("app:installUpdate", () => {
-  setImmediate(() => autoUpdater.quitAndInstall(false, true));
+ipcMain.handle("app:downloadUpdate", async () => {
+  if (APPLE_DEVELOPER || !pendingUpdateVersion) {
+    sendToRenderer("update:downloading", { percent: 0 });
+    autoUpdater.downloadUpdate();
+    return { success: true };
+  }
+  return downloadReleaseManually();
+});
+
+ipcMain.handle("app:installUpdate", async () => {
+  if (APPLE_DEVELOPER) {
+    setImmediate(() => autoUpdater.quitAndInstall(false, true));
+    return;
+  }
+  const dmgPath = path.join(
+    app.getPath("downloads"),
+    `Finance-Manager-${pendingUpdateVersion}.dmg`,
+  );
+  if (fs.existsSync(dmgPath)) {
+    shell.openPath(dmgPath);
+  }
 });
 
 ipcMain.handle("shell:openExternal", (_e, url) => {
@@ -372,6 +368,127 @@ ipcMain.handle("shell:openLogs", () =>
 ipcMain.handle("shell:openUserData", () =>
   shell.openPath(app.getPath("userData")),
 );
+
+// ─── Mail with attachment (macOS) ─────────────────────────────
+ipcMain.handle("mail:openWithAttachment", async (_e, { subject, body, to }) => {
+  const pdfPath = getRegistrationPdfPath();
+  if (!pdfPath) {
+    return { success: false, error: "PDF nicht gefunden" };
+  }
+
+  if (process.platform === "darwin") {
+    return openMailOnMac(to, subject, body, pdfPath);
+  }
+
+  const mailto = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  shell.openExternal(mailto);
+  return { success: true, warning: "Anhang wird nur auf macOS unterstützt" };
+});
+
+function getRegistrationPdfPath() {
+  const candidates = [
+    path.join(app.getAppPath(), "frontend", "dist", "assets", "FinTS-Produktregistrierung_V1.0.4.pdf"),
+    path.join(__dirname, "..", "frontend", "dist", "assets", "FinTS-Produktregistrierung_V1.0.4.pdf"),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
+function openMailOnMac(to, subject, body, filePath) {
+  return new Promise((resolve, reject) => {
+    const esc = (s) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    const script = `
+tell application "Mail"
+  set newMessage to make new outgoing message with properties {subject:"${esc(subject)}", content:"${esc(body)}" & return}
+  tell newMessage
+    make new to recipient at end of to recipients with properties {address:"${esc(to)}"}
+    try
+      make new attachment with properties {file name:"${esc(filePath)}"} at after last paragraph
+    end try
+    set visible to true
+  end tell
+  activate
+end tell
+`;
+    const tmpFile = path.join(app.getPath("temp"), `finance-mail-${Date.now()}.applescript`);
+    fs.writeFileSync(tmpFile, script, "utf-8");
+    exec(`osascript "${tmpFile}"`, (error, stdout, stderr) => {
+      try {
+        fs.unlinkSync(tmpFile);
+      } catch {
+        /* ignore */
+      }
+      if (error) {
+        log.error("Mail AppleScript failed:", error.message, stderr);
+        reject(error);
+      } else {
+        resolve({ success: true });
+      }
+    });
+  });
+}
+
+// ─── Manual download (non‑developer builds) ────────────────────
+function downloadReleaseManually() {
+  return new Promise((resolve) => {
+    const version = pendingUpdateVersion;
+    if (!version) {
+      resolve({ success: false, error: "Keine Update-Informationen" });
+      return;
+    }
+
+    const dest = path.join(
+      app.getPath("downloads"),
+      `Finance-Manager-${version}.dmg`,
+    );
+
+    if (fs.existsSync(dest)) {
+      shell.openPath(dest);
+      sendToRenderer("update:downloaded", { version });
+      resolve({ success: true });
+      return;
+    }
+
+    const url = `https://github.com/MiTi041/Finance-Manager/releases/download/v${version}/Finance-Manager-${version}.dmg`;
+    log.info(`Downloading update: ${url}`);
+
+    sendToRenderer("update:downloading", { percent: 0 });
+
+    https
+      .get(url, (res) => {
+        const total = parseInt(res.headers["content-length"] ?? "0", 10);
+        let downloaded = 0;
+        const fileStream = fs.createWriteStream(dest);
+
+        res.on("data", (chunk) => {
+          downloaded += chunk.length;
+          if (total > 0) {
+            const pct = Math.round((downloaded / total) * 100);
+            sendToRenderer("update:downloading", { percent: pct });
+          }
+        });
+
+        res.pipe(fileStream);
+
+        fileStream.on("finish", () => {
+          fileStream.close();
+          sendToRenderer("update:downloaded", { version });
+          shell.openPath(dest);
+          log.info(`Update downloaded → ${dest}`);
+          resolve({ success: true });
+        });
+      })
+      .on("error", (err) => {
+        log.error("Manual download failed:", err.message);
+        sendToRenderer("update:error", {
+          message: `Download fehlgeschlagen: ${err.message}`,
+        });
+        resolve({ success: false, error: err.message });
+      });
+  });
+}
 
 // ─── Window creation ──────────────────────────────────────────────────────────
 function createWindow() {

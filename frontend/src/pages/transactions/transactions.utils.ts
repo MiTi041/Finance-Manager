@@ -7,6 +7,8 @@ export const UNASSIGNED_CATEGORY_VALUE = "__unassigned__";
 export type TransactionCategoryOption = {
   value: string;
   label: string;
+  icon: string | null;
+  depth: number;
 };
 
 type LinkedBankEntry = SelectedBankOption | StoredBankCredentials;
@@ -53,6 +55,8 @@ export function buildCategoryOptions(categories: FinanceCategory[]) {
       options.push({
         value: String(category.id),
         label: `${"\u00A0\u00A0".repeat(depth)}${category.name}`,
+        icon: category.icon,
+        depth,
       });
       walk(category.id, depth + 1);
     });

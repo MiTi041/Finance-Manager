@@ -29,12 +29,14 @@ import {
 } from "@/lib/categories";
 import { hasFreshCache } from "@/lib/fetch-cache";
 import { VirtualizedList } from "@/components/virtualized-list";
+import { toast } from "sonner";
 
 const EMPTY_FORM = {
   name: "",
   typ: "",
   parent_id: "",
   personal_expense: false,
+  icon: "",
 };
 
 const DEPTH_GAP = 16; // px zwischen Einzugsebenen
@@ -119,6 +121,7 @@ function normalizeCategoryDraft(form: CategoryFormState) {
     typ: form.typ.trim(),
     parent_id: normalizeOptionalId(form.parent_id),
     personal_expense: form.personal_expense,
+    icon: form.icon.trim() || null,
   };
 }
 
@@ -130,10 +133,11 @@ function isCategoryDirty(
 
   if (!editingCategory) {
     return (
-      draft.name !== "" ||
-      draft.typ !== "" ||
-      draft.parent_id !== null ||
-      draft.personal_expense !== false
+    draft.name !== "" ||
+    draft.typ !== "" ||
+    draft.parent_id !== null ||
+    draft.personal_expense !== false ||
+    draft.icon !== null
     );
   }
 
@@ -141,7 +145,8 @@ function isCategoryDirty(
     draft.name !== editingCategory.name ||
     draft.typ !== editingCategory.typ ||
     draft.parent_id !== (editingCategory.parent_id ?? null) ||
-    draft.personal_expense !== editingCategory.personal_expense
+    draft.personal_expense !== editingCategory.personal_expense ||
+    draft.icon !== (editingCategory.icon ?? null)
   );
 }
 
@@ -265,6 +270,7 @@ export function CategoriesTab() {
       typ: category.typ,
       parent_id: category.parent_id ? String(category.parent_id) : "",
       personal_expense: category.personal_expense,
+      icon: category.icon ?? "",
     });
     setError(null);
   };
@@ -301,6 +307,7 @@ export function CategoriesTab() {
           ? String(action.category.parent_id)
           : "",
         personal_expense: action.category.personal_expense,
+        icon: action.category.icon ?? "",
       });
       setError(null);
       return;
@@ -332,6 +339,7 @@ export function CategoriesTab() {
         typ: form.typ.trim(),
         parent_id: normalizeOptionalId(form.parent_id),
         personal_expense: form.personal_expense,
+        icon: form.icon.trim() || null,
       };
 
       if (editingCategory) {
@@ -498,7 +506,7 @@ export function CategoriesTab() {
           emptyStateIllustration={<Tags className="size-5" />}
           getItemKey={(entry) => entry.category.id}
           getItemHeight={(entry) =>
-            editingCategory?.id === entry.category.id ? 364 : 108
+            editingCategory?.id === entry.category.id ? 410 : 108
           }
           toolbarActions={[
             <Button
@@ -555,8 +563,8 @@ export function CategoriesTab() {
                     className={`self-stretch bg-border mr-1 shrink-0 ${entry.depth == 0 ? "w-0" : "w-px"}`}
                   />
 
-                  <div className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                    <Tags className="size-4" />
+                  <div className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground text-xl">
+                    {category.icon || <Tags className="size-4" />}
                   </div>
 
                   <div className="min-w-0 flex-1">
@@ -611,6 +619,29 @@ export function CategoriesTab() {
                                   name: event.target.value,
                                 }))
                               }
+                              autoComplete="off"
+                            />
+                          </div>
+
+                          <div className="flex flex-col gap-2">
+                            <label
+                              className="text-sm font-medium"
+                              htmlFor={`category-icon-${category.id}`}
+                            >
+                              Icon (Emoji)
+                            </label>
+                            <Input
+                              id={`category-icon-${category.id}`}
+                              value={form.icon}
+                              onClick={(event) => event.stopPropagation()}
+                              onChange={(event) =>
+                                setForm((current) => ({
+                                  ...current,
+                                  icon: event.target.value,
+                                }))
+                              }
+                              placeholder="z.B. 🍔"
+                              className="w-24"
                               autoComplete="off"
                             />
                           </div>
@@ -793,6 +824,22 @@ export function CategoriesTab() {
             </div>
 
             <div className="grid gap-2">
+              <label className="text-sm font-medium" htmlFor="category-icon">
+                Icon (Emoji)
+              </label>
+              <Input
+                id="category-icon"
+                value={form.icon}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, icon: event.target.value }))
+                }
+                placeholder="z.B. 🍔"
+                className="w-24"
+                autoComplete="off"
+              />
+            </div>
+
+            <div className="grid gap-2">
               <label className="text-sm font-medium" htmlFor="category-type">
                 Typ
               </label>
@@ -925,6 +972,7 @@ export function CategoriesTab() {
         }}
         onConfirm={confirmDeleteCategory}
       />
+
     </div>
   );
 }

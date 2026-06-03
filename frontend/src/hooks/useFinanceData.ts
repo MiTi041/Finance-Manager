@@ -1,25 +1,12 @@
 "use client";
 
 import { useMemo } from "react";
+import { isWithinInterval, startOfDay, endOfDay } from "date-fns";
 
 import { useTransactionsData } from "@/hooks/useTransactionsData";
 import type { DateFilterValue } from "@/types/date-filter";
 import type { Transaction } from "@/types/transaction";
-
-type UseFinanceDataResult = {
-  balance: number;
-  balanceFormatted: string;
-  incomes: number;
-  incomesFormatted: string;
-  expenses: number;
-  expensesFormatted: string;
-  transactionCount: number;
-  loading: boolean;
-  refreshing: boolean;
-  error: string | null;
-  reload: () => Promise<void>;
-  transactions: Transaction[];
-};
+import { getTimeSpanForRange } from "@/types/time-range";
 
 function calculateBalance(transactions: Transaction[]) {
   return transactions.reduce((total, transaction) => {
@@ -48,37 +35,44 @@ function calculateExpenses(transactions: Transaction[]) {
   }, 0);
 }
 
+function filterTransactionsByDate(
+  transactions: Transaction[],
+  dateFilter: DateFilterValue,
+) {
+  if (!dateFilter.timeSpan && !dateFilter.timeRange) return transactions;
+
+  const span = dateFilter.timeSpan ?? getTimeSpanForRange(dateFilter.timeRange!);
+  const from = startOfDay(span.from);
+  const until = endOfDay(span.until);
+
+  return transactions.filter((t) => {
+    const date = t.daten.buchungsdatum ? new Date(t.daten.buchungsdatum) : null;
+    return date && isWithinInterval(date, { start: from, end: until });
+  });
+}
+
 export function useFinanceData(
   dateFilter: DateFilterValue = {},
-): UseFinanceDataResult {
+) {
   const { transactions, loading, refreshing, error, reload } =
-    useTransactionsData(dateFilter);
-  const { transactions: allTransactions } = useTransactionsData();
+    useTransactionsData();
 
-  const balance = useMemo(
-    () => calculateBalance(allTransactions),
-    [allTransactions],
+  const filteredTransactions = useMemo(
+    () => filterTransactionsByDate(transactions, dateFilter),
+    [transactions, dateFilter],
   );
 
+  const balance = useMemo(() => calculateBalance(transactions), [transactions]);
   const balanceFormatted = useMemo(() => formatBalance(balance), [balance]);
-
-  const incomes = useMemo(
-    () => calculateIncomes(allTransactions),
-    [allTransactions],
-  );
-
-  const expenses = useMemo(
-    () => calculateExpenses(allTransactions),
-    [allTransactions],
-  );
-
+  const incomes = useMemo(() => calculateIncomes(transactions), [transactions]);
+  const expenses = useMemo(() => calculateExpenses(transactions), [transactions]);
   const incomesFormatted = useMemo(() => formatBalance(incomes), [incomes]);
   const expensesFormatted = useMemo(() => formatBalance(-expenses), [expenses]);
 
   return {
     balance,
     balanceFormatted,
-    transactionCount: transactions.length,
+    transactionCount: filteredTransactions.length,
     loading,
     refreshing,
     error,
@@ -87,6 +81,6 @@ export function useFinanceData(
     incomesFormatted,
     expenses,
     expensesFormatted,
-    transactions,
+    transactions: filteredTransactions,
   };
 }

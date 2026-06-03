@@ -10,6 +10,18 @@ export type FinanceCategory = {
   parent_id: number | null;
   parent_name?: string | null;
   personal_expense: boolean;
+  icon: string | null;
+};
+
+export type Prediction = {
+  transaction_id: number;
+  entry_date: string | null;
+  purpose: string;
+  amount: number | null;
+  applicant_name: string;
+  recipient_name: string;
+  predicted_category_id: number;
+  similarity: number;
 };
 
 function getApiBaseUrl(): string {
@@ -58,6 +70,7 @@ export async function createCategory(payload: {
   typ: string;
   parent_id?: number | null;
   personal_expense?: boolean;
+  icon?: string | null;
 }): Promise<FinanceCategory> {
   const response = await fetch(`${getApiBaseUrl()}/db/categories`, {
     method: "POST",
@@ -79,6 +92,7 @@ export async function updateCategory(
     typ: string;
     parent_id: number | null;
     personal_expense: boolean;
+    icon: string | null;
   }>,
 ): Promise<FinanceCategory> {
   const response = await fetch(
@@ -109,6 +123,49 @@ export async function deleteCategory(categoryId: number): Promise<void> {
   await emitReferenceChange();
 }
 
+export async function triggerAutoCategorize(): Promise<{
+  count: number;
+  predictions: Prediction[];
+}> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/db/transactions/auto-categorize`,
+    { method: "POST" },
+  );
+  return parseJsonResponse(response);
+}
+
+export async function applyPrediction(
+  transactionId: number,
+  categoryId: number | null,
+): Promise<void> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/db/transactions/auto-categorize/apply`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        transaction_id: transactionId,
+        category_id: categoryId,
+      }),
+    },
+  );
+  await parseJsonResponse(response);
+}
+
+export async function applyAllPredictions(
+  items: Array<{ transaction_id: number; category_id: number | null }>,
+): Promise<void> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/db/transactions/auto-categorize/apply-all`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(items),
+    },
+  );
+  await parseJsonResponse(response);
+}
+
 export async function updateTransactionCategory(
   transactionId: number,
   categoryId: number | null,
@@ -125,4 +182,22 @@ export async function updateTransactionCategory(
   );
 
   await parseJsonResponse(response);
+}
+
+export async function updateTransactionsCategoryBatch(
+  transactionIds: number[],
+  categoryId: number | null,
+): Promise<{ updated: number }> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/db/transactions/batch-categorize`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ transaction_ids: transactionIds, category_id: categoryId }),
+    },
+  );
+
+  return parseJsonResponse(response);
 }

@@ -14,13 +14,17 @@ import { toast } from "sonner";
 import DateFilter from "@/components/date-filter";
 import { EmptyState } from "@/components/empty-state";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { VirtualizedList } from "@/components/virtualized-list";
+import {
+  VirtualizedList,
+  type VirtualizedListRef,
+} from "@/components/virtualized-list";
 
 import { useGlobalDateFilter } from "@/hooks/use-global-date-filter";
 import { useTransactionsData } from "@/hooks/useTransactionsData";
 
 import {
   fetchCategories,
+  triggerAutoCategorize,
   updateTransactionCategory,
   type FinanceCategory,
 } from "@/lib/categories";
@@ -37,6 +41,9 @@ import { type Transaction } from "@/types/transaction";
 
 import { TransactionRow } from "./TransactionRow";
 import { TransactionsFilterBar } from "./TransactionsFilterBar";
+import { BatchActionsBar } from "./BatchActionsBar";
+import { useSelection } from "./useSelection";
+import { useBatchActions } from "./useBatchActions";
 import {
   buildCategoryOptions,
   buildLinkedAccountLookup,
@@ -62,11 +69,15 @@ export default function TransactionsPage() {
   >(new Map());
   const [kontoinhaber, setKontoinhaber] = useState<KontoinhaberRecord[]>([]);
   const [categories, setCategories] = useState<FinanceCategory[]>([]);
+  const [predictionsMap, setPredictionsMap] = useState<
+    Map<number, { categoryId: number; similarity: number }>
+  >(new Map());
   const [expandedTransactionId, setExpandedTransactionId] = useState<
     number | null
   >(null);
   const [onlyUnassigned, setOnlyUnassigned] = useState(false);
   const [onlyUnknownIban, setOnlyUnknownIban] = useState(false);
+  const [showDeletedBanks, setShowDeletedBanks] = useState(false);
   const [amountFilter, setAmountFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [visibleTransactions, setVisibleTransactions] = useState<Transaction[]>(
@@ -81,6 +92,7 @@ export default function TransactionsPage() {
   const categoryTriggerRefs = useRef(
     new Map<number, HTMLButtonElement | null>(),
   );
+  const virtualListRef = useRef<VirtualizedListRef>(null);
 
   const loadKontoinhaberData = useCallback(
     async (options?: { forceRefresh?: boolean }) => {
@@ -125,6 +137,25 @@ export default function TransactionsPage() {
         if (active) setCategories([]);
       });
 
+    void triggerAutoCategorize()
+      .then((result) => {
+        if (!active) return;
+        const map = new Map<
+          number,
+          { categoryId: number; similarity: number }
+        >();
+        for (const p of result.predictions) {
+          map.set(p.transaction_id, {
+            categoryId: p.predicted_category_id,
+            similarity: p.similarity,
+          });
+        }
+        setPredictionsMap(map);
+      })
+      .catch(() => {
+        if (active) setPredictionsMap(new Map());
+      });
+
     return () => {
       active = false;
     };
@@ -141,9 +172,72 @@ export default function TransactionsPage() {
   );
 
   const categoryFilterOptions = useMemo<TransactionCategoryOption[]>(
-    () => [{ value: "all", label: "Alle Kategorien" }, ...categoryOptions],
+    () => [
+      { value: "all", label: "Alle Kategorien", icon: null, depth: 0 },
+      ...categoryOptions,
+    ],
     [categoryOptions],
   );
+
+  const filterCounts = useMemo(() => {
+    let unassigned = 0;
+    let unknownIban = 0;
+    let deletedBank = 0;
+
+    for (const transaction of transactions) {
+      const kategorieId = transaction.technisch.kategorieId;
+      const isUnassigned = kategorieId == null;
+      const isIncome = transaction.betrag.wert >= 0;
+      const partnerIban = normalizeIban(transaction.zahlungspartner.iban);
+      const isUnknownIban =
+        partnerIban.length > 0 && !ibanToKontoinhaber.has(partnerIban);
+      const isSaldoCorrection =
+        transaction.technisch.transactionCode == "MANUAL_BALANCE_ADJUSTMENT";
+      const isBankDeleted = transaction.technisch.bankDeleted;
+
+      if (isSaldoCorrection) continue;
+
+      if (amountFilter === "income" && !isIncome) continue;
+      if (amountFilter === "expense" && isIncome) continue;
+      if (
+        categoryFilter !== "all" &&
+        String(kategorieId ?? "") !== categoryFilter
+      ) {
+        continue;
+      }
+
+      {
+        let passes = true;
+        if (!showDeletedBanks && isBankDeleted) passes = false;
+        if (onlyUnknownIban && !isUnknownIban) passes = false;
+        if (passes && isUnassigned) unassigned++;
+      }
+
+      {
+        let passes = true;
+        if (!showDeletedBanks && isBankDeleted) passes = false;
+        if (onlyUnassigned && !isUnassigned) passes = false;
+        if (passes && isUnknownIban) unknownIban++;
+      }
+
+      {
+        let passes = true;
+        if (onlyUnassigned && !isUnassigned) passes = false;
+        if (onlyUnknownIban && !isUnknownIban) passes = false;
+        if (passes && isBankDeleted) deletedBank++;
+      }
+    }
+
+    return { unassigned, unknownIban, deletedBank };
+  }, [
+    transactions,
+    ibanToKontoinhaber,
+    amountFilter,
+    categoryFilter,
+    onlyUnassigned,
+    onlyUnknownIban,
+    showDeletedBanks,
+  ]);
 
   const transactionSortItems = useMemo(
     () => [
@@ -183,7 +277,7 @@ export default function TransactionsPage() {
     if (!trigger) return;
 
     trigger.focus();
-    trigger.scrollIntoView({ block: "nearest" });
+    trigger.scrollIntoView({ block: "center" });
     setPendingCategoryFocusId(null);
   }, [pendingCategoryFocusId, visibleTransactions, expandedTransactionId]);
 
@@ -261,6 +355,7 @@ export default function TransactionsPage() {
   };
 
   const toggleRow = (id: number) => {
+    console.log("kategorie", id);
     setExpandedTransactionId((current) => (current === id ? null : id));
   };
 
@@ -274,15 +369,28 @@ export default function TransactionsPage() {
     );
     if (currentIndex < 0) return;
 
-    const nextTransaction = visibleTransactions[currentIndex + direction];
-    if (!nextTransaction) return;
-
-    setExpandedTransactionId(nextTransaction.id);
-    setPendingCategoryFocusId(nextTransaction.id);
+    const step = direction;
+    let i = currentIndex + step;
+    while (i >= 0 && i < visibleTransactions.length) {
+      const t = visibleTransactions[i];
+      if (t.technisch.kategorieId == null) {
+        setExpandedTransactionId(t.id);
+        virtualListRef.current?.scrollToIndex(i, "start");
+        requestAnimationFrame(() => {
+          const trigger = categoryTriggerRefs.current.get(t.id);
+          if (trigger) {
+            trigger.focus();
+          }
+        });
+        setPendingCategoryFocusId(null);
+        return;
+      }
+      i += step;
+    }
   };
 
   const handleRowKeyDown = (
-    event: KeyboardEvent<HTMLElement>,
+    event: KeyboardEvent<Element>,
     currentId: number,
   ) => {
     if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
@@ -325,11 +433,11 @@ export default function TransactionsPage() {
       const partnerIban = normalizeIban(transaction.zahlungspartner.iban);
       const unknownIban =
         partnerIban.length > 0 && !ibanToKontoinhaber.has(partnerIban);
-      // Transaktionen die zur Saldoberichtigung dienen, sollen nicht angezeigt werden
       const isSaldoCorrection =
         transaction.technisch.transactionCode == "MANUAL_BALANCE_ADJUSTMENT";
 
       if (isSaldoCorrection) return false;
+      if (!showDeletedBanks && transaction.technisch.bankDeleted) return false;
       if (onlyUnassigned && !isUnassigned) return false;
       if (onlyUnknownIban && !unknownIban) return false;
       if (amountFilter === "income" && !isIncome) return false;
@@ -349,8 +457,55 @@ export default function TransactionsPage() {
     ibanToKontoinhaber,
     onlyUnassigned,
     onlyUnknownIban,
+    showDeletedBanks,
     transactions,
   ]);
+
+  const {
+    selectedTransactionIds,
+    selectedCount,
+    handleSelectChange,
+    isAllVisibleSelected,
+    handleSelectAllVisible,
+    clearSelection,
+  } = useSelection(visibleTransactions);
+
+  const {
+    batchDeleteOpen,
+    setBatchDeleteOpen,
+    deletingBatch,
+    handleBatchDelete,
+    batchCategoryId,
+    setBatchCategoryId,
+    applyingBatchCategory,
+    handleBatchCategorize,
+  } = useBatchActions({
+    selectedTransactionIds,
+    clearSelection,
+    reload,
+    expandedTransactionId,
+    setExpandedTransactionId,
+  });
+
+  const handleFilterTransaction = useCallback(
+    (transaction: Transaction, query: string) => {
+      const searchable = [
+        transaction.zahlungspartner.name,
+        transaction.zahlungspartner.datenbankName,
+        transaction.texte.verwendungszweck,
+        transaction.texte.zusatzVerwendungszweck,
+        transaction.texte.buchungstext,
+        transaction.texte.anmerkung,
+        transaction.zahlungspartner.iban,
+        formatDate(transaction.daten.buchungsdatum),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return searchable.includes(query.toLowerCase());
+    },
+    [],
+  );
 
   if (error) {
     return (
@@ -367,17 +522,41 @@ export default function TransactionsPage() {
       <DateFilter value={dateFilter} onChange={setDateFilter} />
 
       <VirtualizedList
+        ref={virtualListRef}
         items={filteredTransactions}
         loading={loading}
         csvExport={true}
         searchPlaceholder="Transaktionen suchen..."
         onVisibleItemsChange={setVisibleTransactions}
         sortItems={transactionSortItems}
+        footerActions={
+          selectedCount > 0
+            ? [
+                <BatchActionsBar
+                  key="batch-actions"
+                  selectedCount={selectedCount}
+                  isAllVisibleSelected={isAllVisibleSelected}
+                  onSelectAll={handleSelectAllVisible}
+                  batchCategoryId={batchCategoryId}
+                  onBatchCategoryChange={setBatchCategoryId}
+                  categoryOptions={categoryOptions}
+                  onBatchCategorize={handleBatchCategorize}
+                  applyingBatchCategory={applyingBatchCategory}
+                  onBatchDelete={() => setBatchDeleteOpen(true)}
+                  onClearSelection={clearSelection}
+                />,
+              ]
+            : undefined
+        }
         filterItems={[
           <TransactionsFilterBar
             key="transactions-filters"
             onlyUnassigned={onlyUnassigned}
             onlyUnknownIban={onlyUnknownIban}
+            showDeletedBanks={showDeletedBanks}
+            unassignedCount={filterCounts.unassigned}
+            unknownIbanCount={filterCounts.unknownIban}
+            deletedBankCount={filterCounts.deletedBank}
             amountFilter={amountFilter}
             categoryFilter={categoryFilter}
             categoryOptions={categoryFilterOptions}
@@ -387,10 +566,14 @@ export default function TransactionsPage() {
             onToggleOnlyUnknownIban={() =>
               setOnlyUnknownIban((current) => !current)
             }
+            onToggleShowDeletedBanks={() =>
+              setShowDeletedBanks((current) => !current)
+            }
             onAmountFilterChange={setAmountFilter}
             onCategoryFilterChange={setCategoryFilter}
           />,
         ]}
+        filterItem={handleFilterTransaction}
         getItemKey={(transaction) => transaction.id}
         getItemHeight={(transaction) =>
           expandedTransactionId === transaction.id
@@ -410,6 +593,9 @@ export default function TransactionsPage() {
             normalizeIban(transaction.zahlungspartner.iban),
           );
           const currentCategoryId = transaction.technisch.kategorieId;
+          const prediction = predictionsMap.get(transaction.id) ?? null;
+          const predictedCategoryId = prediction?.categoryId ?? null;
+          const predictedSimilarity = prediction?.similarity ?? null;
           const partnerIban = normalizeIban(transaction.zahlungspartner.iban);
           const hasUnknownIban =
             partnerIban.length > 0 && !ibanToKontoinhaber.has(partnerIban);
@@ -420,6 +606,9 @@ export default function TransactionsPage() {
               transaction={transaction}
               isExpanded={expandedTransactionId === transaction.id}
               isUnassigned={currentCategoryId == null}
+              isSelected={selectedTransactionIds.has(transaction.id)}
+              predictedCategoryId={predictedCategoryId}
+              predictedSimilarity={predictedSimilarity}
               accountBank={accountBank ?? null}
               partnerBank={partnerBank ?? null}
               selectedBank={selectedBank}
@@ -430,6 +619,7 @@ export default function TransactionsPage() {
               ownerId={ownerId}
               onToggleRow={toggleRow}
               onRowKeyDown={handleRowKeyDown}
+              onSelectChange={handleSelectChange}
               onSaveCategory={(transactionId, categoryId) => {
                 void saveTransactionCategory(transactionId, categoryId);
               }}
@@ -455,6 +645,18 @@ export default function TransactionsPage() {
           if (!open) setTransactionToDelete(null);
         }}
         onConfirm={confirmDeleteTransaction}
+      />
+
+      <ConfirmDialog
+        open={batchDeleteOpen}
+        title={`${selectedCount} Transaktionen löschen`}
+        description={`${selectedCount} ausgewählte Transaktionen wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`}
+        confirmLabel="Alle löschen"
+        loading={deletingBatch}
+        onOpenChange={(open) => {
+          if (!open) setBatchDeleteOpen(false);
+        }}
+        onConfirm={handleBatchDelete}
       />
     </div>
   );

@@ -38,11 +38,16 @@ contextBridge.exposeInMainWorld("api", {
   // ── App / Updates ─────────────────────────────────────────
   getVersion: () => ipcRenderer.invoke("app:version"),
   checkForUpdates: () => ipcRenderer.invoke("app:checkForUpdates"),
+  downloadUpdate: () => ipcRenderer.invoke("app:downloadUpdate"),
   installUpdate: () => ipcRenderer.invoke("app:installUpdate"),
 
   // ── Shell ─────────────────────────────────────────────────
   openExternal: (url) => ipcRenderer.invoke("shell:openExternal", url),
   openLogs: () => ipcRenderer.invoke("shell:openLogs"),
   openUserData: () => ipcRenderer.invoke("shell:openUserData"),
+
+  // ── Mail ──────────────────────────────────────────────────
+  openMailWithAttachment: (data) =>
+    ipcRenderer.invoke("mail:openWithAttachment", data),
 
 });

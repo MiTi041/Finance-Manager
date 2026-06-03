@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
   Dialog,
@@ -19,7 +19,6 @@ import {
   updateBankAccount,
 } from "@/lib/bank-credentials";
 import { EmptyState } from "@/components/empty-state";
-import { Separator } from "@/components/ui/separator";
 import { Check, Loader2, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import { BankLogo } from "@/components/bank-logo";
 

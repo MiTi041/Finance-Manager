@@ -42,6 +42,9 @@ import {
   type FintsSyncStatusDetail,
 } from "@/lib/sync-events";
 import { ModeToggle } from "./dark-mode-toggle";
+import { UpdateBanner } from "./update-banner";
+import { cn } from "@/lib/utils";
+import { getSelectedBank } from "@/lib/selected-bank";
 
 const ACTIVE_BANK_STORAGE_KEY = "finance.sidebar.active-account-iban.v1";
 const LEGACY_ACTIVE_BANK_STORAGE_KEY = "finance.sidebar.active-bank-scope.v1";
@@ -327,7 +330,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     };
 
     const onBankCredentialsChanged = () => {
-      void fetchBankCredentials()
+      void fetchBankCredentials({ forceRefresh: true })
         .then((banks) => {
           setLinkedBanks(banks);
           const storedSelection =
@@ -376,14 +379,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       collapsible="icon"
       {...props}
     >
-      <SidebarHeader className="justify-center">
+      <SidebarHeader className="justify-center p-0">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="cursor-pointer flex w-full items-center justify-between gap-3 rounded-md border border-border/60 bg-sidebar-accent/35 px-3 py-2.5 text-left shadow-sm transition hover:bg-sidebar-accent/55 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:bg-transparent"
+              className="cursor-pointer flex w-full items-center justify-between gap-3  bg-sidebar-accent/35 px-3 py-2.5 text-left shadow-sm transition hover:bg-sidebar-accent/55 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:bg-transparent"
             >
-              <div className="flex min-w-0 items-center gap-3 group-data-[collapsible=icon]:justify-center">
+              <div
+                className={cn(
+                  "flex min-w-0 items-center gap-3 group-data-[collapsible=icon]:justify-center",
+                )}
+              >
                 {activeAccountIban === "all" ? (
                   <div className="flex size-12 group-data-[collapsible=icon]:size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground border">
                     <Landmark className="size-4" />
@@ -424,53 +431,63 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <DropdownMenuLabel>Verknüpfte Konten</DropdownMenuLabel>
             <DropdownMenuSeparator />
 
-            <DropdownMenuItem onSelect={() => setActiveSelection("all")}>
-              <div className="flex size-12 items-center justify-center rounded-lg bg-muted text-muted-foreground border">
-                <Landmark className="size-4" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="truncate font-medium">Alle</div>
-                <div className="truncate text-xs text-muted-foreground">
-                  Alle verknüpften Konten anzeigen
+            <div className="space-y-1">
+              <DropdownMenuItem
+                onSelect={() => setActiveSelection("all")}
+                className={activeAccountIban === "all" ? "bg-accent" : ""}
+              >
+                <div className="flex size-12 items-center justify-center rounded-lg bg-muted text-muted-foreground border">
+                  <Landmark className="size-4" />
                 </div>
-              </div>
-            </DropdownMenuItem>
-
-            {accountOptions.length === 0 ? (
-              <DropdownMenuItem disabled>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">
-                    Keine Konten verbunden
-                  </div>
+                  <div className="truncate font-medium">Alle</div>
                   <div className="truncate text-xs text-muted-foreground">
-                    Verknüpfe zuerst ein Konto in den Einstellungen.
+                    Alle verknüpften Konten anzeigen
                   </div>
                 </div>
               </DropdownMenuItem>
-            ) : (
-              accountOptions.map((account) => (
-                <DropdownMenuItem
-                  key={account.accountIban}
-                  onSelect={() => setActiveSelection(account.accountIban)}
-                >
-                  <BankLogo
-                    src={account.bankLogo || undefined}
-                    alt={account.accountName || account.bankName || "Bank"}
-                    sizeClassName="size-12"
-                    className="p-1"
-                    backgroundClassName="bg-muted/70"
-                  />
+
+              {accountOptions.length === 0 ? (
+                <DropdownMenuItem disabled>
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-medium">
-                      {account.accountName}
+                      Keine Konten verbunden
                     </div>
                     <div className="truncate text-xs text-muted-foreground">
-                      {account.bankName} · {account.accountIban}
+                      Verknüpfe zuerst ein Konto in den Einstellungen.
                     </div>
                   </div>
                 </DropdownMenuItem>
-              ))
-            )}
+              ) : (
+                accountOptions.map((account) => (
+                  <DropdownMenuItem
+                    key={account.accountIban}
+                    onSelect={() => setActiveSelection(account.accountIban)}
+                    className={
+                      activeAccountIban === account.accountIban
+                        ? "bg-accent"
+                        : ""
+                    }
+                  >
+                    <BankLogo
+                      src={account.bankLogo || undefined}
+                      alt={account.accountName || account.bankName || "Bank"}
+                      sizeClassName="size-12"
+                      className="p-1"
+                      backgroundClassName="bg-muted/70"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-medium">
+                        {account.accountName}
+                      </div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {account.bankName} · {account.accountIban}
+                      </div>
+                    </div>
+                  </DropdownMenuItem>
+                ))
+              )}
+            </div>
 
             <DropdownMenuSeparator />
 
@@ -500,6 +517,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <Separator className="opacity-50" />
 
       <SidebarFooter className="p-2 gap-1.5 group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:py-2">
+        <UpdateBanner />
+
         <SidebarMenu className="group-data-[collapsible=icon]:items-center">
           <SidebarMenuItem className="group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center">
             <SidebarMenuButton

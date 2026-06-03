@@ -164,6 +164,7 @@ def row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
         "kategorie": row["kategorie"],
         "note": row["note"],
         "created_at": row["created_at"],
+        "bank_deleted": bool(dict(row).get("bank_deleted", False)),
     }
 
 
@@ -173,7 +174,12 @@ def fetch_transactions(
     from_date: str | None = None,
     to_date: str | None = None,
 ) -> list[dict[str, Any]]:
-    query_parts = ["SELECT * FROM umsaetze"]
+    query_parts = [
+        "SELECT u.*, "
+        "CASE WHEN ba.iban IS NULL THEN 1 ELSE 0 END as bank_deleted "
+        "FROM umsaetze u "
+        "LEFT JOIN (SELECT DISTINCT iban FROM bank_accounts) ba ON u.account_iban = ba.iban"
+    ]
     params: list[Any] = []
 
     if from_date or to_date:
@@ -322,6 +328,18 @@ def delete_transaction(transaction_id: int) -> bool:
     with get_connection() as connection:
         cursor = connection.execute("DELETE FROM umsaetze WHERE id = ?", (transaction_id,))
         return cursor.rowcount > 0
+
+
+def delete_transactions_batch(transaction_ids: list[int]) -> int:
+    if not transaction_ids:
+        return 0
+    placeholders = ",".join("?" for _ in transaction_ids)
+    with get_connection() as connection:
+        cursor = connection.execute(
+            f"DELETE FROM umsaetze WHERE id IN ({placeholders})",
+            transaction_ids,
+        )
+        return cursor.rowcount
 
 
 def update_transaction_note(transaction_id: int, note: str | None) -> bool:

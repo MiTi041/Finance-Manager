@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
+import { handleMailRegistration } from "../lib/mail";
 
 const API_BASE =
   (import.meta as any).env.VITE_API_URL || "http://localhost:8112/api";
@@ -56,7 +57,8 @@ export function ProductIdSetup({ onComplete }: { onComplete: () => void }) {
           >
             fints.org
           </a>{" "}
-          und trage die erhaltene ID unten ein.
+          und trage die erhaltene ID unten ein. Die erteilung der Produkt-ID
+          kann bis zu 2 Wochen dauern.
         </p>
         <Input
           value={value}
@@ -71,6 +73,13 @@ export function ProductIdSetup({ onComplete }: { onComplete: () => void }) {
           className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-6 text-sm font-medium text-primary ring-offset-background transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
         >
           {saving ? "Wird gespeichert…" : "Speichern"}
+        </Button>
+        <Button
+          type="button"
+          onClick={() => handleMailRegistration()}
+          className="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-6 text-sm font-medium ring-offset-background transition-colors hover:bg-accent"
+        >
+          Registrierungsformular per E-Mail
         </Button>
       </form>
     </div>

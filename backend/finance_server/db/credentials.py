@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from datetime import datetime, timezone
 from typing import Any
@@ -217,11 +218,37 @@ def bank_credentials_configured(scope: str | None = None) -> bool:
 
 
 def delete_bank_credentials(scope: str | None = None) -> None:
+    if scope:
+        creds = load_bank_credentials(scope)
+    else:
+        all_creds = list_bank_credentials()
+    
     with get_connection() as connection:
         if scope:
             connection.execute("DELETE FROM bank_credentials WHERE scope = ?", (scope,))
         else:
             connection.execute("DELETE FROM bank_credentials")
+    
+    try:
+        from finance_server.api.fints import clear_state_files_for_creds
+        from finance_server.models import BankCredentials
+
+        if scope:
+            if creds:
+                clear_state_files_for_creds(BankCredentials(
+                    bank_key=creds.get("bank_key", ""),
+                    username=creds.get("username", ""),
+                    pin="x",
+                ))
+        else:
+            for c in all_creds:
+                clear_state_files_for_creds(BankCredentials(
+                    bank_key=c.get("bank_key", ""),
+                    username=c.get("username", ""),
+                    pin="x",
+                ))
+    except Exception:
+        logging.warning("FinTS state file could not be cleared", exc_info=True)
 
 
 def list_bank_accounts(scope: str) -> list[dict[str, Any]]:
