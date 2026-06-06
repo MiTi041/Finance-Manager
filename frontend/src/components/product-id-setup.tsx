@@ -3,8 +3,7 @@ import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { handleMailRegistration } from "../lib/mail";
 
-const API_BASE =
-  (import.meta as any).env.VITE_API_URL || "http://localhost:8112/api";
+const API_BASE = (import.meta as any).env.VITE_API_URL || "http://localhost:8112/api";
 
 export function ProductIdSetup({ onComplete }: { onComplete: () => void }) {
   const [value, setValue] = useState("");
@@ -42,8 +41,8 @@ export function ProductIdSetup({ onComplete }: { onComplete: () => void }) {
       >
         <h1 className="text-2xl font-bold">FinTS-Produkt-ID</h1>
         <p className="text-muted-foreground text-sm leading-relaxed">
-          Um Bankdaten per FinTS (HBCI) abrufen zu können, benötigt diese
-          Anwendung eine persönliche Produkt-ID.
+          Um Bankdaten per FinTS (HBCI) abrufen zu können, benötigt diese Anwendung eine persönliche
+          Produkt-ID.
           <br />
           <br />
           Registriere deine Anwendung kostenfrei unter{" "}
@@ -55,8 +54,8 @@ export function ProductIdSetup({ onComplete }: { onComplete: () => void }) {
           >
             fints.org
           </a>{" "}
-          und trage die erhaltene ID unten ein. Die erteilung der Produkt-ID
-          kann bis zu 2 Wochen dauern.
+          und trage die erhaltene ID unten ein. Die erteilung der Produkt-ID kann bis zu 2 Wochen
+          dauern.
         </p>
         <Input
           value={value}
@@ -68,14 +67,14 @@ export function ProductIdSetup({ onComplete }: { onComplete: () => void }) {
         <Button
           type="submit"
           disabled={saving || !value.trim()}
-          className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-6 text-sm font-medium text-primary ring-offset-background transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
+          className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-6 text-sm font-medium text-accent ring-offset-background transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
         >
           {saving ? "Wird gespeichert…" : "Speichern"}
         </Button>
         <Button
           type="button"
           onClick={() => handleMailRegistration()}
-          className="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-6 text-sm font-medium ring-offset-background transition-colors hover:bg-accent"
+          className="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background text-foreground px-6 text-sm font-medium ring-offset-background transition-colors hover:bg-accent"
         >
           Registrierungsformular per E-Mail
         </Button>
