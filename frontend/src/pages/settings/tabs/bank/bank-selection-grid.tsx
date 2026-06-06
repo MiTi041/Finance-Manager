@@ -1,7 +1,7 @@
 import { Check, Landmark } from "lucide-react";
 
-import { cn } from "@lib/utils";
-import type { BankDefinition } from "@/lib/banks";
+import { cn } from "@/lib/utils";
+import type { BankDefinition } from "@/lib/bank/definitions";
 import { EmptyState } from "@/components/empty-state";
 import { BankLogo, BrandIcon } from "@/components/bank-logo";
 

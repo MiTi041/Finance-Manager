@@ -1,4 +1,4 @@
-import { getApiBaseUrl } from "@/lib/db";
+import { getApiBaseUrl } from "@/lib/api";
 
 type SyncBankContext = {
   scope?: string;

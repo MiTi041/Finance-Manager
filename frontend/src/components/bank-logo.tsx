@@ -1,6 +1,6 @@
 import { Building2, Store } from "lucide-react";
 
-import { cn } from "@lib/utils";
+import { cn } from "@/lib/utils";
 
 type IconFrameProps = {
   src?: string;

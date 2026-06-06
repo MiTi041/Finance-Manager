@@ -3,7 +3,7 @@ import { Slot } from "@radix-ui/react-slot";
 import { ChevronRight, MoreHorizontal } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
-import { cn } from "@lib/utils";
+import { cn } from "@/lib/utils";
 
 function Breadcrumb({ ...props }: React.ComponentProps<"nav">) {
   return <nav aria-label="breadcrumb" data-slot="breadcrumb" {...props} />;
@@ -63,11 +63,7 @@ function BreadcrumbPage({ className, ...props }: React.ComponentProps<"span">) {
   );
 }
 
-function BreadcrumbSeparator({
-  children,
-  className,
-  ...props
-}: React.ComponentProps<"li">) {
+function BreadcrumbSeparator({ children, className, ...props }: React.ComponentProps<"li">) {
   return (
     <li
       data-slot="breadcrumb-separator"
@@ -81,10 +77,7 @@ function BreadcrumbSeparator({
   );
 }
 
-function BreadcrumbEllipsis({
-  className,
-  ...props
-}: React.ComponentProps<"span">) {
+function BreadcrumbEllipsis({ className, ...props }: React.ComponentProps<"span">) {
   return (
     <span
       data-slot="breadcrumb-ellipsis"
@@ -106,14 +99,9 @@ function DynamicBreadcrumbs() {
 
   const titles: Record<string, string> = {
     settings: "Einstellungen",
-    account: "Konto",
     dashboard: "Dashboard",
-    analytics: "Analysen",
     transactions: "Transaktionen",
-    categories: "Kategorien",
-    "recurring-payments": "Wiederkehrende Zahlungen",
-    financeplan: "Finanzplan",
-    bafoeg_calculator: "Bafög-Rechner",
+    subscriptions: "Abonnements",
   };
 
   return (

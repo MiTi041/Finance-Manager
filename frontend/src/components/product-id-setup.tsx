@@ -1,11 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { handleMailRegistration } from "../lib/mail";
 
 const API_BASE =
   (import.meta as any).env.VITE_API_URL || "http://localhost:8112/api";
-const STORAGE_KEY = "finance.product-id.v1";
 
 export function ProductIdSetup({ onComplete }: { onComplete: () => void }) {
   const [value, setValue] = useState("");
@@ -27,7 +26,6 @@ export function ProductIdSetup({ onComplete }: { onComplete: () => void }) {
         body: JSON.stringify({ product_id: pid }),
       });
       if (!res.ok) throw new Error("Speichern fehlgeschlagen");
-      localStorage.setItem(STORAGE_KEY, pid);
       onComplete();
     } catch (err: any) {
       setError(err.message ?? "Verbindungsfehler");
@@ -87,5 +85,5 @@ export function ProductIdSetup({ onComplete }: { onComplete: () => void }) {
 }
 
 export function hasProductId(): boolean {
-  return !!localStorage.getItem(STORAGE_KEY);
+  return false;
 }

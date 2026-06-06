@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   type TransactionCategoryOption,
   UNASSIGNED_CATEGORY_VALUE,
-} from "./transactions.utils";
+} from "@/lib/utils/categories";
 
 type BatchActionsBarProps = {
   selectedCount: number;

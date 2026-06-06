@@ -1,11 +1,6 @@
 import type { IbanKontoinhaberReference } from "@/types/iban-reference";
 import type { Transaction } from "@/types/transaction";
-
-function normalizeIban(value?: string | null) {
-  if (!value) return "";
-
-  return value.replace(/\s+/g, "").toUpperCase();
-}
+import { normalizeIban } from "@/lib/iban";
 
 export function buildIbanReferenceLookup(
   references: IbanKontoinhaberReference[],

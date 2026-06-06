@@ -261,69 +261,6 @@ def fetch_transaction_balance(account_iban: str) -> float:
         return 0.0
 
 
-def insert_balance_adjustment(
-    account_iban: str,
-    target_balance: float,
-    note: str | None = None,
-) -> dict[str, Any]:
-    normalized_iban = normalize_text(account_iban)
-    if not normalized_iban:
-        return {
-            "current_balance": 0.0,
-            "target_balance": target_balance,
-            "difference": 0.0,
-            "received": 0,
-            "inserted": 0,
-            "ignored": 0,
-        }
-
-    current_balance = fetch_transaction_balance(normalized_iban)
-    difference = round(target_balance - current_balance, 2)
-    if abs(difference) < 0.01:
-        return {
-            "current_balance": current_balance,
-            "target_balance": target_balance,
-            "difference": difference,
-            "received": 0,
-            "inserted": 0,
-            "ignored": 0,
-        }
-
-    adjustment_note = note or "Manueller Saldoabgleich"
-    now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-    synthetic_rows = [
-        {
-            "account": {
-                "iban": normalized_iban,
-            },
-            "data": {
-                "date": now,
-                "entry_date": now,
-                "guessed_entry_date": now,
-                "amount": difference,
-                "original_amount": str(difference),
-                "currency": "EUR",
-                "dummy_entry": 1,
-                "posting_text": adjustment_note,
-                "purpose": adjustment_note,
-                "transaction_reference": f"manual-balance-adjustment:{normalized_iban}:{now}",
-                "transaction_code": "MANUAL_BALANCE_ADJUSTMENT",
-                "id": f"manual-balance-adjustment:{normalized_iban}:{now}",
-                "customer_reference": adjustment_note,
-                "bank_reference": adjustment_note,
-            },
-        }
-    ]
-
-    result = insert_transactions(synthetic_rows)
-    return {
-        "current_balance": current_balance,
-        "target_balance": target_balance,
-        "difference": difference,
-        **result,
-    }
-
-
 def delete_transaction(transaction_id: int) -> bool:
     with get_connection() as connection:
         cursor = connection.execute("DELETE FROM umsaetze WHERE id = ?", (transaction_id,))

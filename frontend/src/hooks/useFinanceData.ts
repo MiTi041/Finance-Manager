@@ -1,12 +1,40 @@
 "use client";
 
-import { useMemo } from "react";
-import { isWithinInterval, startOfDay, endOfDay } from "date-fns";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { format, startOfDay, endOfDay, isWithinInterval } from "date-fns";
 
-import { useTransactionsData } from "@/hooks/useTransactionsData";
-import type { DateFilterValue } from "@/types/date-filter";
-import type { Transaction } from "@/types/transaction";
+import { getApiBaseUrl } from "@/lib/api";
+import { buildIbanReferenceLookup, resolveTransactionsCounterparty } from "@/lib/iban-reference";
+
+import { fetchAvailableBanks, type BankDefinition } from "@/lib/bank/definitions";
+
+import { fetchBankCredentials, type StoredBankCredentials } from "@/lib/bank/credentials";
+
+import { fetchIbanKontoinhaberReferences } from "@/lib/reference-data";
+
+import { Transaction, TransactionDto, mapTransaction } from "@/types/transaction";
+import type {
+  IbanKontoinhaberReference,
+  IbanKontoinhaberReferenceDto,
+} from "@/types/iban-reference";
+import { DateFilterValue } from "@/types/date-filter";
 import { getTimeSpanForRange } from "@/types/time-range";
+import { getSelectedBank, type SelectedBankOption } from "@/lib/bank/selected";
+import { normalizeIban } from "@/lib/iban";
+
+const ACTIVE_BANK_STORAGE_KEY = "finance.sidebar.active-account-iban.v1";
+const LEGACY_ACTIVE_BANK_STORAGE_KEY = "finance.sidebar.active-bank-scope.v1";
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  return "Transaktionen konnten nicht geladen werden";
+}
+
+function toDateParam(value: Date) {
+  return format(value, "yyyy-MM-dd");
+}
 
 function calculateBalance(transactions: Transaction[]) {
   return transactions.reduce((total, transaction) => {
@@ -35,10 +63,7 @@ function calculateExpenses(transactions: Transaction[]) {
   }, 0);
 }
 
-function filterTransactionsByDate(
-  transactions: Transaction[],
-  dateFilter: DateFilterValue,
-) {
+function filterTransactionsByDate(transactions: Transaction[], dateFilter: DateFilterValue) {
   if (!dateFilter.timeSpan && !dateFilter.timeRange) return transactions;
 
   const span = dateFilter.timeSpan ?? getTimeSpanForRange(dateFilter.timeRange!);
@@ -51,36 +76,291 @@ function filterTransactionsByDate(
   });
 }
 
-export function useFinanceData(
-  dateFilter: DateFilterValue = {},
-) {
-  const { transactions, loading, refreshing, error, reload } =
-    useTransactionsData();
+export function useFinanceData(dateFilter: DateFilterValue = {}) {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const filteredTransactions = useMemo(
-    () => filterTransactionsByDate(transactions, dateFilter),
-    [transactions, dateFilter],
+  const [activeAccountIban, setActiveAccountIban] = useState<string>(() => {
+    if (typeof window === "undefined") return "all";
+    return (
+      window.localStorage.getItem(ACTIVE_BANK_STORAGE_KEY) ??
+      window.localStorage.getItem(LEGACY_ACTIVE_BANK_STORAGE_KEY) ??
+      "all"
+    );
+  });
+
+  const [linkedBanks, setLinkedBanks] = useState<StoredBankCredentials[]>([]);
+  const [ibanReferences, setIbanReferences] = useState<IbanKontoinhaberReference[]>([]);
+
+  const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
+
+  const transactionQuery = useMemo(() => {
+    const params = new URLSearchParams();
+    if (dateFilter.timeSpan) {
+      params.set("from_date", toDateParam(startOfDay(dateFilter.timeSpan.from)));
+      params.set("to_date", toDateParam(endOfDay(dateFilter.timeSpan.until)));
+    } else if (dateFilter.timeRange) {
+      const span = getTimeSpanForRange(dateFilter.timeRange);
+      params.set("from_date", toDateParam(startOfDay(span.from)));
+      params.set("to_date", toDateParam(endOfDay(span.until)));
+    } else {
+      params.set("days", "36500");
+    }
+    if (activeAccountIban !== "all") {
+      params.set("iban", activeAccountIban);
+    }
+    return params.toString();
+  }, [activeAccountIban, dateFilter]);
+
+  const accountOptions = useMemo(() => {
+    const items: SelectedBankOption[] = [];
+    linkedBanks.forEach((bank) => {
+      const accounts = (bank.accounts ?? []).filter((account) => account?.iban);
+      if (accounts.length > 0) {
+        accounts.forEach((account) => {
+          const iban = normalizeIban(account.iban);
+          if (iban) {
+            items.push({
+              accountIban: iban,
+              accountName:
+                account.account_name ||
+                bank.account_name ||
+                bank.bank_name ||
+                bank.username ||
+                "Konto",
+              bankName: bank.bank_name || bank.bank_key,
+              bankLogo: bank.bank_logo,
+              username: bank.username,
+              scope: bank.scope,
+              balanceCorrection: account.balance,
+            });
+          }
+        });
+        return;
+      }
+      const fallbackIban = normalizeIban(bank.account_iban);
+      if (fallbackIban) {
+        items.push({
+          accountIban: fallbackIban,
+          accountName: bank.account_name || bank.bank_name || bank.username || "Konto",
+          bankName: bank.bank_name || bank.bank_key,
+          bankLogo: bank.bank_logo,
+          username: bank.username,
+          scope: bank.scope,
+          balanceCorrection: null,
+        });
+      }
+    });
+    return items;
+  }, [linkedBanks]);
+
+  const resolveSelection = useCallback(
+    (selection: string) => {
+      if (selection === "all") return "all";
+      const normalizedSelection = normalizeIban(selection);
+      if (normalizedSelection) {
+        const byIban = accountOptions.find((item) => item.accountIban === normalizedSelection);
+        if (byIban) return byIban.accountIban;
+      }
+      const legacyBank = linkedBanks.find((bank) => bank.scope === selection);
+      const legacyFallback =
+        legacyBank?.accounts?.find((account) => normalizeIban(account.iban))?.iban ??
+        legacyBank?.account_iban;
+      return normalizeIban(legacyFallback) || "all";
+    },
+    [accountOptions, linkedBanks],
   );
 
-  const balance = useMemo(() => calculateBalance(transactions), [transactions]);
+  const loadBankMeta = useCallback(async () => {
+    const [banks] = await Promise.all([
+      fetchBankCredentials().catch(() => []),
+      fetchAvailableBanks().catch(() => []),
+    ]);
+    setLinkedBanks(banks);
+  }, []);
+
+  const loadIbanReferences = useCallback(async () => {
+    const rawReferences: IbanKontoinhaberReferenceDto[] =
+      await fetchIbanKontoinhaberReferences().catch(() => []);
+    setIbanReferences(
+      rawReferences.map((reference) => ({
+        iban: reference.iban,
+        kontoinhaberId: reference.f_kontoinhaber_id,
+        kontoinhaberName: reference.kontoinhaber_name,
+        kontoinhaberWebsite: reference.kontoinhaber_website ?? null,
+        kontoinhaberLogoUrl: reference.kontoinhaber_logo_url ?? null,
+        kontoinhaberLogoWhiteBackground: reference.kontoinhaber_logo_white_background ?? false,
+        kontoinhaberLogoPadding: reference.kontoinhaber_logo_padding ?? false,
+        kontoinhaberIsCompany: Boolean(reference.kontoinhaber_is_company ?? true),
+        resolvedLogoUrl: reference.resolved_logo_url ?? null,
+      })),
+    );
+  }, []);
+
+  const loadTransactions = useCallback(async () => {
+    setError(null);
+    setRefreshing(true);
+    try {
+      const response = await fetch(`${apiBaseUrl}/db/transactions?${transactionQuery}`);
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.detail ?? "Transaktionen konnten nicht geladen werden");
+      }
+      const rawTransactions: TransactionDto[] = Array.isArray(payload?.transactions)
+        ? payload.transactions
+        : [];
+      setTransactions(rawTransactions.map(mapTransaction));
+    } catch (err) {
+      setError(getErrorMessage(err));
+      setTransactions([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [apiBaseUrl, transactionQuery]);
+
+  useEffect(() => {
+    void loadBankMeta();
+    void loadIbanReferences();
+    void loadTransactions();
+  }, [loadBankMeta, loadIbanReferences, loadTransactions]);
+
+  useEffect(() => {
+    const onSelectionChange = (event: Event) => {
+      const customEvent = event as CustomEvent<{
+        accountIban?: string;
+        scope?: string;
+      }>;
+      const nextSelection = customEvent.detail?.accountIban ?? customEvent.detail?.scope ?? "all";
+      setActiveAccountIban(resolveSelection(nextSelection));
+    };
+
+    window.addEventListener("finance-bank-selection-change", onSelectionChange);
+    window.addEventListener("finance-bank-credentials-changed", () => void loadBankMeta());
+    window.addEventListener("finance-data-refresh", () => void loadTransactions());
+
+    const onReferenceDataChange = () => {
+      void loadIbanReferences();
+    };
+    window.addEventListener("finance-reference-data-changed", onReferenceDataChange);
+
+    return () => {
+      window.removeEventListener("finance-bank-selection-change", onSelectionChange);
+      window.removeEventListener("finance-bank-credentials-changed", () => void loadBankMeta());
+      window.removeEventListener("finance-data-refresh", () => void loadTransactions());
+      window.removeEventListener("finance-reference-data-changed", onReferenceDataChange);
+    };
+  }, [loadBankMeta, loadIbanReferences, loadTransactions, resolveSelection]);
+
+  const activeAccount = useMemo(
+    () => getSelectedBank(accountOptions, activeAccountIban),
+    [accountOptions, activeAccountIban],
+  );
+
+  const selectedAccountIban = activeAccountIban === "all" ? null : activeAccountIban;
+
+  const accountFilteredTransactions = useMemo(() => {
+    if (activeAccountIban === "all" || !selectedAccountIban) return transactions;
+    return transactions.filter((transaction) => {
+      const kontoIban = normalizeIban(transaction.konto?.iban);
+      return kontoIban === selectedAccountIban;
+    });
+  }, [activeAccountIban, selectedAccountIban, transactions]);
+
+  const resolvedTransactions = useMemo(() => {
+    const lookup = buildIbanReferenceLookup(ibanReferences);
+    return resolveTransactionsCounterparty(accountFilteredTransactions, lookup);
+  }, [accountFilteredTransactions, ibanReferences]);
+
+  const cleanedTransactions = useMemo(
+    () => resolvedTransactions.filter((t) => !t.technisch.bankDeleted),
+    [resolvedTransactions],
+  );
+
+  const filteredTransactions = useMemo(
+    () => filterTransactionsByDate(cleanedTransactions, dateFilter),
+    [cleanedTransactions, dateFilter],
+  );
+
+  const needsCorrection = useMemo(() => {
+    return !dateFilter.timeSpan && !dateFilter.timeRange;
+  }, [dateFilter]);
+
+  const activeCorrection = useMemo(() => {
+    if (selectedAccountIban) {
+      return (
+        (accountOptions ?? []).find((a) => a.accountIban === selectedAccountIban)
+          ?.balanceCorrection ?? 0
+      );
+    }
+    return (accountOptions ?? []).reduce((sum, a) => sum + (a.balanceCorrection ?? 0), 0);
+  }, [accountOptions, selectedAccountIban]);
+
+  const transactionSum = useMemo(
+    () => calculateBalance(cleanedTransactions),
+    [cleanedTransactions],
+  );
+
+  const balance = useMemo(
+    () => activeCorrection + transactionSum,
+    [activeCorrection, transactionSum],
+  );
+
   const balanceFormatted = useMemo(() => formatBalance(balance), [balance]);
-  const incomes = useMemo(() => calculateIncomes(transactions), [transactions]);
-  const expenses = useMemo(() => calculateExpenses(transactions), [transactions]);
+
+  const incomes = useMemo(() => {
+    const base = calculateIncomes(cleanedTransactions);
+    if (!needsCorrection) return base;
+    return activeCorrection > 0 ? base + activeCorrection : base;
+  }, [cleanedTransactions, activeCorrection, needsCorrection]);
+
+  const expenses = useMemo(() => {
+    const base = calculateExpenses(cleanedTransactions);
+    if (!needsCorrection) return base;
+    return activeCorrection < 0 ? base + Math.abs(activeCorrection) : base;
+  }, [cleanedTransactions, activeCorrection, needsCorrection]);
   const incomesFormatted = useMemo(() => formatBalance(incomes), [incomes]);
   const expensesFormatted = useMemo(() => formatBalance(-expenses), [expenses]);
 
+  const accountBalances = useMemo(() => {
+    if (selectedAccountIban) return [];
+
+    const byIban = new Map<string, number>();
+    for (const t of cleanedTransactions) {
+      const iban = normalizeIban(t.konto.iban);
+      if (iban) {
+        byIban.set(iban, (byIban.get(iban) ?? 0) + t.betrag.wert);
+      }
+    }
+
+    return (accountOptions ?? []).map((account) => ({
+      accountIban: account.accountIban,
+      accountName: account.accountName,
+      bankName: account.bankName,
+      balance:
+        (account.balanceCorrection ?? 0) +
+        (byIban.get(account.accountIban) ?? 0),
+    }));
+  }, [accountOptions, cleanedTransactions, selectedAccountIban]);
+
   return {
-    balance,
-    balanceFormatted,
-    transactionCount: filteredTransactions.length,
     loading,
     refreshing,
     error,
-    reload,
+    reload: loadTransactions,
+    transactions: filteredTransactions,
+    transactionCount: filteredTransactions.length,
+    balance,
+    balanceFormatted,
     incomes,
     incomesFormatted,
     expenses,
     expensesFormatted,
-    transactions: filteredTransactions,
+    linkedAccounts: accountOptions,
+    selectedBank: activeAccount,
+    activeAccountIban,
+    accountBalances,
   };
 }

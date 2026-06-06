@@ -1,4 +1,5 @@
-import { fetchCachedJson } from "./fetch-cache";
+import { clearCachedJson } from "../fetch-cache";
+import { fetchCachedResource, getApiBaseUrl, parseJsonResponse } from "../api";
 
 export type StoredBankCredentials = {
   scope: string;
@@ -12,6 +13,7 @@ export type StoredBankCredentials = {
   accounts?: Array<{
     iban?: string;
     account_name?: string;
+    balance?: number | null;
   }>;
 };
 
@@ -41,12 +43,8 @@ export type BankCredentialsStatus = {
 };
 
 export type AccountBalanceAdjustmentResult = {
-  current_balance: number;
-  target_balance: number;
-  difference: number;
-  received: number;
-  inserted: number;
-  ignored: number;
+  correction: number;
+  bank_balance: number;
 };
 
 export class TanRequiredError extends Error {
@@ -81,28 +79,6 @@ export type BankDefinition = {
   bank_logo: string;
 };
 
-const DEFAULT_API_BASE_URL =
-  (import.meta as any).env.VITE_API_URL || "http://localhost:8112/api";
-
-function getApiBaseUrl(): string {
-  return (import.meta as any).env.VITE_SERVER_URL ?? DEFAULT_API_BASE_URL;
-}
-
-async function parseJsonResponse(response: Response) {
-  const payload = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(
-      payload?.detail?.message ??
-        payload?.detail ??
-        payload?.message ??
-        "Bankdaten konnten nicht geladen werden",
-    );
-  }
-
-  return payload;
-}
-
 export async function fetchBankCredentialsStatus(): Promise<BankCredentialsStatus> {
   const response = await fetch(`${getApiBaseUrl()}/bank-credentials/status`);
   return parseJsonResponse(response);
@@ -111,29 +87,13 @@ export async function fetchBankCredentialsStatus(): Promise<BankCredentialsStatu
 export async function fetchBankCredentials(options?: {
   forceRefresh?: boolean;
 }): Promise<StoredBankCredentials[]> {
-  return fetchCachedJson({
-    key: "bank-credentials",
-    forceRefresh: options?.forceRefresh,
-    fetcher: async () => {
-      const response = await fetch(`${getApiBaseUrl()}/bank-credentials`);
-      const payload = await parseJsonResponse(response);
-      return payload?.credentials ?? [];
-    },
-  });
+  return fetchCachedResource("bank-credentials", "/bank-credentials", (p) => p?.credentials ?? [], options);
 }
 
 export async function fetchAvailableBanks(options?: {
   forceRefresh?: boolean;
 }): Promise<BankDefinition[]> {
-  return fetchCachedJson({
-    key: "available-banks",
-    forceRefresh: options?.forceRefresh,
-    fetcher: async () => {
-      const response = await fetch(`${getApiBaseUrl()}/bank-credentials/banks`);
-      const payload = await parseJsonResponse(response);
-      return payload?.banks ?? [];
-    },
-  });
+  return fetchCachedResource("available-banks", "/bank-credentials/banks", (p) => p?.banks ?? [], options);
 }
 
 export async function fetchBankAccounts(
@@ -318,8 +278,9 @@ export async function adjustBankAccountBalance(
   const payload = await parseJsonResponse(response);
 
   try {
+    clearCachedJson("bank-credentials");
     window.dispatchEvent(
-      new CustomEvent("finance-data-refresh", { detail: payload }),
+      new CustomEvent("finance-bank-credentials-changed", { detail: payload }),
     );
   } catch {
     // ignore if running in non-browser environment

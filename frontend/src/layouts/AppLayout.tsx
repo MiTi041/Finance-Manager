@@ -1,12 +1,9 @@
 import { Outlet } from "react-router-dom";
-import {
-  SidebarProvider,
-  SidebarInset,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/app-sidebar";
+import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/layouts/sidebar/app-sidebar";
 import { Separator } from "@/components/ui/separator";
-import { DynamicBreadcrumbs } from "@/components/ui/breadcrumb";
+import { DynamicBreadcrumbs } from "@/layouts/breadcrumb";
+import { DynamicTutorialButton } from "@/layouts/dynamic-tutorial-button";
 import FintsAutoSync from "@/components/fints-auto-sync";
 import { GlobalDateFilterProvider } from "@/hooks/use-global-date-filter";
 
@@ -23,6 +20,7 @@ export default function AppLayout() {
               <Separator orientation="vertical" className="mr-2 h-4" />
               <DynamicBreadcrumbs />
             </div>
+            <DynamicTutorialButton />
           </header>
 
           <div className="flex flex-1 flex-col">

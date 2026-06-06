@@ -8,4 +8,4 @@ class BankCredentials(BaseModel):
     account_name: str | None = None
     username: str = Field(min_length=1)
     pin: str = Field(min_length=1)
-    accounts: list[dict[str, str | None]] | None = None
+    accounts: list[dict[str, str | float | None]] | None = None

@@ -16,11 +16,14 @@ type ConfirmDialogProps = {
   title: string;
   description: string;
   confirmLabel: string;
+  saveLabel?: string;
   cancelLabel?: string;
   loading?: boolean;
+  saving?: boolean;
   destructive?: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void | Promise<void>;
+  onSave?: () => void | Promise<void>;
   children?: ReactNode;
 };
 
@@ -29,11 +32,14 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel,
+  saveLabel,
   cancelLabel = "Abbrechen",
   loading = false,
+  saving = false,
   destructive = true,
   onOpenChange,
   onConfirm,
+  onSave,
   children,
 }: ConfirmDialogProps) {
   return (
@@ -55,9 +61,24 @@ export function ConfirmDialog({
             <X className="size-4" />
             {cancelLabel}
           </Button>
+          {onSave && saveLabel ? (
+            <Button
+              type="button"
+              variant="default"
+              onClick={() => void onSave()}
+              disabled={saving}
+            >
+              {saving ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Check className="size-4" />
+              )}
+              <span>{saving ? `${saveLabel} ...` : saveLabel}</span>
+            </Button>
+          ) : null}
           <Button
             type="button"
-            variant={destructive ? "destructive" : "default"}
+            variant={destructive ? "destructive" : "outline"}
             onClick={() => void onConfirm()}
             disabled={loading}
           >
@@ -65,9 +86,7 @@ export function ConfirmDialog({
               <Loader2 className="size-4 animate-spin" />
             ) : destructive ? (
               <Trash2 className="size-4" />
-            ) : (
-              <Check className="size-4" />
-            )}
+            ) : null}
             <span>{loading ? `${confirmLabel} ...` : confirmLabel}</span>
           </Button>
         </DialogFooter>

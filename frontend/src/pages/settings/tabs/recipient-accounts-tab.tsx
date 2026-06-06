@@ -1,30 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Landmark, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, Landmark, Plus } from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+  fetchKontoinhaberReferenceData,
+  type KontoinhaberMapping,
+} from "@/lib/kontoinhaber";
 import {
   createRecipientAccount,
   deleteRecipientAccount,
-  fetchKontoinhaberReferenceData,
   fetchRecipientAccountsReferenceData,
-  type KontoinhaberMapping,
   type RecipientAccountRecord,
   updateRecipientAccount,
-} from "@/lib/db";
-import { hasFreshCache } from "@/lib/fetch-cache";
+} from "@/lib/recipient-accounts";
 import { VirtualizedList } from "@/components/virtualized-list";
 import { BrandIcon } from "@/components/bank-logo";
+import { DiscardChangesDialog, useSettingsTab } from "@/hooks/useSettingsTab";
+import { RecipientAccountForm } from "./recipient-accounts/RecipientAccountForm";
+import { RecipientAccountCreateDialog } from "./recipient-accounts/RecipientAccountCreateDialog";
 
 const EMPTY_FORM = {
   account_name: "",
@@ -84,289 +80,51 @@ function isRecipientAccountDirty(
   );
 }
 
-type PendingRecipientAccountAction =
-  | { kind: "close-edit" }
-  | { kind: "switch-edit"; recipientAccount: RecipientAccountRecord }
-  | { kind: "close-create" };
-
 export function RecipientAccountsTab() {
-  const [recipientAccounts, setRecipientAccounts] = useState<
-    RecipientAccountRecord[]
-  >([]);
   const [ibanMappings, setIbanMappings] = useState<KontoinhaberMapping[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [savingRecipientAccount, setSavingRecipientAccount] = useState(false);
-  const [deletingRecipientAccountId, setDeletingRecipientAccountId] = useState<
-    number | null
-  >(null);
-  const [recipientAccountToDelete, setRecipientAccountToDelete] =
-    useState<RecipientAccountRecord | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [editingRecipientAccount, setEditingRecipientAccount] =
-    useState<RecipientAccountRecord | null>(null);
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [discardChangesOpen, setDiscardChangesOpen] = useState(false);
-  const [pendingRecipientAccountAction, setPendingRecipientAccountAction] =
-    useState<PendingRecipientAccountAction | null>(null);
-  const [form, setForm] = useState<RecipientAccountFormState>(EMPTY_FORM);
-  const listScrollRef = useRef<HTMLDivElement | null>(null);
 
-  const visibleRecipientAccounts = useMemo(
-    () => recipientAccounts,
-    [recipientAccounts],
+  const hook = useSettingsTab<RecipientAccountRecord, RecipientAccountFormState>(
+    {
+      entityName: "Empfängerkonto",
+      cacheKey: "recipient-accounts-reference-data",
+      loadErrorTitle: "Empfängerkonten konnten nicht geladen werden",
+      saveErrorTitle: "Empfängerkonto konnte nicht gespeichert werden",
+      deleteErrorTitle: "Empfängerkonto konnte nicht gelöscht werden",
+      EMPTY_FORM,
+      fetchItems: async (options) => {
+        const [recipientPayload, kontoinhaberPayload] = await Promise.all([
+          fetchRecipientAccountsReferenceData(options),
+          fetchKontoinhaberReferenceData(options),
+        ]);
+        setIbanMappings(kontoinhaberPayload.iban_mappings ?? []);
+        return recipientPayload.recipient_accounts ?? [];
+      },
+      createItem: (payload) =>
+        createRecipientAccount(
+          payload as Parameters<typeof createRecipientAccount>[0],
+        ),
+      updateItem: (id, payload) =>
+        updateRecipientAccount(
+          id,
+          payload as Parameters<typeof updateRecipientAccount>[1],
+        ),
+      deleteItem: (id) => deleteRecipientAccount(id),
+      normalizeDraft: normalizeRecipientAccountDraft,
+      isDirty: isRecipientAccountDirty,
+      formFromItem: (account) => ({
+        account_name: account.account_name,
+        iban: account.iban,
+        bic: account.bic ?? "",
+        recipient_name: account.recipient_name,
+        is_donation_account: account.is_donation_account,
+      }),
+    },
   );
 
-  const loadData = async (options?: {
-    silent?: boolean;
-    forceRefresh?: boolean;
-  }) => {
-    const shouldShowLoading =
-      options?.forceRefresh ||
-      !hasFreshCache("recipient-accounts-reference-data");
-
-    if (!options?.silent && shouldShowLoading) {
-      setLoading(true);
-    }
-    setError(null);
-
-    try {
-      const [recipientPayload, kontoinhaberPayload] = await Promise.all([
-        fetchRecipientAccountsReferenceData({
-          forceRefresh: options?.forceRefresh,
-        }),
-        fetchKontoinhaberReferenceData({
-          forceRefresh: options?.forceRefresh,
-        }),
-      ]);
-      setRecipientAccounts(recipientPayload.recipient_accounts ?? []);
-      setIbanMappings(kontoinhaberPayload.iban_mappings ?? []);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Empfängerkonten konnten nicht geladen werden",
-      );
-      setRecipientAccounts([]);
-    } finally {
-      if (!options?.silent) {
-        setLoading(false);
-      }
-    }
-  };
-
-  useEffect(() => {
-    void loadData();
-
-    const onReferenceChange = () => {
-      void loadData({ forceRefresh: true });
-    };
-
-    window.addEventListener(
-      "finance-reference-data-changed",
-      onReferenceChange,
-    );
-
-    return () => {
-      window.removeEventListener(
-        "finance-reference-data-changed",
-        onReferenceChange,
-      );
-    };
-  }, []);
-
-  const resetEditor = () => {
-    setEditingRecipientAccount(null);
-    setForm(EMPTY_FORM);
-  };
-
-  const closeEditEditor = () => {
-    if (isRecipientAccountDirty(editingRecipientAccount, form)) {
-      setPendingRecipientAccountAction({ kind: "close-edit" });
-      setDiscardChangesOpen(true);
-      return;
-    }
-
-    resetEditor();
-  };
-
-  const requestOpenRecipientAccount = (
-    recipientAccount: RecipientAccountRecord,
-  ) => {
-    if (editingRecipientAccount?.id === recipientAccount.id) {
-      closeEditEditor();
-      return;
-    }
-
-    if (isRecipientAccountDirty(editingRecipientAccount, form)) {
-      setPendingRecipientAccountAction({
-        kind: "switch-edit",
-        recipientAccount,
-      });
-      setDiscardChangesOpen(true);
-      return;
-    }
-
-    setEditingRecipientAccount(recipientAccount);
-    setForm({
-      account_name: recipientAccount.account_name,
-      iban: recipientAccount.iban,
-      bic: recipientAccount.bic ?? "",
-      recipient_name: recipientAccount.recipient_name,
-      is_donation_account: recipientAccount.is_donation_account,
-    });
-    setError(null);
-  };
-
-  const closeCreateEditor = () => {
-    if (isRecipientAccountDirty(null, form)) {
-      setPendingRecipientAccountAction({ kind: "close-create" });
-      setDiscardChangesOpen(true);
-      return;
-    }
-
-    setCreateDialogOpen(false);
-    setForm(EMPTY_FORM);
-  };
-
-  const confirmDiscardChanges = () => {
-    const action = pendingRecipientAccountAction;
-    setPendingRecipientAccountAction(null);
-    setDiscardChangesOpen(false);
-
-    if (!action) return;
-
-    if (action.kind === "close-edit") {
-      resetEditor();
-      return;
-    }
-
-    if (action.kind === "switch-edit") {
-      setEditingRecipientAccount(action.recipientAccount);
-      setForm({
-        account_name: action.recipientAccount.account_name,
-        iban: action.recipientAccount.iban,
-        bic: action.recipientAccount.bic ?? "",
-        recipient_name: action.recipientAccount.recipient_name,
-        is_donation_account: action.recipientAccount.is_donation_account,
-      });
-      setError(null);
-      return;
-    }
-
-    setCreateDialogOpen(false);
-    setForm(EMPTY_FORM);
-  };
-
-  const openCreateDialog = () => {
-    setForm(EMPTY_FORM);
-    setEditingRecipientAccount(null);
-    setCreateDialogOpen(true);
-    resetEditor();
-  };
-
-  const openEditRow = (recipientAccount: RecipientAccountRecord) => {
-    requestOpenRecipientAccount(recipientAccount);
-  };
-
-  const handleSaveRecipientAccount = async () => {
-    setSavingRecipientAccount(true);
-    setError(null);
-
-    try {
-      const prevScroll = listScrollRef.current?.scrollTop;
-      const payload = {
-        account_name: form.account_name.trim(),
-        iban: normalizeAccountValue(form.iban),
-        bic: normalizeAccountValue(form.bic) || null,
-        recipient_name: form.recipient_name.trim(),
-        is_donation_account: form.is_donation_account,
-      };
-
-      if (editingRecipientAccount) {
-        const updatedRecipientAccount = await updateRecipientAccount(
-          editingRecipientAccount.id,
-          payload,
-        );
-        setRecipientAccounts((current) =>
-          current.map((item) =>
-            item.id === updatedRecipientAccount.id
-              ? updatedRecipientAccount
-              : item,
-          ),
-        );
-        setEditingRecipientAccount(updatedRecipientAccount);
-      } else {
-        const createdRecipientAccount = await createRecipientAccount(payload);
-        setRecipientAccounts((current) => [
-          ...current,
-          createdRecipientAccount,
-        ]);
-        setCreateDialogOpen(false);
-        setForm(EMPTY_FORM);
-      }
-
-      if (prevScroll != null) {
-        const restoreScroll = () => {
-          try {
-            if (listScrollRef.current) {
-              listScrollRef.current.scrollTop = prevScroll;
-            }
-          } catch {
-            // ignore
-          }
-        };
-
-        requestAnimationFrame(() => {
-          restoreScroll();
-          requestAnimationFrame(() => {
-            restoreScroll();
-            setTimeout(restoreScroll, 120);
-          });
-        });
-      }
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Empfängerkonto konnte nicht gespeichert werden",
-      );
-    } finally {
-      setSavingRecipientAccount(false);
-    }
-  };
-
-  const openDeleteRecipientAccountDialog = (
-    recipientAccount: RecipientAccountRecord,
-  ) => {
-    setRecipientAccountToDelete(recipientAccount);
-  };
-
-  const confirmDeleteRecipientAccount = async () => {
-    if (!recipientAccountToDelete) return;
-
-    setDeletingRecipientAccountId(recipientAccountToDelete.id);
-    setError(null);
-
-    try {
-      await deleteRecipientAccount(recipientAccountToDelete.id);
-      setRecipientAccounts((current) =>
-        current.filter((item) => item.id !== recipientAccountToDelete.id),
-      );
-
-      if (editingRecipientAccount?.id === recipientAccountToDelete.id) {
-        resetEditor();
-      }
-      setRecipientAccountToDelete(null);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Empfängerkonto konnte nicht gelöscht werden",
-      );
-    } finally {
-      setDeletingRecipientAccountId(null);
-    }
-  };
+  const visibleRecipientAccounts = useMemo(
+    () => hook.items,
+    [hook.items],
+  );
 
   const filterRecipientAccount = (
     recipientAccount: RecipientAccountRecord,
@@ -390,32 +148,32 @@ export function RecipientAccountsTab() {
 
   return (
     <div>
-      {error ? (
+      {hook.error ? (
         <EmptyState
           title="Empfängerkonten konnten nicht geladen werden"
-          text={error}
+          text={hook.error}
           illustration={<Landmark className="size-5" />}
         />
       ) : (
         <VirtualizedList
           items={visibleRecipientAccounts}
-          loading={loading}
+          loading={hook.loading}
           filterItem={filterRecipientAccount}
           searchPlaceholder="Empfängerkonten suchen..."
-          externalScrollRef={listScrollRef}
+          externalScrollRef={hook.listScrollRef}
           scrollClassName="max-h-[65vh]"
           emptyStateTitle="Keine Empfängerkonten vorhanden"
           emptyStateText="Lege Empfängerkonten mit Kontoname, IBAN, BIC und Empfängername an."
           emptyStateIllustration={<Landmark className="size-5" />}
           getItemKey={(recipientAccount) => recipientAccount.id}
           getItemHeight={(recipientAccount) =>
-            editingRecipientAccount?.id === recipientAccount.id ? 368 : 96
+            hook.editingItem?.id === recipientAccount.id ? 368 : 96
           }
           toolbarActions={[
             <Button
               key="recipient-account-create"
               type="button"
-              onClick={openCreateDialog}
+              onClick={hook.openCreateDialog}
             >
               <Plus className="size-4" />
               Empfängerkonto hinzufügen
@@ -437,10 +195,11 @@ export function RecipientAccountsTab() {
           )}
           renderItem={(recipientAccount) => {
             const isExpanded =
-              editingRecipientAccount?.id === recipientAccount.id;
+              hook.editingItem?.id === recipientAccount.id;
 
             const mapping = ibanMappings.find(
-              (m) => m.iban === normalizeAccountValue(recipientAccount.iban),
+              (m) =>
+                m.iban === normalizeAccountValue(recipientAccount.iban),
             );
 
             return (
@@ -448,7 +207,7 @@ export function RecipientAccountsTab() {
                 <button
                   type="button"
                   className="flex w-full items-center gap-4 px-4 py-3 text-left transition-colors hover:bg-muted/40 cursor-pointer"
-                  onClick={() => openEditRow(recipientAccount)}
+                  onClick={() => hook.openEditRow(recipientAccount)}
                 >
                   <BrandIcon
                     src={
@@ -510,172 +269,16 @@ export function RecipientAccountsTab() {
                 </button>
 
                 {isExpanded && (
-                  <div className="border-y border-muted/60 bg-muted/20">
-                    <div className="flex flex-col gap-0 divide-y divide-border/60">
-                      <div className="flex flex-col gap-4 px-4 py-4">
-                        <div className="flex flex-wrap gap-4">
-                          <div className="flex flex-col gap-2">
-                            <label
-                              className="text-sm font-medium"
-                              htmlFor={`recipient-account-name-${recipientAccount.id}`}
-                            >
-                              Kontoname
-                            </label>
-                            <Input
-                              id={`recipient-account-name-${recipientAccount.id}`}
-                              value={form.account_name}
-                              onClick={(event) => event.stopPropagation()}
-                              onChange={(event) =>
-                                setForm((current) => ({
-                                  ...current,
-                                  account_name: event.target.value,
-                                }))
-                              }
-                              autoComplete="off"
-                            />
-                          </div>
-
-                          <div className="flex flex-col gap-2">
-                            <label
-                              className="text-sm font-medium"
-                              htmlFor={`recipient-account-recipient-${recipientAccount.id}`}
-                            >
-                              Empfängername
-                            </label>
-                            <Input
-                              id={`recipient-account-recipient-${recipientAccount.id}`}
-                              value={form.recipient_name}
-                              onClick={(event) => event.stopPropagation()}
-                              onChange={(event) =>
-                                setForm((current) => ({
-                                  ...current,
-                                  recipient_name: event.target.value,
-                                }))
-                              }
-                              autoComplete="off"
-                            />
-                          </div>
-
-                          <div className="grid gap-2">
-                            <label
-                              className="text-sm font-medium"
-                              htmlFor={`recipient-account-iban-${recipientAccount.id}`}
-                            >
-                              IBAN
-                            </label>
-                            <Input
-                              id={`recipient-account-iban-${recipientAccount.id}`}
-                              value={form.iban}
-                              onClick={(event) => event.stopPropagation()}
-                              onChange={(event) =>
-                                setForm((current) => ({
-                                  ...current,
-                                  iban: event.target.value,
-                                }))
-                              }
-                              placeholder="DE..."
-                              autoComplete="off"
-                            />
-                          </div>
-
-                          <div className="grid gap-2">
-                            <label
-                              className="text-sm font-medium"
-                              htmlFor={`recipient-account-bic-${recipientAccount.id}`}
-                            >
-                              BIC
-                            </label>
-                            <Input
-                              id={`recipient-account-bic-${recipientAccount.id}`}
-                              value={form.bic}
-                              onClick={(event) => event.stopPropagation()}
-                              onChange={(event) =>
-                                setForm((current) => ({
-                                  ...current,
-                                  bic: event.target.value,
-                                }))
-                              }
-                              placeholder="BIC optional"
-                              autoComplete="off"
-                            />
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={form.is_donation_account}
-                          className={
-                            form.is_donation_account
-                              ? "cursor-pointer flex w-full items-center justify-between rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-left transition-colors hover:bg-emerald-500/15"
-                              : "cursor-pointer flex w-full items-center justify-between rounded-lg border border-muted bg-muted/70 px-4 py-3 text-left transition-colors hover:bg-muted/40"
-                          }
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setForm((current) => ({
-                              ...current,
-                              is_donation_account: !current.is_donation_account,
-                            }));
-                          }}
-                        >
-                          <div>
-                            <div className="text-sm font-medium">
-                              Spendenkonto
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              Wird für Spenden-Überweisungen genutzt.
-                            </div>
-                          </div>
-                          <span
-                            className={
-                              form.is_donation_account
-                                ? "inline-flex items-center rounded-full bg-emerald-500 px-3 py-1 text-xs font-medium text-white"
-                                : "inline-flex items-center rounded-full px-3 py-1 text-xs font-medium text-muted-foreground"
-                            }
-                          >
-                            {form.is_donation_account ? "Ja" : "Nein"}
-                          </span>
-                        </button>
-                      </div>
-
-                      <div className="flex flex-wrap gap-2 justify-end px-4 py-2">
-                        <Button
-                          type="button"
-                          onClick={() => void handleSaveRecipientAccount()}
-                          disabled={
-                            savingRecipientAccount ||
-                            !isRecipientAccountDirty(
-                              editingRecipientAccount,
-                              form,
-                            ) ||
-                            !form.account_name.trim() ||
-                            !form.iban.trim() ||
-                            !form.recipient_name.trim()
-                          }
-                        >
-                          {savingRecipientAccount
-                            ? "Speichere ..."
-                            : "Speichern"}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                          onClick={() =>
-                            openDeleteRecipientAccountDialog(recipientAccount)
-                          }
-                          disabled={
-                            deletingRecipientAccountId ===
-                              recipientAccount.id || savingRecipientAccount
-                          }
-                        >
-                          <Trash2 className="size-4" />
-                          {deletingRecipientAccountId === recipientAccount.id
-                            ? "Lösche ..."
-                            : "Löschen"}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
+                  <RecipientAccountForm
+                    account={recipientAccount}
+                    form={hook.form}
+                    setForm={hook.setForm}
+                    saving={hook.saving}
+                    isDirty={isRecipientAccountDirty(hook.editingItem, hook.form)}
+                    onSave={() => void hook.handleSave()}
+                    onDelete={() => hook.openDeleteDialog(recipientAccount)}
+                    deleting={hook.deletingItemId === recipientAccount.id}
+                  />
                 )}
               </div>
             );
@@ -683,184 +286,34 @@ export function RecipientAccountsTab() {
         />
       )}
 
-      <Dialog
-        open={createDialogOpen}
+      <RecipientAccountCreateDialog
+        open={hook.createDialogOpen}
         onOpenChange={(open) => {
           if (open) return;
-          closeCreateEditor();
+          hook.closeCreateEditor();
         }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Empfängerkonto hinzufügen</DialogTitle>
-            <DialogDescription>
-              Kontoname, IBAN, BIC und Empfängername werden hier hinterlegt.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="grid gap-4">
-            <div className="grid gap-2">
-              <label
-                className="text-sm font-medium"
-                htmlFor="recipient-account-name"
-              >
-                Kontoname
-              </label>
-              <Input
-                id="recipient-account-name"
-                value={form.account_name}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    account_name: event.target.value,
-                  }))
-                }
-                autoComplete="off"
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <label
-                className="text-sm font-medium"
-                htmlFor="recipient-account-recipient"
-              >
-                Empfängername
-              </label>
-              <Input
-                id="recipient-account-recipient"
-                value={form.recipient_name}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    recipient_name: event.target.value,
-                  }))
-                }
-                autoComplete="off"
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <label
-                className="text-sm font-medium"
-                htmlFor="recipient-account-iban"
-              >
-                IBAN
-              </label>
-              <Input
-                id="recipient-account-iban"
-                value={form.iban}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    iban: event.target.value,
-                  }))
-                }
-                placeholder="DE..."
-                autoComplete="off"
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <label
-                className="text-sm font-medium"
-                htmlFor="recipient-account-bic"
-              >
-                BIC
-              </label>
-              <Input
-                id="recipient-account-bic"
-                value={form.bic}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    bic: event.target.value,
-                  }))
-                }
-                placeholder="BIC optional"
-                autoComplete="off"
-              />
-            </div>
-
-            <button
-              type="button"
-              role="switch"
-              aria-checked={form.is_donation_account}
-              className={
-                form.is_donation_account
-                  ? "flex items-center justify-between rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-left transition-colors hover:bg-emerald-500/15"
-                  : "flex items-center justify-between rounded-lg border border-muted/60 bg-background px-4 py-3 text-left transition-colors hover:bg-muted/40"
-              }
-              onClick={() =>
-                setForm((current) => ({
-                  ...current,
-                  is_donation_account: !current.is_donation_account,
-                }))
-              }
-            >
-              <div>
-                <div className="text-sm font-medium">Spendenkonto</div>
-                <div className="text-xs text-muted-foreground">
-                  Wird für Spenden-Überweisungen genutzt.
-                </div>
-              </div>
-              <span
-                className={
-                  form.is_donation_account
-                    ? "inline-flex items-center rounded-full bg-emerald-500 px-3 py-1 text-xs font-medium text-white"
-                    : "inline-flex items-center rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground"
-                }
-              >
-                {form.is_donation_account ? "Ja" : "Nein"}
-              </span>
-            </button>
-
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <Button
-                type="button"
-                onClick={() => void handleSaveRecipientAccount()}
-                disabled={
-                  savingRecipientAccount ||
-                  !isRecipientAccountDirty(null, form) ||
-                  !form.account_name.trim() ||
-                  !form.iban.trim() ||
-                  !form.recipient_name.trim()
-                }
-              >
-                {savingRecipientAccount ? "Speichere ..." : "Speichern"}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <ConfirmDialog
-        open={discardChangesOpen}
-        title="Änderungen verwerfen?"
-        description="Du hast ungespeicherte Änderungen. Wenn du jetzt schließt, gehen sie verloren."
-        confirmLabel="Verwerfen"
-        cancelLabel="Weiter bearbeiten"
-        destructive={false}
-        onOpenChange={(open) => {
-          if (open) return;
-          setDiscardChangesOpen(false);
-          setPendingRecipientAccountAction(null);
-        }}
-        onConfirm={confirmDiscardChanges}
+        form={hook.form}
+        setForm={hook.setForm}
+        saving={hook.saving}
+        isDirty={isRecipientAccountDirty(null, hook.form)}
+        onSave={() => void hook.handleSave()}
       />
+
+      <DiscardChangesDialog hook={hook} />
       <ConfirmDialog
-        open={Boolean(recipientAccountToDelete)}
+        open={Boolean(hook.itemToDelete)}
         title="Empfängerkonto löschen"
-        description={`Empfängerkonto "${recipientAccountToDelete?.account_name ?? ""}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`}
+        description={`Empfängerkonto "${hook.itemToDelete?.account_name ?? ""}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`}
         confirmLabel="Löschen"
         loading={
-          recipientAccountToDelete
-            ? deletingRecipientAccountId === recipientAccountToDelete.id
+          hook.itemToDelete
+            ? hook.deletingItemId === hook.itemToDelete.id
             : false
         }
         onOpenChange={(open) => {
-          if (!open) setRecipientAccountToDelete(null);
+          if (!open) hook.setItemToDelete(null);
         }}
-        onConfirm={confirmDeleteRecipientAccount}
+        onConfirm={hook.confirmDelete}
       />
     </div>
   );

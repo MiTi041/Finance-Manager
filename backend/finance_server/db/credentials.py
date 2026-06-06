@@ -93,7 +93,7 @@ def _sync_bank_accounts(
 def _load_bank_accounts(connection: sqlite3.Connection, scope: str) -> list[dict[str, Any]]:
     rows = connection.execute(
         """
-        SELECT iban, account_name
+        SELECT iban, account_name, balance
         FROM bank_accounts
         WHERE scope = ?
         ORDER BY created_at ASC, id ASC
@@ -105,6 +105,7 @@ def _load_bank_accounts(connection: sqlite3.Connection, scope: str) -> list[dict
         {
             "iban": row["iban"],
             "account_name": row["account_name"],
+            "balance": row["balance"],
         }
         for row in rows
     ]
@@ -288,6 +289,24 @@ def update_bank_account(scope: str, iban: str, account_name: str | None = None, 
             (new_iban, new_name, now, scope, normalized_iban),
         )
         return True
+
+
+def update_account_balance(scope: str, iban: str, balance: float) -> bool:
+    normalized_iban = normalize_text(iban)
+    if not normalized_iban:
+        return False
+
+    now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    with get_connection() as connection:
+        cursor = connection.execute(
+            """
+            UPDATE bank_accounts
+            SET balance = ?, updated_at = ?
+            WHERE scope = ? AND UPPER(iban) = UPPER(?)
+            """,
+            (balance, now, scope, normalized_iban),
+        )
+        return cursor.rowcount > 0
 
 
 def delete_bank_account(scope: str, iban: str) -> bool:

@@ -16,12 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/empty-state";
-import {
-  ChevronDownIcon,
-  ChevronsUpDownIcon,
-  ChevronUpIcon,
-  Download,
-} from "lucide-react";
+import { ChevronDownIcon, ChevronsUpDownIcon, ChevronUpIcon, Download } from "lucide-react";
 import { Button } from "./ui/button";
 
 function escapeCsvValue(value: unknown): string {
@@ -114,17 +109,12 @@ function prettifyHeader(key: string) {
 
 function inferExportFilename(entityName?: string, count?: number): string {
   const date = new Date().toISOString().slice(0, 10);
-  const base = entityName
-    ? String(entityName).trim().toLowerCase().replace(/\s+/g, "-")
-    : "export";
+  const base = entityName ? String(entityName).trim().toLowerCase().replace(/\s+/g, "-") : "export";
   const c = typeof count === "number" ? `-${count}` : "";
   return `${base}-export-${date}${c}.csv`;
 }
 
-function collectSearchableText(
-  value: unknown,
-  seen = new WeakSet<object>(),
-): string {
+function collectSearchableText(value: unknown, seen = new WeakSet<object>()): string {
   if (value === null || value === undefined) return "";
 
   if (
@@ -167,10 +157,8 @@ export interface SortOption<T> {
 }
 
 export interface VirtualizedListRef {
-  scrollToIndex: (
-    index: number,
-    align?: "start" | "center" | "end" | "auto",
-  ) => void;
+  scrollToIndex: (index: number, align?: "start" | "center" | "end" | "auto") => void;
+  scrollToItem: (key: React.Key, align?: "start" | "center" | "end" | "auto") => void;
 }
 
 export interface VirtualizedListProps<T> {
@@ -181,6 +169,7 @@ export interface VirtualizedListProps<T> {
   filterItems?: ReactNode[];
   toolbarActions?: ReactNode[];
   footerActions?: ReactNode[];
+  selectAllNode?: ReactNode;
   className?: string;
   searchPlaceholder?: string;
   filterItem?: (item: T, query: string) => boolean;
@@ -214,6 +203,7 @@ function VirtualizedListInner<T>(
     filterItems,
     toolbarActions,
     footerActions,
+    selectAllNode,
     className,
     searchPlaceholder = "Suchen...",
     filterItem,
@@ -242,6 +232,15 @@ function VirtualizedListInner<T>(
   const [offsetTop, setOffsetTop] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const internalScrollRef = useRef<HTMLDivElement>(null);
+
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    searchSort: true,
+    actions: true,
+    filters: true,
+  });
+
+  const toggleSection = (key: string) =>
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
 
   // Measure where the component starts in the viewport so the height
   // can be calculated as (100vh - offsetTop - bottom padding) without
@@ -313,9 +312,16 @@ function VirtualizedListInner<T>(
           align,
         });
       },
+      scrollToItem(key, align = "start") {
+        if (!getItemKey) return;
+        const index = visibleItems.findIndex((item, i) => getItemKey(item, i) === key);
+        if (index >= 0) {
+          virtualRows.scrollToIndex(index, { align });
+        }
+      },
     }),
 
-    [virtualRows],
+    [virtualRows, visibleItems, getItemKey],
   );
 
   const prevLengthRef = useRef(visibleItems.length);
@@ -329,10 +335,7 @@ function VirtualizedListInner<T>(
     }
   }, [virtualRows, visibleItems.length]);
 
-  const loadingSkeletonRows = Array.from(
-    { length: loadingSkeletonCount },
-    (_, index) => index,
-  );
+  const loadingSkeletonRows = Array.from({ length: loadingSkeletonCount }, (_, index) => index);
 
   const handleExportCsv = () => {
     if (visibleItems.length === 0) return;
@@ -340,15 +343,11 @@ function VirtualizedListInner<T>(
 
     // determine headers (stable order) and friendly labels
     const headers = Array.from(new Set(rows.flatMap((r) => Object.keys(r))));
-    const labels = headers.map(
-      (h) => exportColumnMapping?.[h] ?? prettifyHeader(h),
-    );
+    const labels = headers.map((h) => exportColumnMapping?.[h] ?? prettifyHeader(h));
 
     const csvLines = [
       labels.map((l) => escapeCsvValue(l)).join(","),
-      ...rows.map((row) =>
-        headers.map((h) => escapeCsvValue(row[h] ?? "")).join(","),
-      ),
+      ...rows.map((row) => headers.map((h) => escapeCsvValue(row[h] ?? "")).join(",")),
     ];
 
     const csv = csvLines.join("\n");
@@ -358,8 +357,7 @@ function VirtualizedListInner<T>(
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
 
-    const filename =
-      exportFilename ?? inferExportFilename(exportEntityName, rows.length);
+    const filename = exportFilename ?? inferExportFilename(exportEntityName, rows.length);
 
     link.href = url;
     link.setAttribute("download", filename);
@@ -393,81 +391,123 @@ function VirtualizedListInner<T>(
     >
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
         <div className="flex min-w-50 flex-1 flex-col gap-4">
-          {!noSearchbar && (
-            <div className="space-y-2 w-full">
-              <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
-                Suchen
-              </p>
-              <Input
-                placeholder={searchPlaceholder}
-                value={globalFilter}
-                onChange={(event) => setGlobalFilter(event.target.value)}
-                className="w-full sm:max-w-sm sm:flex-1"
-              />
-            </div>
-          )}
-
-          {sortItems && (
-            <div className="space-y-2">
-              <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
-                Sortieren
-              </p>
-              <div className="flex min-w-0 flex-wrap items-center gap-2 justify-start">
-                {sortItems.map((option) => {
-                  const isActive = sortKey === option.value;
-                  const dir = isActive ? sortDir : null;
-                  return (
-                    <Button
-                      key={option.value}
-                      type="button"
-                      onClick={() => handleSortToggle(option.value)}
-                      className={cn(
-                        "inline-flex items-center gap-1.5 w-min rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                        isActive
-                          ? "!bg-foreground !text-background !hover:bg-foreground/90"
-                          : "!bg-muted !text-muted-foreground !hover:bg-muted/80 !hover:text-foreground",
-                      )}
-                    >
-                      <span>{option.label}</span>
-                      <span className="text-xs">
-                        {dir === "asc" ? (
-                          <ChevronUpIcon size={16} />
-                        ) : dir === "desc" ? (
-                          <ChevronDownIcon size={16} />
-                        ) : (
-                          <ChevronsUpDownIcon size={16} />
-                        )}
-                      </span>
-                    </Button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           {toolbarActions && (
             <div className="space-y-2">
-              <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
-                Funktionen
-              </p>
-              <div className={cn("flex flex-wrap gap-2")}>
-                {toolbarActions?.map((item, index) => (
-                  <React.Fragment key={index}>{item}</React.Fragment>
-                ))}
-              </div>
+              <button
+                type="button"
+                onClick={() => toggleSection("actions")}
+                className="cursor-pointer flex w-full items-center justify-start gap-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+              >
+                <span>Funktionen</span>
+                <ChevronDownIcon
+                  size={14}
+                  className={cn(
+                    "transition-transform duration-200",
+                    openSections.actions ? "rotate-0" : "-rotate-90",
+                  )}
+                />
+              </button>
+              {openSections.actions && (
+                <div className={cn("flex flex-wrap gap-2")}>
+                  {toolbarActions?.map((item, index) => (
+                    <React.Fragment key={index}>{item}</React.Fragment>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
           {filterItems && (
             <div className="space-y-2">
-              <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
-                Filtern
-              </p>
-              <div className={cn("flex flex-wrap gap-2")}>
-                {filterItems?.map((item, index) => (
-                  <React.Fragment key={index}>{item}</React.Fragment>
-                ))}
-              </div>
+              <button
+                type="button"
+                onClick={() => toggleSection("filters")}
+                className="cursor-pointer flex w-full items-center justify-start gap-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+              >
+                <span>Filtern</span>
+                <ChevronDownIcon
+                  size={14}
+                  className={cn(
+                    "transition-transform duration-200",
+                    openSections.filters ? "rotate-0" : "-rotate-90",
+                  )}
+                />
+              </button>
+              {openSections.filters && (
+                <div className={cn("flex flex-wrap gap-2")}>
+                  {filterItems?.map((item, index) => (
+                    <React.Fragment key={index}>{item}</React.Fragment>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {(!noSearchbar || sortItems) && (
+            <div className="space-y-2 w-full">
+              <button
+                type="button"
+                onClick={() => toggleSection("searchSort")}
+                className="cursor-pointer flex w-full items-center justify-start gap-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+              >
+                <span>
+                  {!noSearchbar && "Suchen"} {!noSearchbar && sortItems && "&"}{" "}
+                  {sortItems && "Sortieren"}
+                </span>
+                <ChevronDownIcon
+                  size={14}
+                  className={cn(
+                    "transition-transform duration-200",
+                    openSections.searchSort ? "rotate-0" : "-rotate-90",
+                  )}
+                />
+              </button>
+
+              {openSections.searchSort && (
+                <div className="flex flex-wrap gap-4">
+                  {!noSearchbar && (
+                    <Input
+                      placeholder={searchPlaceholder}
+                      value={globalFilter}
+                      onChange={(event) => setGlobalFilter(event.target.value)}
+                      className="flex-1 min-w-[200px]"
+                    />
+                  )}
+
+                  {sortItems && (
+                    <div className="flex min-w-0 flex-wrap items-center gap-2 justify-start">
+                      {sortItems.map((option) => {
+                        const isActive = sortKey === option.value;
+                        const dir = isActive ? sortDir : null;
+                        return (
+                          <Button
+                            key={option.value}
+                            type="button"
+                            onClick={() => handleSortToggle(option.value)}
+                            className={cn(
+                              "inline-flex items-center gap-1.5 w-min rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                              isActive
+                                ? "!bg-foreground !text-background !hover:bg-foreground/90"
+                                : "!bg-muted !text-muted-foreground !hover:bg-muted/80 !hover:text-foreground",
+                            )}
+                          >
+                            <span>{option.label}</span>
+                            <span className="text-xs">
+                              {dir === "asc" ? (
+                                <ChevronUpIcon size={16} />
+                              ) : dir === "desc" ? (
+                                <ChevronDownIcon size={16} />
+                              ) : (
+                                <ChevronsUpDownIcon size={16} />
+                              )}
+                            </span>
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -527,8 +567,7 @@ function VirtualizedListInner<T>(
               const virtualItems = virtualRows.getVirtualItems();
               const paddingTop = virtualItems[0]?.start ?? 0;
               const paddingBottom =
-                virtualRows.getTotalSize() -
-                (virtualItems[virtualItems.length - 1]?.end ?? 0);
+                virtualRows.getTotalSize() - (virtualItems[virtualItems.length - 1]?.end ?? 0);
 
               return (
                 <div>
@@ -538,16 +577,16 @@ function VirtualizedListInner<T>(
                     return (
                       <div
                         key={getItemKey(item, virtualRow.index)}
-                        ref={virtualRows.measureElement}
+                        ref={(el) => {
+                          if (el) virtualRows.measureElement(el);
+                        }}
                         data-index={virtualRow.index}
                       >
                         {renderItem(item, virtualRow.index)}
                       </div>
                     );
                   })}
-                  {paddingBottom > 0 && (
-                    <div style={{ height: paddingBottom }} />
-                  )}
+                  {paddingBottom > 0 && <div style={{ height: paddingBottom }} />}
                 </div>
               );
             })()}
@@ -555,11 +594,12 @@ function VirtualizedListInner<T>(
 
         {footerActions?.map((item, index) => (
           <div
+            key={index}
             className={cn(
               "flex items-center justify-between gap-3 border border-t-0 px-4 py-2 bg-primary/5 border-primary/20",
             )}
           >
-            <React.Fragment key={index}>{item}</React.Fragment>
+            {item}
           </div>
         ))}
 
@@ -576,25 +616,20 @@ function VirtualizedListInner<T>(
               <span className="text-xs text-muted-foreground whitespace-nowrap">
                 {visibleItems.length !== items.length ? (
                   <>
-                    <span className="font-medium text-foreground">
-                      {visibleItems.length}
-                    </span>
+                    <span className="font-medium text-foreground">{visibleItems.length}</span>
                     {" von "}
-                    <span className="font-medium text-foreground">
-                      {items.length}
-                    </span>
+                    <span className="font-medium text-foreground">{items.length}</span>
                     {" Zeilen"}
                   </>
                 ) : (
                   <>
-                    <span className="font-medium text-foreground">
-                      {items.length}
-                    </span>
+                    <span className="font-medium text-foreground">{items.length}</span>
                     {" Zeilen"}
                   </>
                 )}
               </span>
             )}
+            {!footerActions?.length && selectAllNode}
           </div>
           {!loading && visibleItems.length > 0 && csvExport ? (
             <Button

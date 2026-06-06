@@ -38,7 +38,7 @@ import {
   ChevronsLeft as IconChevronsLeft,
   ChevronsRight as IconChevronsRight,
 } from "lucide-react";
-import { cn } from "@lib/utils";
+import { cn } from "@/lib/utils";
 
 interface DataTableProps<T> {
   data: T[];

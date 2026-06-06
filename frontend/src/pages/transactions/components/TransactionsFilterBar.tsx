@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/select";
 import { FilterX, SearchX, Landmark } from "lucide-react";
 
-import { type TransactionCategoryOption } from "./transactions.utils";
+import { type TransactionCategoryOption } from "@/lib/utils/categories";
 
 type TransactionsFilterBarProps = {
   onlyUnassigned: boolean;
@@ -108,7 +108,7 @@ export function TransactionsFilterBar({
           onClick={onToggleShowDeletedBanks}
         >
           <Landmark className="size-4" />
-          <span>Gelöschte Bankzugänge anzeigen</span>
+          <span>Transaktionen von gelöschten Bankzugängen anzeigen</span>
           <span
             className={
               showDeletedBanks

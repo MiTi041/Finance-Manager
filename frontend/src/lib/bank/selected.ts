@@ -1,3 +1,5 @@
+import { normalizeIban } from "@/lib/iban";
+
 export type SelectedBankOption = {
   accountIban: string;
   accountName: string;
@@ -5,11 +7,8 @@ export type SelectedBankOption = {
   bankLogo?: string;
   username?: string;
   scope: string;
+  balanceCorrection?: number | null;
 };
-
-function normalizeIban(value?: string | null) {
-  return value ? value.replace(/\s+/g, "").toUpperCase() : "";
-}
 
 export function getSelectedBank(
   accountOptions: SelectedBankOption[],

@@ -1,4 +1,4 @@
-import { getApiBaseUrl } from "@/lib/db";
+import { getApiBaseUrl } from "@/lib/api";
 
 function isRemoteLogoUrl(value: string) {
   return /^(https?:|data:)/i.test(value);

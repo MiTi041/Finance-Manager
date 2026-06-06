@@ -1,27 +1,43 @@
 "use client";
 
+import { useMemo } from "react";
+import { format } from "date-fns";
+import { CircleX, Loader2, Wallet, TrendingUp, TrendingDown, Receipt } from "lucide-react";
+
 import DateFilter from "@/components/date-filter";
 import { EmptyState } from "@/components/empty-state";
 import { useGlobalDateFilter } from "@/hooks/use-global-date-filter";
 import { useFinanceData } from "@/hooks/useFinanceData";
-import { CircleX } from "lucide-react";
+import { getTimeSpanForRange } from "@/types/time-range";
+import type { DateFilterValue } from "@/types/date-filter";
+
+import { StatCard } from "./components/StatCard";
+import { BalanceChart } from "./components/BalanceChart";
+import { MonthlyChart } from "./components/MonthlyChart";
+import { DashboardSkeleton } from "./components/DashboardSkeleton";
+
+function computeDateFooter(dateFilter: DateFilterValue) {
+  if (!dateFilter.timeSpan && !dateFilter.timeRange) return null;
+  const span = dateFilter.timeSpan ?? getTimeSpanForRange(dateFilter.timeRange!);
+  return `${format(span.from, "dd.MM.yy")} – ${format(span.until, "dd.MM.yy")}`;
+}
 
 export default function DashboardPage() {
   const { dateFilter, setDateFilter } = useGlobalDateFilter();
   const {
     balance,
-    balanceFormatted,
     incomes,
-    incomesFormatted,
     expenses,
-    expensesFormatted,
     transactionCount,
     loading,
     refreshing,
     error,
-    reload,
     transactions,
+    activeAccountIban,
+    accountBalances,
   } = useFinanceData(dateFilter);
+
+  const dateFooter = useMemo(() => computeDateFooter(dateFilter), [dateFilter]);
 
   if (error) {
     return (
@@ -33,13 +49,77 @@ export default function DashboardPage() {
     );
   }
 
+  const savingsRate = incomes > 0 ? (((incomes - expenses) / incomes) * 100).toFixed(0) : "0";
+  const expensePct = ((expenses / (incomes + expenses || 1)) * 100).toFixed(0);
+  const incomePct = ((incomes / (incomes + expenses || 1)) * 100).toFixed(0);
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 py-6">
-      <DateFilter value={dateFilter} onChange={setDateFilter} />
+      <div className="flex items-center justify-between gap-4">
+        <DateFilter value={dateFilter} onChange={setDateFilter} />
+        {refreshing && (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Loader2 size={13} className="animate-spin" />
+            Aktualisiere…
+          </div>
+        )}
+      </div>
 
-      <p>{balanceFormatted}</p>
-      <p>{incomesFormatted}</p>
-      <p>{expensesFormatted}</p>
+      {loading ? (
+        <DashboardSkeleton />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3.5 xl:grid-cols-4">
+            <StatCard
+              title="Gesamtvermögen"
+              value={balance}
+              valueFormat={{ style: "currency", currency: "EUR" }}
+              valueLocales="de-DE"
+              accent={balance >= 0 ? "#00d4a1" : "#ff5c6c"}
+              icon={Wallet}
+              footer={dateFooter!}
+              accountBalances={activeAccountIban === "all" ? accountBalances : undefined}
+            />
+            <StatCard
+              title="Einnahmen"
+              value={incomes}
+              valueFormat={{ style: "currency", currency: "EUR" }}
+              valueLocales="de-DE"
+              sub={`${incomePct} % der Umsätze`}
+              trend="up"
+              accent="#00d4a1"
+              icon={TrendingUp}
+              footer={dateFooter!}
+            />
+            <StatCard
+              title="Ausgaben"
+              value={-expenses}
+              valueFormat={{ style: "currency", currency: "EUR" }}
+              valueLocales="de-DE"
+              sub={`${expensePct} % der Umsätze`}
+              trend="down"
+              accent="#ff5c6c"
+              icon={TrendingDown}
+              footer={dateFooter!}
+            />
+            <StatCard
+              title="Transaktionen"
+              value={transactionCount}
+              valueFormat={{ style: "decimal" }}
+              valueLocales="de-DE"
+              sub={`${savingsRate} % Sparquote`}
+              accent="#b47bff"
+              icon={Receipt}
+              footer={dateFooter!}
+            />
+          </div>
+
+          <div className="flex gap-3.5">
+            <BalanceChart transactions={transactions} currentBalance={balance} />
+            <MonthlyChart transactions={transactions} />
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -7,7 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { handleMailRegistration } from "@/lib/mail";
 import {
   CheckCircle2,
@@ -21,19 +21,30 @@ import {
 
 const API_BASE =
   (import.meta as any).env.VITE_API_URL || "http://localhost:8112/api";
-const STORAGE_KEY = "finance.product-id.v1";
 
 export function ProductIdTab() {
-  const [value, setValue] = useState(
-    () => localStorage.getItem(STORAGE_KEY) ?? "",
-  );
+  const [value, setValue] = useState("");
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
 
-  const isConfigured = !!localStorage.getItem(STORAGE_KEY);
+  const [isConfigured, setIsConfigured] = useState(false);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/product-id`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.product_id) {
+          setValue(data.product_id);
+          setIsConfigured(true);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
 
   const handleSave = async () => {
     const pid = value.trim();
@@ -49,7 +60,7 @@ export function ProductIdTab() {
         body: JSON.stringify({ product_id: pid }),
       });
       if (!res.ok) throw new Error("Speichern fehlgeschlagen");
-      localStorage.setItem(STORAGE_KEY, pid);
+      setIsConfigured(true);
       setMessage({ type: "success", text: "Produkt-ID gespeichert." });
     } catch (err: any) {
       setMessage({ type: "error", text: err.message ?? "Verbindungsfehler" });
@@ -58,11 +69,36 @@ export function ProductIdTab() {
     }
   };
 
-  const handleClear = () => {
-    localStorage.removeItem(STORAGE_KEY);
-    setValue("");
-    setMessage({ type: "success", text: "Produkt-ID entfernt." });
+  const handleClear = async () => {
+    setSaving(true);
+    setMessage(null);
+
+    try {
+      const res = await fetch(`${API_BASE}/product-id`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Löschen fehlgeschlagen");
+      setValue("");
+      setIsConfigured(false);
+      setMessage({ type: "success", text: "Produkt-ID entfernt." });
+    } catch (err: any) {
+      setMessage({ type: "error", text: err.message ?? "Verbindungsfehler" });
+    } finally {
+      setSaving(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="grid gap-6">
+        <Card className="py-6">
+          <CardContent>
+            <p className="text-sm text-muted-foreground">Lade…</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="grid gap-6">
@@ -94,10 +130,9 @@ export function ProductIdTab() {
                 type="submit"
                 onClick={handleSave}
                 disabled={
-                  (isConfigured &&
-                    value === localStorage.getItem(STORAGE_KEY)) ||
                   saving ||
-                  !value.trim()
+                  !value.trim() ||
+                  (isConfigured && value.trim() === value && !message)
                 }
               >
                 {saving
@@ -112,6 +147,7 @@ export function ProductIdTab() {
                   variant="outline"
                   onClick={handleClear}
                   className="text-destructive hover:text-destructive"
+                  disabled={saving}
                 >
                   <Trash2 className="size-4" />
                 </Button>
@@ -136,7 +172,7 @@ export function ProductIdTab() {
             </div>
           )}
 
-          {isConfigured && (
+          {isConfigured && !message && (
             <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-700 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-400">
               <CheckCircle2 className="size-4 shrink-0 text-blue-500" />
               <span>Produkt-ID ist hinterlegt. Bankabrufe sind aktiviert.</span>

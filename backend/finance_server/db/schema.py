@@ -276,4 +276,12 @@ def initialize_database(connection: sqlite3.Connection) -> None:
     if row_count == 0:
         connection.executescript(SEED_CATEGORIES_SQL)
 
+    _ensure_table_columns(
+        connection,
+        "bank_accounts",
+        {
+            "balance": "REAL",
+        },
+    )
+
     create_app_settings_table(connection)

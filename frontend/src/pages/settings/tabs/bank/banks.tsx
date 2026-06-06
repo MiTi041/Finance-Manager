@@ -17,7 +17,7 @@ import {
   adjustBankAccountBalance,
   type StoredBankCredentials,
   updateBankAccount,
-} from "@/lib/bank-credentials";
+} from "@/lib/bank/credentials";
 import { EmptyState } from "@/components/empty-state";
 import { Check, Loader2, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import { BankLogo } from "@/components/bank-logo";
@@ -94,6 +94,22 @@ export function Banks({ linkedBanks, deletingScope, onDeleteOne }: BanksProps) {
 
   const isDirty = (accountName: string) =>
     Boolean(editing && editing.accountName.trim() !== accountName.trim());
+
+  const handleSaveAndDiscard = async () => {
+    if (!editing) return;
+    setSaving(true);
+    try {
+      await updateBankAccount(
+        editing.scope,
+        editing.iban,
+        { account_name: editing.accountName },
+      );
+      setEditing(null);
+      setDiscardChangesOpen(false);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const confirmDeleteBank = async () => {
     if (!bankToDelete) return;
@@ -377,11 +393,14 @@ export function Banks({ linkedBanks, deletingScope, onDeleteOne }: BanksProps) {
       })}
       <ConfirmDialog
         open={discardChangesOpen}
-        title="Änderungen verwerfen?"
-        description="Du hast ungespeicherte Änderungen. Wenn du jetzt schließt, gehen sie verloren."
+        title="Ungespeicherte Änderungen"
+        description="Du hast ungespeicherte Änderungen. Was möchtest du tun?"
         confirmLabel="Verwerfen"
+        saveLabel="Speichern"
         cancelLabel="Weiter bearbeiten"
         destructive={false}
+        saving={saving}
+        onSave={() => void handleSaveAndDiscard()}
         onOpenChange={(open) => {
           if (open) return;
           setDiscardChangesOpen(false);

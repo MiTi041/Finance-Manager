@@ -13,6 +13,7 @@ insert into `kategorien` (`icon`, `id`, `name`, `parent_id`, `personal_expense`,
 insert into `kategorien` (`icon`, `id`, `name`, `parent_id`, `personal_expense`, `typ`) values ('🐷', 211, 'Sparen', NULL, 0, 'Ausgabe');
 insert into `kategorien` (`icon`, `id`, `name`, `parent_id`, `personal_expense`, `typ`) values ('🛡️', 212, 'Versicherungen', NULL, 0, 'Ausgabe');
 insert into `kategorien` (`icon`, `id`, `name`, `parent_id`, `personal_expense`, `typ`) values ('🏠', 213, 'Wohnen', NULL, 0, 'Ausgabe');
+insert into `kategorien` (`icon`, `id`, `name`, `parent_id`, `personal_expense`, `typ`) values ('🏢', 214, 'Gewerbe', NULL, 0, 'Ausgabe');
 insert into `kategorien` (`icon`, `id`, `name`, `parent_id`, `personal_expense`, `typ`) values ('💰', 20101, 'Elterngeld', 201, 0, 'Einnahme');
 insert into `kategorien` (`icon`, `id`, `name`, `parent_id`, `personal_expense`, `typ`) values ('💰', 20102, 'Kapitalerträge', 201, 0, 'Einnahme');
 insert into `kategorien` (`icon`, `id`, `name`, `parent_id`, `personal_expense`, `typ`) values ('💰', 20103, 'Kindergeld', 201, 0, 'Einnahme');
@@ -56,11 +57,10 @@ insert into `kategorien` (`icon`, `id`, `name`, `parent_id`, `personal_expense`,
 insert into `kategorien` (`icon`, `id`, `name`, `parent_id`, `personal_expense`, `typ`) values ('🛍️', 20804, 'Elektrohandel', 208, 0, 'Ausgabe');
 insert into `kategorien` (`icon`, `id`, `name`, `parent_id`, `personal_expense`, `typ`) values ('🛍️', 20805, 'Friseur', 208, 0, 'Ausgabe');
 insert into `kategorien` (`icon`, `id`, `name`, `parent_id`, `personal_expense`, `typ`) values ('🛍️', 20806, 'Geschenke', 208, 1, 'Ausgabe');
-insert into `kategorien` (`icon`, `id`, `name`, `parent_id`, `personal_expense`, `typ`) values ('🛍️', 20807, 'Gewerbe', 208, 0, 'Einnahme');
+insert into `kategorien` (`icon`, `id`, `name`, `parent_id`, `personal_expense`, `typ`) values ('🛍️', 20807, 'Sonstiger Lifestyle', 208, 0, 'Ausgabe');
 insert into `kategorien` (`icon`, `id`, `name`, `parent_id`, `personal_expense`, `typ`) values ('🛍️', 20808, 'Mobilfunk', 208, 0, 'Ausgabe');
 insert into `kategorien` (`icon`, `id`, `name`, `parent_id`, `personal_expense`, `typ`) values ('🛍️', 20809, 'Prime-Mitgliedschaft', 208, 0, 'Ausgabe');
 insert into `kategorien` (`icon`, `id`, `name`, `parent_id`, `personal_expense`, `typ`) values ('🛍️', 20810, 'Shopping', 208, 0, 'Ausgabe');
-insert into `kategorien` (`icon`, `id`, `name`, `parent_id`, `personal_expense`, `typ`) values ('🛍️', 20811, 'Sonstiger Lifestyle', 208, 0, 'Ausgabe');
 insert into `kategorien` (`icon`, `id`, `name`, `parent_id`, `personal_expense`, `typ`) values ('🚗', 20901, 'Auto', 209, 0, 'Ausgabe');
 insert into `kategorien` (`icon`, `id`, `name`, `parent_id`, `personal_expense`, `typ`) values ('🚗', 20902, 'Bus & Bahn', 209, 0, 'Ausgabe');
 insert into `kategorien` (`icon`, `id`, `name`, `parent_id`, `personal_expense`, `typ`) values ('🚗', 20903, 'Fahrrad', 209, 0, 'Ausgabe');

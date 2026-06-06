@@ -8,8 +8,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import type { BankDefinition } from "@/lib/banks";
-import type { StoredBankCredentials } from "@/lib/bank-credentials";
+import type { BankDefinition } from "@/lib/bank/definitions";
+import type { StoredBankCredentials } from "@/lib/bank/credentials";
 import { BankSelectionGrid } from "./bank-selection-grid";
 import { Banks } from "./banks";
 import {
@@ -33,7 +33,7 @@ import {
   fetchBankAccounts,
   saveBankCredentials,
   TanRequiredError,
-} from "@/lib/bank-credentials";
+} from "@/lib/bank/credentials";
 import { hasFreshCache } from "@/lib/fetch-cache";
 import { FINTS_SYNC_REQUEST_EVENT } from "@/lib/sync-events";
 

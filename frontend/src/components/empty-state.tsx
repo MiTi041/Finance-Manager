@@ -2,7 +2,7 @@
 
 import { ReactNode } from "react"
 import { motion } from "motion/react"
-import { cn } from "@lib/utils"
+import { cn } from "@/lib/utils"
 
 type EmptyStateProps = {
     title: string

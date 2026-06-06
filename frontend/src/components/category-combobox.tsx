@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { Check, ChevronsUpDown, Pencil } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,7 @@ import {
   CommandSeparator,
 } from "@/components/ui/command";
 
-import type { TransactionCategoryOption } from "@/pages/transactions/transactions.utils";
+import { type TransactionCategoryOption } from "@/lib/utils/categories";
 
 type CategoryComboboxProps = {
   options: TransactionCategoryOption[];
@@ -50,6 +51,7 @@ export function CategoryCombobox({
   height = 10,
 }: CategoryComboboxProps) {
   const [open, setOpen] = React.useState(false);
+  const navigate = useNavigate();
 
   const selected = options.find((o) => o.value === value);
 
@@ -150,6 +152,20 @@ export function CategoryCombobox({
               ))}
             </CommandGroup>
           </CommandList>
+          <CommandSeparator />
+          <div className="px-2 py-1.5">
+            <Button
+              className="flex w-full items-center justify-start gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground bg-transparent hover:bg-muted transition-colors"
+              height={8}
+              onClick={() => {
+                setOpen(false);
+                navigate("/settings?tab=categories");
+              }}
+            >
+              <Pencil className="h-3.5 w-3.5 shrink-0" />
+              Kategorien bearbeiten
+            </Button>
+          </div>
         </Command>
       </PopoverContent>
     </Popover>

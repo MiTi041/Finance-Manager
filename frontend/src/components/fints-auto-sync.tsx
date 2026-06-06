@@ -8,8 +8,8 @@ import {
   type FintsSyncSource,
   type FintsSyncStatusDetail,
 } from "@/lib/sync-events";
-import { fetchLatestDbTransaction } from "@/lib/db";
-import { fetchBankCredentials } from "../lib/bank-credentials";
+import { fetchLatestDbTransaction } from "@/lib/transactions";
+import { fetchBankCredentials } from "@/lib/bank/credentials";
 import { importFromFintsServer } from "@/lib/upload-helper";
 
 const FALLBACK_SYNC_DAYS = Number(

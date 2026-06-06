@@ -13,10 +13,11 @@ from finance_server.api.fints import fetch_account_balance
 from finance_server.db import (
     delete_bank_credentials,
     delete_bank_account as delete_bank_account_row,
-    insert_balance_adjustment,
+    fetch_transaction_balance,
     list_bank_credentials,
     list_bank_accounts,
     load_bank_credentials,
+    update_account_balance,
     update_bank_account as update_bank_account_row,
     upsert_bank_accounts,
     save_bank_credentials,
@@ -190,11 +191,12 @@ def adjust_bank_account_balance(
 
     balance = fetch_account_balance(BankCredentials.model_validate(credentials), iban)
 
-    return insert_balance_adjustment(
-        account_iban=iban,
-        target_balance=balance["amount"],
-        note=(payload.note if payload else None) or "Saldoabgleich per FinTS",
-    )
+    balance_amount = balance["amount"]
+    transaction_sum = fetch_transaction_balance(iban)
+    correction = balance_amount - transaction_sum
+    update_account_balance(scope, iban, correction)
+
+    return {"correction": correction, "bank_balance": balance_amount}
 
 
 @router.get("/bank-credentials")

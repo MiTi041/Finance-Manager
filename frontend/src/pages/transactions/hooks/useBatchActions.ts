@@ -3,14 +3,12 @@
 import { useState } from "react";
 import { toast } from "sonner";
 
-import {
-  updateTransactionsCategoryBatch,
-} from "@/lib/categories";
+import { updateTransactionsCategoryBatch } from "@/lib/categories/category-transactions";
 import {
   deleteTransactionsBatch,
-} from "@/lib/db";
+} from "@/lib/transactions";
 
-import { UNASSIGNED_CATEGORY_VALUE } from "./transactions.utils";
+import { UNASSIGNED_CATEGORY_VALUE } from "@/lib/utils/categories";
 
 type UseBatchActionsOptions = {
   selectedTransactionIds: Set<number>;
