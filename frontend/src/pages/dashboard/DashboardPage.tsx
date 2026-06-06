@@ -2,7 +2,15 @@
 
 import { useMemo } from "react";
 import { format } from "date-fns";
-import { CircleX, Loader2, Wallet, TrendingUp, TrendingDown, Receipt } from "lucide-react";
+import {
+  CircleX,
+  Loader2,
+  Wallet,
+  TrendingUp,
+  TrendingDown,
+  Receipt,
+  CircleDashed,
+} from "lucide-react";
 
 import DateFilter from "@/components/date-filter";
 import { EmptyState } from "@/components/empty-state";
@@ -39,6 +47,14 @@ export default function DashboardPage() {
 
   const dateFooter = useMemo(() => computeDateFooter(dateFilter), [dateFilter]);
 
+  const savingsRate = incomes > 0 ? (((incomes - expenses) / incomes) * 100).toFixed(0) : "0";
+  const expensePct = ((expenses / (incomes + expenses || 1)) * 100).toFixed(0);
+  const incomePct = ((incomes / (incomes + expenses || 1)) * 100).toFixed(0);
+
+  if (transactions.length == 0) {
+    return <EmptyState title="Es gibt noch keine Daten" illustration={<CircleDashed />} />;
+  }
+
   if (error) {
     return (
       <EmptyState
@@ -48,10 +64,6 @@ export default function DashboardPage() {
       />
     );
   }
-
-  const savingsRate = incomes > 0 ? (((incomes - expenses) / incomes) * 100).toFixed(0) : "0";
-  const expensePct = ((expenses / (incomes + expenses || 1)) * 100).toFixed(0);
-  const incomePct = ((incomes / (incomes + expenses || 1)) * 100).toFixed(0);
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 py-6">
