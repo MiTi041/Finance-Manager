@@ -4,11 +4,7 @@ import * as React from "react";
 import { Link } from "react-router-dom";
 import { Settings } from "lucide-react";
 
-import {
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-} from "@/components/ui/sidebar";
+import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
 import { ModeToggle } from "@/components/dark-mode-toggle";
 import { SyncButton } from "./sync-button";
 
@@ -43,12 +39,10 @@ export function SidebarFooterContent({
           >
             <Link
               to="/settings"
-              className="group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-full"
+              className="gap-3 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-full"
             >
               <Settings className="size-4 shrink-0" />
-              <span className="group-data-[collapsible=icon]:hidden">
-                Einstellungen
-              </span>
+              <span className="group-data-[collapsible=icon]:hidden">Einstellungen</span>
             </Link>
           </SidebarMenuButton>
         </SidebarMenuItem>

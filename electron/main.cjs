@@ -1,13 +1,6 @@
 "use strict";
 
-const {
-  app,
-  BrowserWindow,
-  dialog,
-  ipcMain,
-  shell,
-  nativeTheme,
-} = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, shell, nativeTheme } = require("electron");
 
 // ─── App identity (must be first) ───────────────────────────────────────────
 app.name = "Finance-Manager";
@@ -126,9 +119,7 @@ function waitForBackend(retries = 30, interval = 1000) {
       const req = http.get("http://127.0.0.1:8112/health", (res) => {
         if (settled) return;
         settled = true;
-        res.statusCode === 200
-          ? resolve()
-          : setTimeout(() => check(n - 1), interval);
+        res.statusCode === 200 ? resolve() : setTimeout(() => check(n - 1), interval);
       });
       req.on("error", () => {
         if (settled) return;
@@ -166,9 +157,7 @@ function setupAutoUpdater() {
 
   // NOTE: "checking" is intentionally NOT forwarded to the renderer
   // to avoid persistent loading toasts on every launch.
-  autoUpdater.on("checking-for-update", () =>
-    log.info("Checking for updates…"),
-  );
+  autoUpdater.on("checking-for-update", () => log.info("Checking for updates…"));
 
   autoUpdater.on("update-available", (info) => {
     log.info("Update available:", info.version);
@@ -202,8 +191,7 @@ function setupAutoUpdater() {
     log.error("Updater error:", err);
 
     const isCodeSignError =
-      err.message?.includes("Code signature") ||
-      err.message?.includes("code signature");
+      err.message?.includes("Code signature") || err.message?.includes("code signature");
 
     if (isCodeSignError && !app.isPackaged) {
       // Dev mode — not relevant
@@ -222,27 +210,22 @@ function setupAutoUpdater() {
         .showMessageBox(getMainWindow(), {
           type: "info",
           title: "Update verfügbar",
-          message: "Ein Update wurde heruntergeladen, aber die automatische Installation ist fehlgeschlagen.",
-          detail:
-            "Lade die neueste Version manuell von GitHub herunter und ersetze die App.",
+          message:
+            "Ein Update wurde heruntergeladen, aber die automatische Installation ist fehlgeschlagen.",
+          detail: "Lade die neueste Version manuell von GitHub herunter und ersetze die App.",
           buttons: ["Zu GitHub", "Schließen"],
           defaultId: 0,
           cancelId: 1,
         })
         .then(({ response }) => {
           if (response === 0)
-            shell.openExternal(
-              "https://github.com/MiTi041/Finance-Manager/releases/latest",
-            );
+            shell.openExternal("https://github.com/MiTi041/Finance-Manager/releases/latest");
         });
     }
 
     // Clear broken pending update cache on macOS to prevent retry loops
     if (process.platform === "darwin") {
-      const shipItCache = path.join(
-        app.getPath("cache"),
-        "com.finance-manager.app.ShipIt",
-      );
+      const shipItCache = path.join(app.getPath("cache"), "com.finance-manager.app.ShipIt");
       try {
         fs.rmSync(shipItCache, { recursive: true, force: true });
         log.info("Cleared ShipIt cache after updater error");
@@ -259,8 +242,7 @@ function setupAutoUpdater() {
 // ─── DB helpers ───────────────────────────────────────────────────────────────
 async function handleDbExport() {
   const dbPath = getDbPath();
-  if (!fs.existsSync(dbPath))
-    return { success: false, error: "Keine Datenbank gefunden" };
+  if (!fs.existsSync(dbPath)) return { success: false, error: "Keine Datenbank gefunden" };
 
   const { canceled, filePath } = await dialog.showSaveDialog(getMainWindow(), {
     title: "Datenbank exportieren",
@@ -288,14 +270,12 @@ async function handleDbImport() {
     filters: [{ name: "SQLite-Datenbank", extensions: ["db"] }],
     properties: ["openFile"],
   });
-  if (canceled || !filePaths.length)
-    return { success: false, error: "Abgebrochen" };
+  if (canceled || !filePaths.length) return { success: false, error: "Abgebrochen" };
 
   const { response: confirm } = await dialog.showMessageBox(getMainWindow(), {
     type: "warning",
     title: "Datenbank überschreiben?",
-    message:
-      "Die aktuelle Datenbank wird ersetzt. Das kann nicht rückgängig gemacht werden.",
+    message: "Die aktuelle Datenbank wird ersetzt. Das kann nicht rückgängig gemacht werden.",
     buttons: ["Importieren", "Abbrechen"],
     defaultId: 0,
     cancelId: 1,
@@ -330,7 +310,10 @@ ipcMain.handle("app:checkForUpdates", () => {
 });
 
 ipcMain.handle("app:downloadUpdate", async () => {
-  if (APPLE_DEVELOPER || !pendingUpdateVersion) {
+  // Windows: always use autoUpdater (downloads a .exe/.nsis installer)
+  // macOS (Apple Developer build) or no pending version: use autoUpdater too
+  // macOS (non-developer build): download .dmg manually from GitHub
+  if (process.platform === "win32" || APPLE_DEVELOPER || !pendingUpdateVersion) {
     sendToRenderer("update:downloading", { percent: 0 });
     autoUpdater.downloadUpdate();
     return { success: true };
@@ -339,10 +322,19 @@ ipcMain.handle("app:downloadUpdate", async () => {
 });
 
 ipcMain.handle("app:installUpdate", async () => {
+  // Windows: autoUpdater handles the .exe installer natively
+  if (process.platform === "win32") {
+    setImmediate(() => autoUpdater.quitAndInstall(false, true));
+    return;
+  }
+
+  // macOS (Apple Developer build): autoUpdater can install directly
   if (APPLE_DEVELOPER) {
     setImmediate(() => autoUpdater.quitAndInstall(false, true));
     return;
   }
+
+  // macOS (non-developer build): open the manually downloaded .dmg
   const dmgPath = path.join(
     app.getPath("downloads"),
     `Finance-Manager-${pendingUpdateVersion}.dmg`,
@@ -355,19 +347,14 @@ ipcMain.handle("app:installUpdate", async () => {
 ipcMain.handle("shell:openExternal", (_e, url) => {
   try {
     const parsed = new URL(url);
-    if (["https:", "http:"].includes(parsed.protocol))
-      return shell.openExternal(url);
+    if (["https:", "http:"].includes(parsed.protocol)) return shell.openExternal(url);
   } catch {
     /* ignore */
   }
 });
 
-ipcMain.handle("shell:openLogs", () =>
-  shell.openPath(log.transports.file.getFile().path),
-);
-ipcMain.handle("shell:openUserData", () =>
-  shell.openPath(app.getPath("userData")),
-);
+ipcMain.handle("shell:openLogs", () => shell.openPath(log.transports.file.getFile().path));
+ipcMain.handle("shell:openUserData", () => shell.openPath(app.getPath("userData")));
 
 // ─── Mail with attachment (macOS) ─────────────────────────────
 ipcMain.handle("mail:openWithAttachment", async (_e, { subject, body, to }) => {
@@ -387,8 +374,21 @@ ipcMain.handle("mail:openWithAttachment", async (_e, { subject, body, to }) => {
 
 function getRegistrationPdfPath() {
   const candidates = [
-    path.join(app.getAppPath(), "frontend", "dist", "assets", "FinTS-Produktregistrierung_V1.0.4.pdf"),
-    path.join(__dirname, "..", "frontend", "dist", "assets", "FinTS-Produktregistrierung_V1.0.4.pdf"),
+    path.join(
+      app.getAppPath(),
+      "frontend",
+      "dist",
+      "assets",
+      "FinTS-Produktregistrierung_V1.0.4.pdf",
+    ),
+    path.join(
+      __dirname,
+      "..",
+      "frontend",
+      "dist",
+      "assets",
+      "FinTS-Produktregistrierung_V1.0.4.pdf",
+    ),
   ];
   for (const p of candidates) {
     if (fs.existsSync(p)) return p;
@@ -430,7 +430,8 @@ end tell
   });
 }
 
-// ─── Manual download (non‑developer builds) ────────────────────
+// ─── Manual download (macOS non-developer builds only) ───────────────────────
+// Never called on Windows — Windows uses autoUpdater.downloadUpdate() instead.
 function downloadReleaseManually() {
   return new Promise((resolve) => {
     const version = pendingUpdateVersion;
@@ -439,10 +440,7 @@ function downloadReleaseManually() {
       return;
     }
 
-    const dest = path.join(
-      app.getPath("downloads"),
-      `Finance-Manager-${version}.dmg`,
-    );
+    const dest = path.join(app.getPath("downloads"), `Finance-Manager-${version}.dmg`);
 
     if (fs.existsSync(dest)) {
       shell.openPath(dest);
@@ -531,10 +529,7 @@ app.whenReady().then(async () => {
     log.info("Backend ready");
   } catch (err) {
     log.error("Backend failed:", err.message);
-    dialog.showErrorBox(
-      "Backend-Fehler",
-      `Backend konnte nicht gestartet werden:\n${err.message}`,
-    );
+    dialog.showErrorBox("Backend-Fehler", `Backend konnte nicht gestartet werden:\n${err.message}`);
   }
 
   createWindow();

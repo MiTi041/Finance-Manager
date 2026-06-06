@@ -1,12 +1,8 @@
 "use client";
 
-import * as React from "react";
 import { RefreshCw } from "lucide-react";
 
-import {
-  SidebarMenuButton,
-  SidebarMenuItem,
-} from "@/components/ui/sidebar";
+import { SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
 
 export type SyncButtonProps = {
   isSyncing: boolean;
@@ -29,7 +25,7 @@ export function SyncButton({
         tooltip={`Daten aktualisieren (${cacheAgeText})`}
         className={`h-12 flex items-center justify-start gap-3 rounded-md transition-all group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-9 group-data-[collapsible=icon]:h-9 group-data-[collapsible=icon]:p-0 ${
           isSyncing
-            ? "bg-primary/5 text-primary hover:bg-primary/10"
+            ? "bg-primary/10 text-primary hover:bg-primary/10"
             : "hover:bg-accent/50 text-muted-foreground hover:text-foreground"
         }`}
       >
@@ -47,7 +43,9 @@ export function SyncButton({
           </span>
 
           {isSyncing ? (
-            <span className="text-[10px] text-muted-foreground font-normal tracking-wide tabular-nums mt-0.5 truncate max-w-[10rem]">
+            <span
+              className={`text-[10px] font-normal tracking-wide tabular-nums mt-0.5 truncate max-w-[10rem] text-muted-foreground`}
+            >
               {syncStatusText || "Bitte warten..."}
             </span>
           ) : (
