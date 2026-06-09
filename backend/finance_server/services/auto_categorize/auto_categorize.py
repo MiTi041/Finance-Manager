@@ -21,8 +21,11 @@ from __future__ import annotations
 import hashlib
 import logging
 import threading
-from typing import Any
+from typing import TYPE_CHECKING, Any
 import re
+
+if TYPE_CHECKING:
+    from sklearn.feature_extraction.text import TfidfVectorizer
 
 import numpy as np
 from scipy.sparse import spmatrix
@@ -107,7 +110,7 @@ def _combine_text(row: dict[str, Any]) -> str:
         "recipient":  row.get("recipient_name") or "",
         "posting":    row.get("posting_text") or "",
         "additional": row.get("additional_purpose") or "",
-        "owner":      row.get("kontoinhaber_name") or "",
+        "owner":      row.get("zahlungspartner_name") or "",
     }
 
     tokens: list[str] = []
@@ -125,7 +128,7 @@ def _combine_text(row: dict[str, Any]) -> str:
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _fetch_all_transactions() -> list[dict[str, Any]]:
-    """Lädt alle Transaktionen inkl. Kontoinhaber-Name (JOIN über IBAN).
+    """Lädt alle Transaktionen inkl. Zahlungspartner-Name (JOIN über IBAN).
 
     Sortierung: neueste Buchung zuerst, damit bei gleicher Ähnlichkeit
     aktuellere Trainingsdaten bevorzugt werden.
@@ -133,10 +136,10 @@ def _fetch_all_transactions() -> list[dict[str, Any]]:
     with get_connection() as connection:
         rows = connection.execute(
             """
-            SELECT u.*, k.name AS kontoinhaber_name
+            SELECT u.*, k.name AS zahlungspartner_name
             FROM umsaetze u
             LEFT JOIN ibans i ON u.applicant_iban = i.iban
-            LEFT JOIN kontoinhaber k ON k.id = i.f_kontoinhaber_id
+            LEFT JOIN zahlungspartner k ON k.id = i.f_zahlungspartner_id
             ORDER BY COALESCE(u.entry_date, u.date, substr(u.created_at, 1, 10)) DESC, u.id DESC
             """
         ).fetchall()
@@ -344,7 +347,7 @@ def build_predictions() -> list[dict[str, Any]]:
 
         if pred_stale:
             logger.info("Vorhersage-Cache veraltet – berechne neu (hash=%s)", uncategorized_hash[:8])
-            all_tx        = _fetch_all_transactions() if model_stale else _fetch_all_transactions()
+            all_tx        = _fetch_all_transactions()
             uncategorized = [t for t in all_tx if t.get("kategorie") is None and t.get("id")]
             predictions   = _compute_predictions(uncategorized, _model_cache)  # type: ignore[arg-type]
             _pred_cache   = {"hash": uncategorized_hash, "predictions": predictions}

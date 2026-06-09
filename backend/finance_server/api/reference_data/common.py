@@ -14,7 +14,7 @@ PAYMENT_PARTNER_LOGO_DIR = (
 
 def _safe_logo_name(value: str) -> str:
     normalized = re.sub(r"[^a-zA-Z0-9]+", "-", value.strip().lower()).strip("-")
-    return normalized or "kontoinhaber"
+    return normalized or "zahlungspartner"
 
 
 def _resolve_assets_logo_path(logo_path: str | None) -> FilePath | None:
@@ -33,7 +33,7 @@ def _resolve_assets_logo_path(logo_path: str | None) -> FilePath | None:
     return path
 
 
-def _resolve_kontoinhaber_logo_file(logo_url: str) -> FilePath | None:
+def _resolve_zahlungspartner_logo_file(logo_url: str) -> FilePath | None:
     candidate = (logo_url or "").strip()
     if not candidate:
         return None
@@ -51,6 +51,12 @@ def _resolve_kontoinhaber_logo_file(logo_url: str) -> FilePath | None:
         path = (FilePath.cwd() / path).resolve()
 
     if not path.exists() or not path.is_file():
+        return None
+
+    project_root = FilePath(__file__).resolve().parents[2]
+    try:
+        path.relative_to(project_root)
+    except ValueError:
         return None
 
     return path

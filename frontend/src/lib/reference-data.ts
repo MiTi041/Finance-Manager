@@ -1,16 +1,16 @@
 import { getApiBaseUrl, parseJsonResponse } from "./api";
 import { emitReferenceChange } from "./events";
 
-export async function fetchIbanKontoinhaberReferences(): Promise<
+export async function fetchIbanZahlungspartnerReferences(): Promise<
   Array<{
     iban: string;
-    f_kontoinhaber_id: number;
-    kontoinhaber_name: string;
-    kontoinhaber_website?: string | null;
-    kontoinhaber_logo_padding?: boolean | null;
-    kontoinhaber_logo_url?: string | null;
-    kontoinhaber_logo_white_background?: boolean | null;
-    kontoinhaber_is_company?: boolean | null;
+    f_zahlungspartner_id: number;
+    zahlungspartner_name: string;
+    zahlungspartner_website?: string | null;
+    zahlungspartner_logo_padding?: boolean | null;
+    zahlungspartner_logo_url?: string | null;
+    zahlungspartner_logo_white_background?: boolean | null;
+    zahlungspartner_is_company?: boolean | null;
     resolved_logo_url?: string | null;
   }>
 > {
@@ -20,9 +20,9 @@ export async function fetchIbanKontoinhaberReferences(): Promise<
   return payload?.references ?? [];
 }
 
-export async function updateIbanKontoinhaberMapping(
+export async function updateIbanZahlungspartnerMapping(
   iban: string,
-  kontoinhaberId: number,
+  zahlungspartnerId: number,
 ): Promise<void> {
   const response = await fetch(
     `${getApiBaseUrl()}/db/reference-data/ibans/${encodeURIComponent(iban)}`,
@@ -31,7 +31,7 @@ export async function updateIbanKontoinhaberMapping(
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ kontoinhaber_id: kontoinhaberId }),
+      body: JSON.stringify({ zahlungspartner_id: zahlungspartnerId }),
     },
   );
 

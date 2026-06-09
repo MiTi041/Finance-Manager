@@ -3,7 +3,7 @@ import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { handleMailRegistration } from "../lib/mail";
 
-const API_BASE = (import.meta as any).env.VITE_API_URL || "http://localhost:8112/api";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8112/api";
 
 export function ProductIdSetup({ onComplete }: { onComplete: () => void }) {
   const [value, setValue] = useState("");
@@ -25,9 +25,10 @@ export function ProductIdSetup({ onComplete }: { onComplete: () => void }) {
         body: JSON.stringify({ product_id: pid }),
       });
       if (!res.ok) throw new Error("Speichern fehlgeschlagen");
+      window.localStorage.setItem(PRODUCT_ID_CACHE_KEY, "true");
       onComplete();
-    } catch (err: any) {
-      setError(err.message ?? "Verbindungsfehler");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Verbindungsfehler");
     } finally {
       setSaving(false);
     }
@@ -83,6 +84,9 @@ export function ProductIdSetup({ onComplete }: { onComplete: () => void }) {
   );
 }
 
+const PRODUCT_ID_CACHE_KEY = "finance.product-id.configured";
+
 export function hasProductId(): boolean {
-  return false;
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(PRODUCT_ID_CACHE_KEY) === "true";
 }

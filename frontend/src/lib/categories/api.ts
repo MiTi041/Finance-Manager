@@ -5,7 +5,7 @@ import { type FinanceCategory } from "./types";
 export async function fetchCategories(options?: {
   forceRefresh?: boolean;
 }): Promise<FinanceCategory[]> {
-  return fetchCachedResource("categories", "/db/categories", (p) => p?.categories ?? [], options);
+  return fetchCachedResource("categories-v2", "/db/categories", (p) => p?.categories ?? [], options);
 }
 
 export async function createCategory(payload: {

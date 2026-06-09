@@ -10,13 +10,14 @@ import {
 } from "@/lib/sync-events";
 import { fetchLatestDbTransaction } from "@/lib/transactions";
 import { fetchBankCredentials } from "@/lib/bank/credentials";
-import { importFromFintsServer } from "@/lib/upload-helper";
+import { importFromFintsServer, RateLimitError } from "@/lib/upload-helper";
+import { getErrorMessage } from "@/lib/utils/error";
 
 const FALLBACK_SYNC_DAYS = Number(
-  (import.meta as any).env.VITE_FINTS_DAYS ?? "730",
+  import.meta.env.VITE_FINTS_DAYS ?? "730",
 );
 const MAX_SYNC_DAYS = Number(
-  (import.meta as any).env.VITE_FINTS_MAX_DAYS ?? "36500",
+  import.meta.env.VITE_FINTS_MAX_DAYS ?? "36500",
 );
 const AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 
@@ -97,16 +98,25 @@ export default function FintsAutoSync() {
                 `Sync fehlgeschlagen für ${bank.bank_name || bank.account_name || bank.username || bank.scope}`,
                 error,
               );
-              toast.error(
-                `Sync fehlgeschlagen für ${bank.bank_name || bank.account_name || bank.username || bank.scope}`,
-              );
+              if (error instanceof RateLimitError) {
+                toast.error(error.message);
+              } else {
+                toast.error(
+                  `Sync fehlgeschlagen für ${bank.bank_name || bank.account_name || bank.username || bank.scope}`,
+                );
+              }
             }
           }
         }
 
         window.dispatchEvent(new CustomEvent("finance-data-refresh"));
+        window.dispatchEvent(new CustomEvent("finance-bank-credentials-changed"));
       } catch (error) {
-        toast.error(`Sync fehlgeschlagen: ${getErrorMessage(error)}`);
+        if (error instanceof RateLimitError) {
+          toast.error(error.message);
+        } else {
+          toast.error(`Sync fehlgeschlagen: ${getErrorMessage(error)}`);
+        }
         console.error(error);
       } finally {
         window.__fintsSyncInProgress = false;
@@ -184,17 +194,6 @@ function rememberSyncRun(days: number) {
   } catch {
     // ignore storage write errors
   }
-}
-
-function getErrorMessage(error: unknown) {
-  if (error && typeof error === "object" && "message" in error) {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === "string" && message.trim()) {
-      return message;
-    }
-  }
-
-  return "Unbekannter Fehler";
 }
 
 function parseFlexibleDate(value: unknown): Date | null {

@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Iterable
 import sqlite3
 
-from .connection import get_connection
+from finance_server.core.database import get_connection
 from .utils import build_transaction_hash, normalize_local_amount, normalize_text
 
 

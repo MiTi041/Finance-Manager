@@ -275,6 +275,12 @@ export async function adjustBankAccountBalance(
     },
   );
 
+  if (response.status === 429) {
+    const payload = await response.json().catch(() => ({}));
+    const retryAfter = payload?.retry_after ?? payload?.detail?.retry_after ?? 60;
+    throw new Error(`Saldo-Abruf limitiert. Bitte warte ${retryAfter} Sekunden.`);
+  }
+
   const payload = await parseJsonResponse(response);
 
   try {

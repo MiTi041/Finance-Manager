@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 
 const API_BASE =
-  (import.meta as any).env.VITE_API_URL || "http://localhost:8112/api";
+  import.meta.env.VITE_API_URL || "http://localhost:8112/api";
 
 export function ProductIdTab() {
   const [value, setValue] = useState("");

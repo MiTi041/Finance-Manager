@@ -1,8 +1,8 @@
 const DEFAULT_API_BASE_URL =
-  (import.meta as any).env.VITE_API_URL || "http://localhost:8112/api";
+  import.meta.env.VITE_API_URL || "http://localhost:8112/api";
 
 export function getApiBaseUrl(): string {
-  return (import.meta as any).env.VITE_SERVER_URL ?? DEFAULT_API_BASE_URL;
+  return import.meta.env.VITE_SERVER_URL ?? DEFAULT_API_BASE_URL;
 }
 
 import { fetchCachedJson } from "./fetch-cache";

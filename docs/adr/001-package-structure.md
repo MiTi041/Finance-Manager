@@ -13,7 +13,7 @@ The codebase had monolithic modules mixing multiple concerns:
 Split modules by domain/feature rather than by layer:
 
 ### Frontend
-- lib/kontoinhaber.ts — Kontoinhaber types + CRUD
+- lib/zahlungspartner.ts — Zahlungspartner types + CRUD
 - lib/recipient-accounts.ts — Recipient account types + CRUD
 - lib/transactions.ts — Transaction upload, delete, notes
 - lib/reference-data.ts — Cross-entity reference data queries
@@ -21,7 +21,7 @@ Split modules by domain/feature rather than by layer:
 
 ### Backend
 - api/fints/ — Package with accounts, transactions, balance, transfer, sync, product_id
-- api/reference_data/ — Package with kontoinhaber, recipient_accounts, iban_mappings
+- api/reference_data/ — Package with zahlungspartner, recipient_accounts, iban_mappings
 
 ### Service Layer
 - services/* — Business logic separated from API routing

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from .connection import get_connection
+from finance_server.core.database import get_connection
 from .settings import get_setting, set_setting, delete_setting
 from .credentials import (
     bank_credentials_configured,
     build_credentials_scope,
+    compute_and_store_balance_corrections,
     delete_bank_account,
     delete_bank_credentials,
     list_bank_accounts,
@@ -17,18 +18,18 @@ from .credentials import (
 )
 from .references import (
     create_empfaengerkonto_record,
-    create_kontoinhaber_record,
+    create_zahlungspartner_record,
     delete_empfaengerkonto_record,
-    delete_kontoinhaber_record,
+    delete_zahlungspartner_record,
     get_empfaengerkonto_record,
-    get_kontoinhaber_record,
+    get_zahlungspartner_record,
     list_empfaengerkonten_records,
-    list_iban_kontoinhaber_references,
-    list_kontoinhaber_iban_mappings,
-    list_kontoinhaber_records,
+    list_iban_zahlungspartner_references,
+    list_zahlungspartner_iban_mappings,
+    list_zahlungspartner_records,
     update_empfaengerkonto_record,
-    update_kontoinhaber_iban_mapping,
-    update_kontoinhaber_record,
+    update_zahlungspartner_iban_mapping,
+    update_zahlungspartner_record,
 )
 from .categories import (
     create_category_record,
@@ -39,12 +40,27 @@ from .categories import (
     update_transaction_category,
     update_transactions_category_batch,
 )
-from .schema import initialize_database
+from .subscription_identities import (
+    create_subscription_identity,
+    delete_subscription_identity,
+    find_subscription_identity,
+    get_subscription_identity,
+    list_subscription_identities,
+    update_subscription_identity,
+)
+from finance_server.core.schema import initialize_database
 from .transactions import delete_transaction, delete_transactions_batch, fetch_latest_transaction, fetch_transaction_balance, fetch_transactions, insert_transactions, row_to_dict, to_row_payload, update_transaction_note
 
 __all__ = [
     "bank_credentials_configured",
     "build_credentials_scope",
+    "create_subscription_identity",
+    "delete_subscription_identity",
+    "find_subscription_identity",
+    "get_subscription_identity",
+    "list_subscription_identities",
+    "update_subscription_identity",
+    "compute_and_store_balance_corrections",
     "create_category_record",
     "create_empfaengerkonto_record",
     "delete_bank_account",
@@ -55,24 +71,24 @@ __all__ = [
     "delete_transaction",
     "delete_transactions_batch",
     "delete_empfaengerkonto_record",
-    "create_kontoinhaber_record",
-    "delete_kontoinhaber_record",
+    "create_zahlungspartner_record",
+    "delete_zahlungspartner_record",
     "fetch_latest_transaction",
     "fetch_transaction_balance",
     "fetch_transactions",
     "get_connection",
     "get_category_record",
     "get_empfaengerkonto_record",
-    "get_kontoinhaber_record",
+    "get_zahlungspartner_record",
     "initialize_database",
     "list_empfaengerkonten_records",
     "list_categories",
     "list_bank_accounts",
     "insert_transactions",
     "update_account_balance",
-    "list_iban_kontoinhaber_references",
-    "list_kontoinhaber_iban_mappings",
-    "list_kontoinhaber_records",
+    "list_iban_zahlungspartner_references",
+    "list_zahlungspartner_iban_mappings",
+    "list_zahlungspartner_records",
     "list_bank_credentials",
     "load_bank_credentials",
     "row_to_dict",
@@ -81,8 +97,8 @@ __all__ = [
     "update_category_record",
     "update_empfaengerkonto_record",
     "update_bank_account",
-    "update_kontoinhaber_iban_mapping",
-    "update_kontoinhaber_record",
+    "update_zahlungspartner_iban_mapping",
+    "update_zahlungspartner_record",
     "update_transaction_category",
     "update_transactions_category_batch",
     "update_transaction_note",

@@ -1,9 +1,8 @@
-"use client";
-
 import * as React from "react";
 import { FileText, Gauge, Repeat } from "lucide-react";
 
 import { normalizeIban } from "@/lib/iban";
+import { buildAccountOptions, resolveAccountSelection } from "@/lib/utils/accounts";
 import { NavMain } from "@/components/nav-main";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
@@ -75,77 +74,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     );
   });
 
-  const accountOptions = React.useMemo(() => {
-    const items: Array<{
-      accountIban: string;
-      accountName: string;
-      bankName: string;
-      bankLogo?: string;
-      username?: string;
-      scope: string;
-    }> = [];
-
-    linkedBanks.forEach((bank) => {
-      const accounts = (bank.accounts ?? []).filter((account) => Boolean(account?.iban));
-
-      if (accounts.length > 0) {
-        accounts.forEach((account) => {
-          items.push({
-            accountIban: normalizeIban(account.iban),
-            accountName:
-              account.account_name ||
-              bank.account_name ||
-              bank.bank_name ||
-              bank.username ||
-              "Konto",
-            bankName: bank.bank_name || bank.bank_key,
-            bankLogo: bank.bank_logo || undefined,
-            username: bank.username,
-            scope: bank.scope,
-          });
-        });
-        return;
-      }
-
-      const fallbackIban = normalizeIban(bank.account_iban);
-      if (fallbackIban) {
-        items.push({
-          accountIban: fallbackIban,
-          accountName: bank.account_name || bank.bank_name || bank.username || "Konto",
-          bankName: bank.bank_name || bank.bank_key,
-          bankLogo: bank.bank_logo || undefined,
-          username: bank.username,
-          scope: bank.scope,
-        });
-      }
-    });
-
-    return items;
-  }, [linkedBanks]);
+  const accountOptions = React.useMemo(
+    () => buildAccountOptions(linkedBanks),
+    [linkedBanks],
+  );
 
   const resolveSelection = React.useCallback(
-    (selection: string) => {
-      if (selection === "all") {
-        return "all";
-      }
-
-      const byIban = accountOptions.find((item) => item.accountIban === normalizeIban(selection));
-      if (byIban) {
-        return byIban.accountIban;
-      }
-
-      const legacyBank = linkedBanks.find((bank) => bank.scope === selection);
-      if (legacyBank) {
-        const legacyFallback =
-          legacyBank.accounts?.find((account) => normalizeIban(account.iban))?.iban ??
-          legacyBank.account_iban;
-        if (legacyFallback) {
-          return normalizeIban(legacyFallback);
-        }
-      }
-
-      return "all";
-    },
+    (selection: string) => resolveAccountSelection(selection, accountOptions, linkedBanks),
     [accountOptions, linkedBanks],
   );
 

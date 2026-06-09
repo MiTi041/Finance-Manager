@@ -1,23 +1,23 @@
-export interface IbanKontoinhaberReferenceDto {
+export interface IbanZahlungspartnerReferenceDto {
   iban: string;
-  f_kontoinhaber_id: number;
-  kontoinhaber_name: string;
-  kontoinhaber_website?: string | null;
-  kontoinhaber_logo_url?: string | null;
-  kontoinhaber_logo_white_background?: boolean | null;
-  kontoinhaber_logo_padding?: boolean | null;
-  kontoinhaber_is_company?: boolean | number | null;
+  f_zahlungspartner_id: number;
+  zahlungspartner_name: string;
+  zahlungspartner_website?: string | null;
+  zahlungspartner_logo_url?: string | null;
+  zahlungspartner_logo_white_background?: boolean | null;
+  zahlungspartner_logo_padding?: boolean | null;
+  zahlungspartner_is_company?: boolean | number | null;
   resolved_logo_url?: string | null;
 }
 
-export interface IbanKontoinhaberReference {
+export interface IbanZahlungspartnerReference {
   iban: string;
-  kontoinhaberId: number;
-  kontoinhaberName: string;
-  kontoinhaberWebsite?: string | null;
-  kontoinhaberLogoUrl?: string | null;
-  kontoinhaberLogoWhiteBackground?: boolean;
-  kontoinhaberLogoPadding?: boolean;
+  zahlungspartnerId: number;
+  zahlungspartnerName: string;
+  zahlungspartnerWebsite?: string | null;
+  zahlungspartnerLogoUrl?: string | null;
+  zahlungspartnerLogoWhiteBackground?: boolean;
+  zahlungspartnerLogoPadding?: boolean;
   resolvedLogoUrl?: string | null;
-  kontoinhaberIsCompany?: boolean;
+  zahlungspartnerIsCompany?: boolean;
 }

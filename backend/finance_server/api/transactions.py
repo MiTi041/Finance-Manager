@@ -2,27 +2,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from finance_server.models.transaction import TransactionImportRequest, TransactionNoteUpdateRequest, BatchIdsRequest
 from finance_server.services.transaction_service import TransactionService
 from finance_server.api._crud import crud_delete
-
-_service = TransactionService()
+from finance_server.api.deps import get_transaction_service
 
 router = APIRouter()
-
-
-class TransactionImportRequest(BaseModel):
-    rows: list[dict[str, Any]] = Field(default_factory=list)
-
-
-class TransactionNoteUpdateRequest(BaseModel):
-    note: str | None = None
-
-
-class BatchIdsRequest(BaseModel):
-    transaction_ids: list[int]
 
 
 @router.get("/db/transactions")
@@ -31,8 +18,9 @@ def get_transactions(
     from_date: str | None = Query(default=None),
     to_date: str | None = Query(default=None),
     iban: str | None = None,
+    service: TransactionService = Depends(get_transaction_service),
 ) -> dict[str, Any]:
-    rows = _service.get_transactions(
+    rows = service.get_transactions(
         days=days,
         iban=iban,
         from_date=from_date,
@@ -45,33 +33,53 @@ def get_transactions(
 
 
 @router.get("/db/transactions/latest")
-def get_latest_transaction(iban: str | None = None, blz: str | None = None) -> dict[str, Any]:
-    transaction = _service.get_latest_transaction(iban=iban, blz=blz)
+def get_latest_transaction(
+    iban: str | None = None,
+    blz: str | None = None,
+    service: TransactionService = Depends(get_transaction_service),
+) -> dict[str, Any]:
+    transaction = service.get_latest_transaction(iban=iban, blz=blz)
     return {"transaction": transaction}
 
 
 @router.post("/db/transactions/import")
-def import_transactions(request: TransactionImportRequest) -> dict[str, Any]:
-    return _service.import_transactions(request.rows)
+def import_transactions(
+    request: TransactionImportRequest,
+    service: TransactionService = Depends(get_transaction_service),
+) -> dict[str, Any]:
+    try:
+        return service.import_transactions(request.rows)
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
 
 
 @router.post("/db/transactions/batch-delete")
-def remove_transactions_batch(request: BatchIdsRequest) -> dict[str, Any]:
-    deleted = _service.delete_transactions_batch(request.transaction_ids)
+def remove_transactions_batch(
+    request: BatchIdsRequest,
+    service: TransactionService = Depends(get_transaction_service),
+) -> dict[str, Any]:
+    try:
+        deleted = service.delete_transactions_batch(request.transaction_ids)
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
     return {"deleted": deleted}
 
 
 @router.delete("/db/transactions/{transaction_id}")
-def remove_transaction(transaction_id: int) -> dict[str, Any]:
-    return crud_delete(_service.delete_transaction, transaction_id, "Transaktion")
+def remove_transaction(
+    transaction_id: int,
+    service: TransactionService = Depends(get_transaction_service),
+) -> dict[str, Any]:
+    return crud_delete(service.delete_transaction, transaction_id, "Transaktion")
 
 
 @router.patch("/db/transactions/{transaction_id}/note")
 def set_transaction_note(
     transaction_id: int,
     request: TransactionNoteUpdateRequest,
+    service: TransactionService = Depends(get_transaction_service),
 ) -> dict[str, Any]:
-    updated = _service.update_note(transaction_id, request.note)
+    updated = service.update_note(transaction_id, request.note)
     if not updated:
         raise HTTPException(status_code=404, detail="Transaktion nicht gefunden")
 

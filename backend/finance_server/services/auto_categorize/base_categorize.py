@@ -44,12 +44,12 @@ import pickle
 import re
 import threading
 import time
+from pathlib import Path
 from typing import Any
 
 import numpy as np
 
 from finance_server.db import get_connection
-from finance_server.db.paths import get_db_path
 from finance_server.services.auto_categorize._tfidf import (
     _create_vectorizer,
     _find_best_match,
@@ -77,33 +77,27 @@ logger = logging.getLogger(__name__)
 # immer Stufe 2 + 3 als Ergänzung angeboten – unabhängig vom eigenen Modell.
 MIN_OWN_SAMPLES = 20
 
-# TTL für den globalen Basis-Modell-Cache. Nach dieser Zeit wird das Modell
-# neu gebaut, um Kategorisierungen anderer Nutzer einzubeziehen.
-_BASE_MODEL_TTL_SECONDS = 3600  # 1 Stunde
-
 # ──────────────────────────────────────────────────────────────────────────────
-# Cache + Persistenz für das globale Basis-Modell
+# Statisches Basis-Modell (wird einmal erstellt und per git ausgeliefert)
 # ──────────────────────────────────────────────────────────────────────────────
 
 _base_model_cache: dict[str, Any] | None = None
 _base_model_lock = threading.Lock()
 
+MODELS_DIR = Path(__file__).resolve().parent.parent.parent / "ml_models"
+MODEL_FILENAME = "auto_categorize_model.pkl"
+
+
 def _base_model_path() -> str:
-    """Pfad für die Pickle-Datei des Basis-Modells (neben der DB)."""
-    db_path = get_db_path()
-    return str(db_path.parent / "base_model.pkl")
+    """Pfad für die Pickle-Datei des Basis-Modells."""
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    return str(MODELS_DIR / MODEL_FILENAME)
 
 
 def _save_base_model(model: dict[str, Any]) -> None:
     """Serialisiert das Modell als Pickle auf die Platte.
 
-    sklearn-Modelle (TfidfVectorizer) sind pickle-bar. Die sparse train_vectors
-    (scipy.sparse) ebenfalls. So kann das Modell beim nächsten App-Start
-    geladen werden, ohne neu trainieren zu müssen.
-
-    Die 'built_at'-Metrik wird vor dem Speichern auf 0 gesetzt, damit der
-    TTL-Check beim Laden immer einen Rebuild erzwingt (der Pickle-Wert wäre
-    sonst gegenüber dem TTL-Check veraltet).
+    Wird nur vom Trainings-Skript aufgerufen, nicht zur Laufzeit.
     """
     path = _base_model_path()
     try:
@@ -115,7 +109,7 @@ def _save_base_model(model: dict[str, Any]) -> None:
 
 
 def _load_base_model() -> dict[str, Any] | None:
-    """Lädt das Modell von der Platte, falls vorhanden."""
+    """Lädt das statische Basis-Modell von der Platte."""
     path = _base_model_path()
     if not os.path.exists(path):
         return None
@@ -378,13 +372,13 @@ def _fetch_all_categorized_transactions() -> list[dict[str, Any]]:
             """
             SELECT
                 u.*,
-                k_name.name   AS kontoinhaber_name,
+                k_name.name   AS zahlungspartner_name,
                 kat.name      AS kategorie_name,
                 kat.typ       AS kategorie_typ
             FROM umsaetze u
             JOIN kategorien kat ON kat.id = u.kategorie
             LEFT JOIN ibans i ON u.applicant_iban = i.iban
-            LEFT JOIN kontoinhaber k_name ON k_name.id = i.f_kontoinhaber_id
+            LEFT JOIN zahlungspartner k_name ON k_name.id = i.f_zahlungspartner_id
             WHERE u.kategorie IS NOT NULL
             ORDER BY u.id DESC
             """
@@ -396,7 +390,7 @@ def _fetch_all_categories() -> list[dict[str, Any]]:
     """Gibt alle globalen Kategorien zurück (id, name, typ).
 
     Kategorien sind in diesem System global (nicht pro Nutzer), daher
-    gibt es keine Einschränkung auf einen bestimmten Kontoinhaber.
+    gibt es keine Einschränkung auf einen bestimmten Zahlungspartner.
     """
     with get_connection() as conn:
         rows = conn.execute(
@@ -461,44 +455,20 @@ def _build_base_model() -> dict[str, Any] | None:
 
 
 def _get_base_model() -> dict[str, Any] | None:
-    """Gibt das Basis-Modell zurück (disk-gecacht, TTL-gesteuert).
+    """Gibt das statische Basis-Modell zurück.
 
-    Ladereihenfolge:
-      1. In-Memory-Cache (_base_model_cache) – schnellster Pfad
-      2. Pickle-Datei auf Platte – überlebt App-Neustarts
-      3. Neu trainieren aus der DB – wenn kein Cache existiert
-
-    Nach dem Training wird das Modell automatisch auf Platte gespeichert,
-    damit der nächste App-Start schneller ist.
-
-    Alle _BASE_MODEL_TTL_SECONDS wird ein Rebuild erzwungen, um neue
-    Kategorisierungen (auch von anderen Nutzern) einzubeziehen.
+    Das Modell wird einmal erstellt (via build_base_model.py Skript)
+    und per git ausgeliefert. Es wird zur Laufzeit nie neu trainiert.
     """
     global _base_model_cache
 
+    if _base_model_cache is not None:
+        return _base_model_cache
+
     with _base_model_lock:
-        now = time.monotonic()
-        if (
-            _base_model_cache is not None
-            and now - _base_model_cache["built_at"] < _BASE_MODEL_TTL_SECONDS
-        ):
-            return _base_model_cache
-
-        # Versuche von Platte zu laden (wenn im Cache nichts ist)
-        if _base_model_cache is None:
-            disk_model = _load_base_model()
-            if disk_model is not None:
-                _base_model_cache = disk_model
-                if now - _base_model_cache["built_at"] < _BASE_MODEL_TTL_SECONDS:
-                    return _base_model_cache
-                logger.info("Basis-Modell auf Platte gefunden, aber TTL abgelaufen.")
-
-        logger.info("Basis-Modell – baue neu (TTL abgelaufen oder kein Cache).")
-        _base_model_cache = _build_base_model()
-
         if _base_model_cache is not None:
-            _save_base_model(_base_model_cache)
-
+            return _base_model_cache
+        _base_model_cache = _load_base_model()
         return _base_model_cache
 
 
@@ -518,7 +488,7 @@ def predict_rules(
     die vorcompilierten Regex-Patterns geprüft. Da Patterns spezifisch zu
     allgemein sortiert sind, gewinnt immer die präziseste Regel.
 
-    Kategorien sind global (kein kontoinhaber_id nötig).
+    Kategorien sind global (kein zahlungspartner_id nötig).
     """
     # Texte für die Keyword-Suche zusammenführen (ohne Feld-Prefixes, da
     # die Regex-Patterns auf natürlichsprachigen Text ausgelegt sind)
@@ -536,15 +506,19 @@ def predict_rules(
 
     amount = transaction.get("amount") or 0
     expected_typ = "Einnahme" if amount > 0 else "Ausgabe"
+    opposite_typ = "Ausgabe" if expected_typ == "Einnahme" else "Einnahme"
 
     all_categories = _fetch_all_categories()
 
-    for pattern, cat_name, typ in _COMPILED_RULES:
-        if typ != expected_typ:
-            continue
+    for typ in (expected_typ, opposite_typ):
+        for pattern, cat_name, rule_typ in _COMPILED_RULES:
+            if rule_typ != typ:
+                continue
 
-        if pattern.search(search_text):
-            matched_cat = _resolve_category_id(cat_name, typ, all_categories)
+            if not pattern.search(search_text):
+                continue
+
+            matched_cat = _resolve_category_id(cat_name, rule_typ, all_categories)
 
             if matched_cat is None:
                 logger.debug(
@@ -593,43 +567,48 @@ def predict_base(
 
     amount = transaction.get("amount") or 0
     expected_typ = "Einnahme" if amount > 0 else "Ausgabe"
-
-    type_mask = np.array(
-        [lbl.startswith(expected_typ) for lbl in model["labels"]],
-        dtype=bool,
-    )
-
-    if not np.any(type_mask):
-        return None
+    opposite_typ = "Ausgabe" if expected_typ == "Einnahme" else "Einnahme"
 
     tx_vector = model["vectorizer"].transform([text])
-    filtered_vectors = model["train_vectors"][type_mask]
-    filtered_labels  = [lbl for lbl, keep in zip(model["labels"], type_mask) if keep]
-
-    result = _find_best_match(tx_vector, filtered_vectors)
-    if result is None:
-        return None
-
-    original_idx, best_score = result
-    best_label = filtered_labels[original_idx]
-    category_name = best_label.split("::", 1)[1]
-
     all_categories = _fetch_all_categories()
-    matched_cat = _resolve_category_id(category_name, expected_typ, all_categories)
 
-    if matched_cat is None:
-        logger.debug(
-            "Basis-Modell: Kategorie '%s' nicht auflösbar.",
-            category_name,
+    for typ in (expected_typ, opposite_typ):
+        type_mask = np.array(
+            [lbl.startswith(typ) for lbl in model["labels"]],
+            dtype=bool,
         )
-        return None
 
-    return {
-        "predicted_category_id":   matched_cat["id"],
-        "predicted_category_name": matched_cat["name"],
-        "similarity":              round(best_score, 3),
-        "source":                  "base_model",
-    }
+        if not np.any(type_mask):
+            continue
+
+        filtered_vectors = model["train_vectors"][type_mask]
+        filtered_labels  = [lbl for lbl, keep in zip(model["labels"], type_mask) if keep]
+
+        result = _find_best_match(tx_vector, filtered_vectors)
+        if result is None:
+            continue
+
+        original_idx, best_score = result
+        best_label = filtered_labels[original_idx]
+        category_name = best_label.split("::", 1)[1]
+
+        matched_cat = _resolve_category_id(category_name, typ, all_categories)
+
+        if matched_cat is None:
+            logger.debug(
+                "Basis-Modell: Kategorie '%s' nicht auflösbar.",
+                category_name,
+            )
+            continue
+
+        return {
+            "predicted_category_id":   matched_cat["id"],
+            "predicted_category_name": matched_cat["name"],
+            "similarity":              round(best_score, 3),
+            "source":                  "base_model",
+        }
+
+    return None
 
 
 def _own_prediction_by_tx_id() -> dict[int, dict[str, Any]]:
@@ -674,10 +653,6 @@ def build_combined_predictions() -> list[dict[str, Any]]:
     """
     own_by_tx = _own_prediction_by_tx_id()
 
-    # Kategorie-Typ-Lookup (id → typ) für die Validierung
-    all_categories = _fetch_all_categories()
-    cat_type_by_id: dict[int, str] = {c["id"]: c["typ"] for c in all_categories}
-
     all_tx = _fetch_all_transactions()
     uncategorized = [
         t for t in all_tx
@@ -690,17 +665,12 @@ def build_combined_predictions() -> list[dict[str, Any]]:
 
     for tx in uncategorized:
         tx_id = tx["id"]
-        amount = tx.get("amount") or 0
-        expected_typ = "Einnahme" if amount > 0 else "Ausgabe"
 
         # ── Stufe 1: Eigenes Modell ──────────────────────────────────────────
         if tx_id in own_by_tx:
             pred = own_by_tx[tx_id]
-            predicted_typ = cat_type_by_id.get(pred["predicted_category_id"])
-            if predicted_typ == expected_typ:
-                combined.append({**pred, "source": "own_model"})
-                continue
-            # Typ mismatch → Stufe-1-Treffer verwerfen, falle durch zu Stufe 2/3
+            combined.append({**pred, "source": "own_model"})
+            continue
 
         # ── Stufe 2: Keyword-Regeln ──────────────────────────────────────────
         rules_result = predict_rules(tx)

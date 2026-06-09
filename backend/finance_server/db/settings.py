@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from .connection import get_connection
+from finance_server.core.database import get_connection
 
 
 def get_setting(key: str) -> str | None:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .connection import get_connection
+from finance_server.core.database import get_connection
 from .utils import normalize_text
 
 
@@ -15,6 +15,7 @@ def _serialize_category_row(row: Any) -> dict[str, Any]:
         "parent_name": row["parent_name"],
         "personal_expense": bool(row["personal_expense"]),
         "icon": row["icon"],
+        "transaction_count": row["transaction_count"],
     }
 
 
@@ -79,7 +80,8 @@ def list_categories() -> list[dict[str, Any]]:
                 c.parent_id,
                 parent.name AS parent_name,
                 c.personal_expense,
-                c.icon
+                c.icon,
+                (SELECT COUNT(*) FROM umsaetze WHERE kategorie = c.id) AS transaction_count
             FROM kategorien c
             LEFT JOIN kategorien parent ON parent.id = c.parent_id
             ORDER BY c.typ ASC, c.parent_id IS NOT NULL ASC, c.parent_id ASC, c.name ASC, c.id ASC
@@ -100,7 +102,8 @@ def get_category_record(category_id: int) -> dict[str, Any] | None:
                 c.parent_id,
                 parent.name AS parent_name,
                 c.personal_expense,
-                c.icon
+                c.icon,
+                (SELECT COUNT(*) FROM umsaetze WHERE kategorie = c.id) AS transaction_count
             FROM kategorien c
             LEFT JOIN kategorien parent ON parent.id = c.parent_id
             WHERE c.id = ?

@@ -1,5 +1,19 @@
 import { getApiBaseUrl } from "@/lib/api";
 
+export class RateLimitError extends Error {
+  retryAfter: number;
+
+  constructor(retryAfter: number, code?: string) {
+    super(
+      code === "SYNC_ALL_LIMITED"
+        ? `Komplett-Sync bereits durchgeführt. Bitte warte ${retryAfter} Sekunden.`
+        : `Bitte warte ${retryAfter} Sekunden vor der nächsten Anfrage.`,
+    );
+    this.name = "RateLimitError";
+    this.retryAfter = retryAfter;
+  }
+}
+
 type SyncBankContext = {
   scope?: string;
 };
@@ -29,7 +43,11 @@ export async function importFromFintsServer(
     const payload = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      const code = payload?.detail?.code;
+      const code = payload?.detail?.code ?? payload?.code;
+      if (code === "RATE_LIMITED") {
+        const retryAfter = payload?.detail?.retry_after ?? payload?.retry_after ?? 30;
+        throw new RateLimitError(retryAfter, code);
+      }
       if (code === "TAN_REQUIRED" && !tanHintVisible) {
         tanHintVisible = true;
         onTanRequiredChange?.(true);

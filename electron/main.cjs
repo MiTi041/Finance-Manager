@@ -244,30 +244,32 @@ async function handleDbExport() {
   const dbPath = getDbPath();
   if (!fs.existsSync(dbPath)) return { success: false, error: "Keine Datenbank gefunden" };
 
+  const dateStr = new Date().toISOString().slice(0, 10);
+
   const { canceled, filePath } = await dialog.showSaveDialog(getMainWindow(), {
     title: "Datenbank exportieren",
-    defaultPath: `Finance-Manager-backup-${new Date().toISOString().slice(0, 10)}.db`,
-    filters: [{ name: "SQLite-Datenbank", extensions: ["db"] }],
+    defaultPath: `Finance-Manager-backup-${dateStr}.zip`,
+    filters: [{ name: "Zip-Archiv", extensions: ["zip"] }],
   });
   if (canceled || !filePath) return { success: false, error: "Abgebrochen" };
 
-  stopBackend();
   try {
-    fs.copyFileSync(dbPath, filePath);
+    const resp = await fetch("http://127.0.0.1:8112/api/db/export");
+    if (!resp.ok) return { success: false, error: "Export fehlgeschlagen" };
+    const buf = Buffer.from(await resp.arrayBuffer());
+    fs.writeFileSync(filePath, buf);
     log.info(`DB exported → ${filePath}`);
     return { success: true };
   } catch (err) {
     log.error("Export error:", err);
     return { success: false, error: err.message };
-  } finally {
-    startBackend();
   }
 }
 
 async function handleDbImport() {
   const { canceled, filePaths } = await dialog.showOpenDialog(getMainWindow(), {
     title: "Datenbank importieren",
-    filters: [{ name: "SQLite-Datenbank", extensions: ["db"] }],
+    filters: [{ name: "Zip-Archiv", extensions: ["zip"] }],
     properties: ["openFile"],
   });
   if (canceled || !filePaths.length) return { success: false, error: "Abgebrochen" };
@@ -282,17 +284,24 @@ async function handleDbImport() {
   });
   if (confirm !== 0) return { success: false, error: "Abgebrochen" };
 
-  stopBackend();
   try {
-    fs.copyFileSync(filePaths[0], getDbPath());
+    const zipBuf = fs.readFileSync(filePaths[0]);
+    const formData = new FormData();
+    const blob = new Blob([zipBuf], { type: "application/zip" });
+    formData.append("file", blob, "finance-backup.zip");
+    const resp = await fetch("http://127.0.0.1:8112/api/db/import", {
+      method: "POST",
+      body: formData,
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      return { success: false, error: err.detail ?? "Import fehlgeschlagen" };
+    }
     log.info(`DB imported ← ${filePaths[0]}`);
-    startBackend();
-    await waitForBackend(20, 500);
     sendToRenderer("db:imported", null);
     return { success: true };
   } catch (err) {
     log.error("Import error:", err);
-    startBackend();
     return { success: false, error: err.message };
   }
 }

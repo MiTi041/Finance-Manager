@@ -1,4 +1,5 @@
-import { buildFlatCategoryTree, type FinanceCategory } from "../categories";
+import { buildFlatCategoryTree } from "../categories/category-tree";
+import type { FinanceCategory } from "../categories/types";
 
 export const UNASSIGNED_CATEGORY_VALUE = "__unassigned__";
 

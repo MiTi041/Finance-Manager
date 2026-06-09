@@ -182,7 +182,6 @@ export interface VirtualizedListProps<T> {
   emptyStateText?: string;
   emptyStateIllustration?: ReactNode;
   scrollClassName?: string;
-  searchClassName?: string;
   externalScrollRef?: React.RefObject<HTMLDivElement | null>;
   exportFilename?: string;
   /** Optional mapping from flattened object keys (e.g. "konto.kontonummer") to friendly column labels */
@@ -216,7 +215,6 @@ function VirtualizedListInner<T>(
     emptyStateText = "Es wurden keine Einträge gefunden.",
     emptyStateIllustration,
     scrollClassName,
-    searchClassName,
     externalScrollRef,
     exportFilename,
     exportColumnMapping,
@@ -389,128 +387,129 @@ function VirtualizedListInner<T>(
         height: offsetTop ? `calc(100vh - ${offsetTop}px - 3rem)` : undefined,
       }}
     >
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
-        <div className="flex min-w-50 flex-1 flex-col gap-4">
-          {toolbarActions && (
-            <div className="space-y-2">
-              <button
-                type="button"
-                onClick={() => toggleSection("actions")}
-                className="cursor-pointer flex w-full items-center justify-start gap-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60 hover:text-muted-foreground transition-colors"
-              >
-                <span>Funktionen</span>
-                <ChevronDownIcon
-                  size={14}
-                  className={cn(
-                    "transition-transform duration-200",
-                    openSections.actions ? "rotate-0" : "-rotate-90",
-                  )}
-                />
-              </button>
-              {openSections.actions && (
-                <div className={cn("flex flex-wrap gap-2")}>
-                  {toolbarActions?.map((item, index) => (
-                    <React.Fragment key={index}>{item}</React.Fragment>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+      <div className="flex min-w-50 flex-col gap-4">
+        {toolbarActions && (
+          <div className="space-y-2">
+            <button
+              type="button"
+              aria-expanded={openSections.actions}
+              onClick={() => toggleSection("actions")}
+              className="cursor-pointer flex w-full items-center justify-start gap-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+            >
+              <span>Funktionen</span>
+              <ChevronDownIcon
+                size={14}
+                className={cn(
+                  "transition-transform duration-200",
+                  openSections.actions ? "rotate-0" : "-rotate-90",
+                )}
+              />
+            </button>
+            {openSections.actions && (
+              <div className={cn("flex flex-wrap gap-2")}>
+                {toolbarActions?.map((item, index) => (
+                  <React.Fragment key={index}>{item}</React.Fragment>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
-          {filterItems && (
-            <div className="space-y-2">
-              <button
-                type="button"
-                onClick={() => toggleSection("filters")}
-                className="cursor-pointer flex w-full items-center justify-start gap-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60 hover:text-muted-foreground transition-colors"
-              >
-                <span>Filtern</span>
-                <ChevronDownIcon
-                  size={14}
-                  className={cn(
-                    "transition-transform duration-200",
-                    openSections.filters ? "rotate-0" : "-rotate-90",
-                  )}
-                />
-              </button>
-              {openSections.filters && (
-                <div className={cn("flex flex-wrap gap-2")}>
-                  {filterItems?.map((item, index) => (
-                    <React.Fragment key={index}>{item}</React.Fragment>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+        {filterItems && (
+          <div className="space-y-2">
+            <button
+              type="button"
+              aria-expanded={openSections.filters}
+              onClick={() => toggleSection("filters")}
+              className="cursor-pointer flex w-full items-center justify-start gap-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+            >
+              <span>Filtern</span>
+              <ChevronDownIcon
+                size={14}
+                className={cn(
+                  "transition-transform duration-200",
+                  openSections.filters ? "rotate-0" : "-rotate-90",
+                )}
+              />
+            </button>
+            {openSections.filters && (
+              <div className={cn("flex flex-wrap gap-2")}>
+                {filterItems?.map((item, index) => (
+                  <React.Fragment key={index}>{item}</React.Fragment>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
-          {(!noSearchbar || sortItems) && (
-            <div className="space-y-2 w-full">
-              <button
-                type="button"
-                onClick={() => toggleSection("searchSort")}
-                className="cursor-pointer flex w-full items-center justify-start gap-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60 hover:text-muted-foreground transition-colors"
-              >
-                <span>
-                  {!noSearchbar && "Suchen"} {!noSearchbar && sortItems && "&"}{" "}
-                  {sortItems && "Sortieren"}
-                </span>
-                <ChevronDownIcon
-                  size={14}
-                  className={cn(
-                    "transition-transform duration-200",
-                    openSections.searchSort ? "rotate-0" : "-rotate-90",
-                  )}
-                />
-              </button>
+        {(!noSearchbar || sortItems) && (
+          <div className="space-y-2 w-full">
+            <button
+              type="button"
+              aria-expanded={openSections.searchSort}
+              onClick={() => toggleSection("searchSort")}
+              className="cursor-pointer flex w-full items-center justify-start gap-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+            >
+              <span>
+                {!noSearchbar && "Suchen"} {!noSearchbar && sortItems && "&"}{" "}
+                {sortItems && "Sortieren"}
+              </span>
+              <ChevronDownIcon
+                size={14}
+                className={cn(
+                  "transition-transform duration-200",
+                  openSections.searchSort ? "rotate-0" : "-rotate-90",
+                )}
+              />
+            </button>
 
-              {openSections.searchSort && (
-                <div className="flex flex-wrap gap-4">
-                  {!noSearchbar && (
-                    <Input
-                      placeholder={searchPlaceholder}
-                      value={globalFilter}
-                      onChange={(event) => setGlobalFilter(event.target.value)}
-                      className="flex-1 min-w-[200px]"
-                    />
-                  )}
+            {openSections.searchSort && (
+              <div className="flex flex-wrap gap-4">
+                {!noSearchbar && (
+                  <Input
+                    placeholder={searchPlaceholder}
+                    value={globalFilter}
+                    onChange={(event) => setGlobalFilter(event.target.value)}
+                    className="flex-1 min-w-[200px]"
+                  />
+                )}
 
-                  {sortItems && (
-                    <div className="flex min-w-0 flex-wrap items-center gap-2 justify-start">
-                      {sortItems.map((option) => {
-                        const isActive = sortKey === option.value;
-                        const dir = isActive ? sortDir : null;
-                        return (
-                          <Button
-                            key={option.value}
-                            type="button"
-                            onClick={() => handleSortToggle(option.value)}
-                            className={cn(
-                              "inline-flex items-center gap-1.5 w-min rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                              isActive
-                                ? "!bg-foreground !text-background !hover:bg-foreground/90"
-                                : "!bg-muted !text-muted-foreground !hover:bg-muted/80 !hover:text-foreground",
+                {sortItems && (
+                  <div className="flex min-w-0 flex-wrap items-center gap-2 justify-start">
+                    {sortItems.map((option) => {
+                      const isActive = sortKey === option.value;
+                      const dir = isActive ? sortDir : null;
+                      return (
+                        <Button
+                          key={option.value}
+                          type="button"
+                          onClick={() => handleSortToggle(option.value)}
+                          className={cn(
+                            "inline-flex items-center gap-1.5 w-min rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                            isActive
+                              ? "!bg-foreground !text-background !hover:bg-foreground/90"
+                              : "!bg-muted !text-muted-foreground !hover:bg-muted/80 !hover:text-foreground",
+                          )}
+                        >
+                          <span>{option.label}</span>
+                          <span className="text-xs">
+                            {dir === "asc" ? (
+                              <ChevronUpIcon size={16} />
+                            ) : dir === "desc" ? (
+                              <ChevronDownIcon size={16} />
+                            ) : (
+                              <ChevronsUpDownIcon size={16} />
                             )}
-                          >
-                            <span>{option.label}</span>
-                            <span className="text-xs">
-                              {dir === "asc" ? (
-                                <ChevronUpIcon size={16} />
-                              ) : dir === "desc" ? (
-                                <ChevronDownIcon size={16} />
-                              ) : (
-                                <ChevronsUpDownIcon size={16} />
-                              )}
-                            </span>
-                          </Button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+                          </span>
+                        </Button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Scroll container + footer — fills remaining height */}

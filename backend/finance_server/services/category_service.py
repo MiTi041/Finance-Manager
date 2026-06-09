@@ -8,6 +8,8 @@ from finance_server.db import (
     list_categories,
     update_category_record,
 )
+from finance_server.services.auto_categorize import build_combined_predictions
+from finance_server.services.auto_categorize.auto_categorize import apply_prediction as _apply_prediction
 
 
 class CategoryService:
@@ -24,3 +26,9 @@ class CategoryService:
 
     def delete_category(self, category_id: int) -> bool:
         return delete_category_record(category_id)
+
+    def get_predictions(self) -> list[dict[str, Any]]:
+        return build_combined_predictions()
+
+    def apply_prediction(self, transaction_id: int, category_id: int | None) -> None:
+        _apply_prediction(transaction_id, category_id)

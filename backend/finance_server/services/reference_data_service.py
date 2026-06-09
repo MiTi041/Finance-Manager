@@ -4,50 +4,50 @@ from typing import Any
 
 from finance_server.db import (
     create_empfaengerkonto_record,
-    create_kontoinhaber_record,
+    create_zahlungspartner_record,
     delete_empfaengerkonto_record,
-    delete_kontoinhaber_record,
-    get_kontoinhaber_record,
+    delete_zahlungspartner_record,
+    get_zahlungspartner_record,
     list_empfaengerkonten_records,
-    list_iban_kontoinhaber_references,
-    list_kontoinhaber_iban_mappings,
-    list_kontoinhaber_records,
+    list_iban_zahlungspartner_references,
+    list_zahlungspartner_iban_mappings,
+    list_zahlungspartner_records,
     update_empfaengerkonto_record,
-    update_kontoinhaber_iban_mapping,
-    update_kontoinhaber_record,
+    update_zahlungspartner_iban_mapping,
+    update_zahlungspartner_record,
 )
 
 
 class ReferenceDataService:
     def get_iban_references(self) -> list[dict[str, Any]]:
-        return list_iban_kontoinhaber_references()
+        return list_iban_zahlungspartner_references()
 
-    def update_iban_mapping(self, iban: str, kontoinhaber_id: int) -> bool:
-        return update_kontoinhaber_iban_mapping(iban, kontoinhaber_id)
+    def update_iban_mapping(self, iban: str, zahlungspartner_id: int) -> bool:
+        return update_zahlungspartner_iban_mapping(iban, zahlungspartner_id)
 
-    def get_kontoinhaber(
-        self, kontoinhaber_id: int
+    def get_zahlungspartner(
+        self, zahlungspartner_id: int
     ) -> dict[str, Any] | None:
-        return get_kontoinhaber_record(kontoinhaber_id)
+        return get_zahlungspartner_record(zahlungspartner_id)
 
-    def list_kontoinhaber(self) -> list[dict[str, Any]]:
-        return list_kontoinhaber_records()
+    def list_zahlungspartner(self) -> list[dict[str, Any]]:
+        return list_zahlungspartner_records()
 
-    def list_kontoinhaber_mappings(self) -> list[dict[str, Any]]:
-        return list_kontoinhaber_iban_mappings()
+    def list_zahlungspartner_mappings(self) -> list[dict[str, Any]]:
+        return list_zahlungspartner_iban_mappings()
 
-    def create_kontoinhaber(
+    def create_zahlungspartner(
         self, payload: dict[str, Any]
     ) -> dict[str, Any]:
-        return create_kontoinhaber_record(payload)
+        return create_zahlungspartner_record(payload)
 
-    def update_kontoinhaber(
-        self, kontoinhaber_id: int, payload: dict[str, Any]
+    def update_zahlungspartner(
+        self, zahlungspartner_id: int, payload: dict[str, Any]
     ) -> dict[str, Any] | None:
-        return update_kontoinhaber_record(kontoinhaber_id, payload)
+        return update_zahlungspartner_record(zahlungspartner_id, payload)
 
-    def delete_kontoinhaber(self, kontoinhaber_id: int) -> bool:
-        return delete_kontoinhaber_record(kontoinhaber_id)
+    def delete_zahlungspartner(self, zahlungspartner_id: int) -> bool:
+        return delete_zahlungspartner_record(zahlungspartner_id)
 
     def get_recipient_accounts(self) -> list[dict[str, Any]]:
         return list_empfaengerkonten_records()

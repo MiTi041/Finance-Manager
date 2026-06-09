@@ -8,8 +8,8 @@ from typing import Any
 
 from cryptography.fernet import Fernet, InvalidToken
 
-from .connection import get_connection
-from .paths import get_credentials_key_path
+from finance_server.core.database import get_connection
+from finance_server.core.paths import get_credentials_key_path
 from .utils import normalize_text
 
 
@@ -24,8 +24,8 @@ def get_credentials_fernet() -> Fernet:
         key_path.write_bytes(key)
         try:
             key_path.chmod(0o600)
-        except Exception:
-            pass
+        except OSError:
+            logging.warning("Could not set permissions on credentials key file: %s", key_path)
 
     return Fernet(key)
 
@@ -231,8 +231,8 @@ def delete_bank_credentials(scope: str | None = None) -> None:
             connection.execute("DELETE FROM bank_credentials")
     
     try:
-        from finance_server.api.fints import clear_state_files_for_creds
-        from finance_server.models import BankCredentials
+        from finance_server.fints.client import clear_state_files_for_creds
+        from finance_server.models.bank import BankCredentials
 
         if scope:
             if creds:
@@ -289,6 +289,34 @@ def update_bank_account(scope: str, iban: str, account_name: str | None = None, 
             (new_iban, new_name, now, scope, normalized_iban),
         )
         return True
+
+
+def compute_and_store_balance_corrections(
+    scope: str, balances: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """
+    Berechnet und speichert die Saldo-Korrektur für alle übergebenen Kontosalden.
+    correction = bank_balance - SUM(lokale_transaktionen)
+    """
+    from .transactions import fetch_transaction_balance
+
+    results: list[dict[str, Any]] = []
+    for entry in balances:
+        iban = entry.get("iban")
+        bank_balance = entry.get("amount")
+        if iban and bank_balance is not None:
+            try:
+                transaction_sum = fetch_transaction_balance(iban)
+                correction = float(bank_balance) - transaction_sum
+                update_account_balance(scope, iban, correction)
+                results.append({
+                    "iban": iban,
+                    "correction": correction,
+                    "bank_balance": float(bank_balance),
+                })
+            except Exception:
+                logging.exception("Saldo-Korrektur fehlgeschlagen für IBAN=%s", iban)
+    return results
 
 
 def update_account_balance(scope: str, iban: str, balance: float) -> bool:

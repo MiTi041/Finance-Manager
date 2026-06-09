@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
-from functools import lru_cache
 import time
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -11,7 +9,8 @@ from urllib.request import Request, urlopen
 from typing import Any, cast
 import sqlite3
 
-from .connection import get_connection
+from finance_server.core.config import settings
+from finance_server.core.database import get_connection
 from .utils import normalize_text
 
 
@@ -86,10 +85,14 @@ def _resolve_local_logo_path(logo_url: str | None) -> Path | None:
     return path
 
 
-@lru_cache(maxsize=512)
+_hunter_logo_cache: dict[str, str | None] = {}
+
 def _resolve_hunter_company_logo(domain: str) -> str | None:
-    hunter_key = os.environ.get("HUNTER_LOGO_KEY", "").strip()
+    if domain in _hunter_logo_cache:
+        return _hunter_logo_cache[domain]
+    hunter_key = settings.hunter_logo_key.strip()
     if not hunter_key or not domain:
+        _hunter_logo_cache[domain] = None
         return None
 
     url = f"https://api.hunter.io/v2/companies/find?domain={domain}&api_key={hunter_key}"
@@ -98,30 +101,29 @@ def _resolve_hunter_company_logo(domain: str) -> str | None:
     try:
         with urlopen(request, timeout=5) as response:
             payload = json.loads(response.read().decode("utf-8"))
-    except (HTTPError, URLError, TimeoutError, json.JSONDecodeError, UnicodeDecodeError):
+    except (HTTPError, URLError, OSError, json.JSONDecodeError, UnicodeDecodeError):
         return None
 
     logo = payload.get("data", {}).get("logo") if isinstance(payload, dict) else None
-    if isinstance(logo, str) and logo.strip():
-        return logo.strip()
+    result = logo.strip() if isinstance(logo, str) and logo.strip() else None
+    _hunter_logo_cache[domain] = result
+    return result
 
-    return None
 
-
-def _store_kontoinhaber_logo(kontoinhaber_id: int, logo_url: str) -> None:
-    from .connection import get_connection
+def _store_zahlungspartner_logo(zahlungspartner_id: int, logo_url: str) -> None:
+    from finance_server.core.database import get_connection
 
     for attempt in range(3):
         try:
             with get_connection() as connection:
                 connection.execute(
                     """
-                    UPDATE kontoinhaber
+                    UPDATE zahlungspartner
                     SET logo_url = ?
                     WHERE id = ?
                       AND (logo_url IS NULL OR TRIM(logo_url) = '' OR logo_url != ?)
                     """,
-                    (logo_url, kontoinhaber_id, logo_url),
+                    (logo_url, zahlungspartner_id, logo_url),
                 )
                 connection.commit()
             return
@@ -131,7 +133,7 @@ def _store_kontoinhaber_logo(kontoinhaber_id: int, logo_url: str) -> None:
             time.sleep(0.2 * (attempt + 1))
 
 
-def _serialize_kontoinhaber_row(row: sqlite3.Row) -> dict[str, Any]:
+def _serialize_zahlungspartner_row(row: sqlite3.Row) -> dict[str, Any]:
     return {
         "id": row["id"],
         "name": row["name"],
@@ -144,41 +146,41 @@ def _serialize_kontoinhaber_row(row: sqlite3.Row) -> dict[str, Any]:
     }
 
 
-def list_kontoinhaber_records() -> list[dict[str, Any]]:
+def list_zahlungspartner_records() -> list[dict[str, Any]]:
     with get_connection() as connection:
         rows = connection.execute(
             """
             SELECT id, name, website, logo_url, local_logo_path, logo_white_background, logo_padding, is_company
-            FROM kontoinhaber
+            FROM zahlungspartner
             ORDER BY name COLLATE NOCASE ASC, id ASC
             """
         ).fetchall()
 
         iban_rows = connection.execute(
             """
-            SELECT iban, f_kontoinhaber_id
+            SELECT iban, f_zahlungspartner_id
             FROM ibans
             ORDER BY iban ASC
             """
         ).fetchall()
 
-    records = [_serialize_kontoinhaber_row(row) for row in rows]
+    records = [_serialize_zahlungspartner_row(row) for row in rows]
     by_id = {record["id"]: record for record in records}
     for record in records:
         record["ibans"] = []
 
     for row in iban_rows:
-        owner = by_id.get(row["f_kontoinhaber_id"])
+        owner = by_id.get(row["f_zahlungspartner_id"])
         if owner is not None:
             owner["ibans"].append(row["iban"])
 
     return records
 
 
-def create_kontoinhaber_record(payload: dict[str, Any]) -> dict[str, Any]:
+def create_zahlungspartner_record(payload: dict[str, Any]) -> dict[str, Any]:
     name = normalize_text(payload.get("name"))
     if not name:
-        raise ValueError("Kontoinhaber-Name fehlt.")
+        raise ValueError("Zahlungspartner-Name fehlt.")
 
     website = _normalize_optional_text(payload.get("website"))
     logo_url = _normalize_optional_text(payload.get("logo_url"))
@@ -201,7 +203,7 @@ def create_kontoinhaber_record(payload: dict[str, Any]) -> dict[str, Any]:
     with get_connection() as connection:
         cursor = connection.execute(
             """
-            INSERT INTO kontoinhaber (
+            INSERT INTO zahlungspartner (
                 name,
                 website,
                 logo_url,
@@ -213,15 +215,15 @@ def create_kontoinhaber_record(payload: dict[str, Any]) -> dict[str, Any]:
             """,
             (name, website, logo_url, logo_white_background, logo_padding, is_company),
         )
-        kontoinhaber_id = cast(int, cursor.lastrowid)
+        zahlungspartner_id = cast(int, cursor.lastrowid)
 
     if website and not logo_url:
-        resolve_kontoinhaber_logo(kontoinhaber_id, website, None)
+        resolve_zahlungspartner_logo(zahlungspartner_id, website, None)
 
-    record = get_kontoinhaber_record(kontoinhaber_id)
+    record = get_zahlungspartner_record(zahlungspartner_id)
     if record is None:
         return {
-            "id": kontoinhaber_id,
+            "id": zahlungspartner_id,
             "name": name,
             "website": website,
             "logo_url": logo_url,
@@ -234,8 +236,8 @@ def create_kontoinhaber_record(payload: dict[str, Any]) -> dict[str, Any]:
     return record
 
 
-def update_kontoinhaber_record(kontoinhaber_id: int, payload: dict[str, Any]) -> dict[str, Any] | None:
-    current = get_kontoinhaber_record(kontoinhaber_id)
+def update_zahlungspartner_record(zahlungspartner_id: int, payload: dict[str, Any]) -> dict[str, Any] | None:
+    current = get_zahlungspartner_record(zahlungspartner_id)
     if current is None:
         return None
 
@@ -249,7 +251,7 @@ def update_kontoinhaber_record(kontoinhaber_id: int, payload: dict[str, Any]) ->
     if "name" in payload:
         name = normalize_text(payload.get("name"))
         if not name:
-            raise ValueError("Kontoinhaber-Name fehlt.")
+            raise ValueError("Zahlungspartner-Name fehlt.")
         fields.append("name = ?")
         params.append(name)
 
@@ -296,60 +298,60 @@ def update_kontoinhaber_record(kontoinhaber_id: int, payload: dict[str, Any]) ->
         params.append(next_is_company)
 
     if not fields:
-        return get_kontoinhaber_record(kontoinhaber_id)
+        return get_zahlungspartner_record(zahlungspartner_id)
 
-    params.append(kontoinhaber_id)
+    params.append(zahlungspartner_id)
 
     with get_connection() as connection:
         cursor = connection.execute(
-            f"UPDATE kontoinhaber SET {', '.join(fields)} WHERE id = ?",
+            f"UPDATE zahlungspartner SET {', '.join(fields)} WHERE id = ?",
             params,
         )
         if cursor.rowcount <= 0:
             return None
 
-    updated = get_kontoinhaber_record(kontoinhaber_id)
+    updated = get_zahlungspartner_record(zahlungspartner_id)
     if updated is not None and updated.get("website") and not updated.get("logo_url"):
-        resolve_kontoinhaber_logo(
-            kontoinhaber_id,
+        resolve_zahlungspartner_logo(
+            zahlungspartner_id,
             updated.get("website"),
             None,
         )
-        updated = get_kontoinhaber_record(kontoinhaber_id)
+        updated = get_zahlungspartner_record(zahlungspartner_id)
 
     return updated
 
 
-def delete_kontoinhaber_record(kontoinhaber_id: int) -> bool:
+def delete_zahlungspartner_record(zahlungspartner_id: int) -> bool:
     with get_connection() as connection:
         owner = connection.execute(
-            "SELECT id FROM kontoinhaber WHERE id = ?",
-            (kontoinhaber_id,),
+            "SELECT id FROM zahlungspartner WHERE id = ?",
+            (zahlungspartner_id,),
         ).fetchone()
         if owner is None:
             return False
 
         connection.execute(
-            "DELETE FROM ibans WHERE f_kontoinhaber_id = ?",
-            (kontoinhaber_id,),
+            "DELETE FROM ibans WHERE f_zahlungspartner_id = ?",
+            (zahlungspartner_id,),
         )
         connection.execute(
-            "DELETE FROM kontoinhaber WHERE id = ?",
-            (kontoinhaber_id,),
+            "DELETE FROM zahlungspartner WHERE id = ?",
+            (zahlungspartner_id,),
         )
 
     return True
 
 
-def get_kontoinhaber_record(kontoinhaber_id: int) -> dict[str, Any] | None:
+def get_zahlungspartner_record(zahlungspartner_id: int) -> dict[str, Any] | None:
     with get_connection() as connection:
         row = connection.execute(
             """
             SELECT id, name, website, logo_url, local_logo_path, logo_white_background, logo_padding, is_company
-            FROM kontoinhaber
+            FROM zahlungspartner
             WHERE id = ?
             """,
-            (kontoinhaber_id,),
+            (zahlungspartner_id,),
         ).fetchone()
 
         if row is None:
@@ -359,33 +361,33 @@ def get_kontoinhaber_record(kontoinhaber_id: int) -> dict[str, Any] | None:
             """
             SELECT iban
             FROM ibans
-            WHERE f_kontoinhaber_id = ?
+            WHERE f_zahlungspartner_id = ?
             ORDER BY iban ASC
             """,
-            (kontoinhaber_id,),
+            (zahlungspartner_id,),
         ).fetchall()
 
-    record = _serialize_kontoinhaber_row(row)
+    record = _serialize_zahlungspartner_row(row)
     record["ibans"] = [iban_row["iban"] for iban_row in iban_rows]
     return record
 
 
-def list_kontoinhaber_iban_mappings() -> list[dict[str, Any]]:
+def list_zahlungspartner_iban_mappings() -> list[dict[str, Any]]:
     with get_connection() as connection:
         rows = connection.execute(
             """
             SELECT
                 i.iban,
-                i.f_kontoinhaber_id,
-                k.name AS kontoinhaber_name,
-                k.website AS kontoinhaber_website,
-                k.logo_url AS kontoinhaber_logo_url,
-                k.local_logo_path AS kontoinhaber_local_logo_path,
-                k.logo_white_background AS kontoinhaber_logo_white_background,
-                k.logo_padding AS kontoinhaber_logo_padding,
-                k.is_company AS kontoinhaber_is_company
+                i.f_zahlungspartner_id,
+                k.name AS zahlungspartner_name,
+                k.website AS zahlungspartner_website,
+                k.logo_url AS zahlungspartner_logo_url,
+                k.local_logo_path AS zahlungspartner_local_logo_path,
+                k.logo_white_background AS zahlungspartner_logo_white_background,
+                k.logo_padding AS zahlungspartner_logo_padding,
+                k.is_company AS zahlungspartner_is_company
             FROM ibans i
-            INNER JOIN kontoinhaber k ON k.id = i.f_kontoinhaber_id
+            INNER JOIN zahlungspartner k ON k.id = i.f_zahlungspartner_id
             ORDER BY i.iban ASC
             """
         ).fetchall()
@@ -393,18 +395,18 @@ def list_kontoinhaber_iban_mappings() -> list[dict[str, Any]]:
     return [
         {
             "iban": row["iban"],
-            "f_kontoinhaber_id": row["f_kontoinhaber_id"],
-            "kontoinhaber_name": row["kontoinhaber_name"],
-            "kontoinhaber_website": row["kontoinhaber_website"],
-            "kontoinhaber_logo_url": row["kontoinhaber_logo_url"],
-            "kontoinhaber_local_logo_path": row["kontoinhaber_local_logo_path"],
-            "kontoinhaber_logo_white_background": bool(
-                row["kontoinhaber_logo_white_background"]
+            "f_zahlungspartner_id": row["f_zahlungspartner_id"],
+            "zahlungspartner_name": row["zahlungspartner_name"],
+            "zahlungspartner_website": row["zahlungspartner_website"],
+            "zahlungspartner_logo_url": row["zahlungspartner_logo_url"],
+            "zahlungspartner_local_logo_path": row["zahlungspartner_local_logo_path"],
+            "zahlungspartner_logo_white_background": bool(
+                row["zahlungspartner_logo_white_background"]
             ),
-            "kontoinhaber_logo_padding": bool(
-                row["kontoinhaber_logo_padding"]
+            "zahlungspartner_logo_padding": bool(
+                row["zahlungspartner_logo_padding"]
             ),
-            "kontoinhaber_is_company": bool(row["kontoinhaber_is_company"]),
+            "zahlungspartner_is_company": bool(row["zahlungspartner_is_company"]),
         }
         for row in rows
     ]
@@ -588,33 +590,33 @@ def delete_empfaengerkonto_record(empfaengerkonto_id: int) -> bool:
     return cursor.rowcount > 0
 
 
-def update_kontoinhaber_iban_mapping(iban: str, kontoinhaber_id: int) -> bool:
+def update_zahlungspartner_iban_mapping(iban: str, zahlungspartner_id: int) -> bool:
     normalized_iban = normalize_text(iban)
     if not normalized_iban:
         return False
 
     with get_connection() as connection:
         owner = connection.execute(
-            "SELECT id FROM kontoinhaber WHERE id = ?",
-            (kontoinhaber_id,),
+            "SELECT id FROM zahlungspartner WHERE id = ?",
+            (zahlungspartner_id,),
         ).fetchone()
         if owner is None:
             return False
 
         connection.execute(
             """
-            INSERT INTO ibans (iban, f_kontoinhaber_id)
+            INSERT INTO ibans (iban, f_zahlungspartner_id)
             VALUES (?, ?)
             ON CONFLICT(iban) DO UPDATE SET
-                f_kontoinhaber_id = excluded.f_kontoinhaber_id
+                f_zahlungspartner_id = excluded.f_zahlungspartner_id
             """,
-            (normalized_iban, kontoinhaber_id),
+            (normalized_iban, zahlungspartner_id),
         )
         return True
 
 
-def resolve_kontoinhaber_logo(
-    kontoinhaber_id: int,
+def resolve_zahlungspartner_logo(
+    zahlungspartner_id: int,
     website: str | None,
     fallback_logo_url: str | None,
     local_logo_path: str | None = None,
@@ -626,61 +628,78 @@ def resolve_kontoinhaber_logo(
     stored_logo = (fallback_logo_url or "").strip()
     if stored_logo:
         if _resolve_local_logo_path(stored_logo) is not None:
-            return f"/api/reference-data/kontoinhaber/{kontoinhaber_id}/logo"
+            return f"/api/reference-data/zahlungspartner/{zahlungspartner_id}/logo"
         return stored_logo
 
     domain = _normalize_domain(website)
     if domain:
         hunter_logo = _resolve_hunter_company_logo(domain)
         if hunter_logo:
-            _store_kontoinhaber_logo(kontoinhaber_id, hunter_logo)
+            _store_zahlungspartner_logo(zahlungspartner_id, hunter_logo)
             return hunter_logo
 
     return None
 
 
-def list_iban_kontoinhaber_references() -> list[dict[str, Any]]:
+def get_zahlungspartner_by_iban(iban: str) -> dict[str, Any] | None:
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT k.id, k.name, k.website, k.logo_url, k.local_logo_path,
+                   k.logo_white_background, k.logo_padding, k.is_company
+            FROM ibans i
+            INNER JOIN zahlungspartner k ON k.id = i.f_zahlungspartner_id
+            WHERE i.iban = ?
+            """,
+            (iban,),
+        ).fetchone()
+    if row is None:
+        return None
+    return _serialize_zahlungspartner_row(row)
+
+
+def list_iban_zahlungspartner_references() -> list[dict[str, Any]]:
     with get_connection() as connection:
         rows = connection.execute(
             """
             SELECT
-                k.id AS kontoinhaber_id,
+                k.id AS zahlungspartner_id,
                 i.iban,
-                i.f_kontoinhaber_id,
-                k.name AS kontoinhaber_name,
-                k.website AS kontoinhaber_website,
-                k.logo_url AS kontoinhaber_logo_url
-                , k.local_logo_path AS kontoinhaber_local_logo_path
-                , k.logo_white_background AS kontoinhaber_logo_white_background
-                , k.logo_padding AS kontoinhaber_logo_padding
-                , k.is_company AS kontoinhaber_is_company
+                i.f_zahlungspartner_id,
+                k.name AS zahlungspartner_name,
+                k.website AS zahlungspartner_website,
+                k.logo_url AS zahlungspartner_logo_url
+                , k.local_logo_path AS zahlungspartner_local_logo_path
+                , k.logo_white_background AS zahlungspartner_logo_white_background
+                , k.logo_padding AS zahlungspartner_logo_padding
+                , k.is_company AS zahlungspartner_is_company
             FROM ibans i
-            INNER JOIN kontoinhaber k ON k.id = i.f_kontoinhaber_id
+            INNER JOIN zahlungspartner k ON k.id = i.f_zahlungspartner_id
             ORDER BY i.iban
             """
         ).fetchall()
 
     return [
         {
-            "kontoinhaber_id": row["kontoinhaber_id"],
+            "zahlungspartner_id": row["zahlungspartner_id"],
             "iban": row["iban"],
-            "f_kontoinhaber_id": row["f_kontoinhaber_id"],
-            "kontoinhaber_name": row["kontoinhaber_name"],
-            "kontoinhaber_website": row["kontoinhaber_website"],
-            "kontoinhaber_logo_url": row["kontoinhaber_logo_url"],
-            "kontoinhaber_local_logo_path": row["kontoinhaber_local_logo_path"],
-            "kontoinhaber_logo_white_background": bool(
-                row["kontoinhaber_logo_white_background"]
+            "f_zahlungspartner_id": row["f_zahlungspartner_id"],
+            "zahlungspartner_name": row["zahlungspartner_name"],
+            "zahlungspartner_website": row["zahlungspartner_website"],
+            "zahlungspartner_logo_url": row["zahlungspartner_logo_url"],
+            "zahlungspartner_local_logo_path": row["zahlungspartner_local_logo_path"],
+            "zahlungspartner_logo_white_background": bool(
+                row["zahlungspartner_logo_white_background"]
             ),
-            "kontoinhaber_logo_padding": bool(
-                row["kontoinhaber_logo_padding"]
+            "zahlungspartner_logo_padding": bool(
+                row["zahlungspartner_logo_padding"]
             ),
-            "kontoinhaber_is_company": bool(row["kontoinhaber_is_company"]),
-            "resolved_logo_url": resolve_kontoinhaber_logo(
-                row["kontoinhaber_id"],
-                row["kontoinhaber_website"],
-                row["kontoinhaber_logo_url"],
-                row["kontoinhaber_local_logo_path"],
+            "zahlungspartner_is_company": bool(row["zahlungspartner_is_company"]),
+            "resolved_logo_url": resolve_zahlungspartner_logo(
+                row["zahlungspartner_id"],
+                row["zahlungspartner_website"],
+                row["zahlungspartner_logo_url"],
+                row["zahlungspartner_local_logo_path"],
             ),
         }
         for row in rows

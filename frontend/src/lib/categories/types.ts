@@ -6,6 +6,7 @@ export type FinanceCategory = {
   parent_name?: string | null;
   personal_expense: boolean;
   icon: string | null;
+  transaction_count: number;
 };
 
 export type FlatCategoryNode = {

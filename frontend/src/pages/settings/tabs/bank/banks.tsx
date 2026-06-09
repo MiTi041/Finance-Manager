@@ -70,14 +70,10 @@ export function Banks({ linkedBanks, deletingScope, onDeleteOne }: BanksProps) {
   const [editing, setEditing] = useState<EditingState>(null);
   const [saving, setSaving] = useState(false);
   const [balanceSaving, setBalanceSaving] = useState(false);
-  const [balanceAdjustingAccount, setBalanceAdjustingAccount] = useState<
-    string | null
-  >(null);
+  const [balanceAdjustingAccount, setBalanceAdjustingAccount] = useState<string | null>(null);
   const [deletingAccount, setDeletingAccount] = useState<string | null>(null);
-  const [bankToDelete, setBankToDelete] =
-    useState<StoredBankCredentials | null>(null);
-  const [accountToDelete, setAccountToDelete] =
-    useState<AccountDeleteState>(null);
+  const [bankToDelete, setBankToDelete] = useState<StoredBankCredentials | null>(null);
+  const [accountToDelete, setAccountToDelete] = useState<AccountDeleteState>(null);
   const [discardChangesOpen, setDiscardChangesOpen] = useState(false);
   const [balanceError, setBalanceError] = useState<string | null>(null);
 
@@ -99,11 +95,7 @@ export function Banks({ linkedBanks, deletingScope, onDeleteOne }: BanksProps) {
     if (!editing) return;
     setSaving(true);
     try {
-      await updateBankAccount(
-        editing.scope,
-        editing.iban,
-        { account_name: editing.accountName },
-      );
+      await updateBankAccount(editing.scope, editing.iban, { account_name: editing.accountName });
       setEditing(null);
       setDiscardChangesOpen(false);
     } finally {
@@ -135,9 +127,7 @@ export function Banks({ linkedBanks, deletingScope, onDeleteOne }: BanksProps) {
       <span className="text-sm text-muted-foreground">
         {bankCount} verbundene Bank{bankCount !== 1 ? "en" : ""}
       </span>
-      {balanceError ? (
-        <p className="text-sm text-destructive">{balanceError}</p>
-      ) : null}
+      {balanceError ? <p className="text-sm text-destructive">{balanceError}</p> : null}
       {linkedBanks.map((bank) => {
         const accounts = getAccounts(bank);
 
@@ -172,9 +162,7 @@ export function Banks({ linkedBanks, deletingScope, onDeleteOne }: BanksProps) {
                     Aktiv
                   </Badge>
                   {bank.username && (
-                    <span className="text-xs text-muted-foreground">
-                      {bank.username}
-                    </span>
+                    <span className="text-xs text-muted-foreground">{bank.username}</span>
                   )}
                   <span className="text-xs text-muted-foreground">
                     · {accounts.length} Konto{accounts.length !== 1 ? "s" : ""}
@@ -199,15 +187,10 @@ export function Banks({ linkedBanks, deletingScope, onDeleteOne }: BanksProps) {
               <div className="border-t divide-y">
                 {accounts.map((account) => {
                   const accountKey = `${bank.scope}:${account.iban || account.account_name}`;
-                  const isEditing =
-                    editing?.scope === bank.scope &&
-                    editing?.iban === account.iban;
+                  const isEditing = editing?.scope === bank.scope && editing?.iban === account.iban;
 
                   return (
-                    <div
-                      key={accountKey}
-                      className="flex items-center gap-4 px-5 py-3"
-                    >
+                    <div key={accountKey} className="flex items-center gap-4 px-5 py-3">
                       {/* Indent indicator */}
                       <div className="w-px self-stretch bg-border ml-4 mr-1 shrink-0" />
 
@@ -236,48 +219,9 @@ export function Banks({ linkedBanks, deletingScope, onDeleteOne }: BanksProps) {
                             }
                           >
                             <Pencil className="!h-4 !w-4" />
-                            <span>Bearbeiten</span>
+                            <span>Umbenennen</span>
                           </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={async () => {
-                              const accountKey = `${bank.scope}:${account.iban || account.account_name}`;
-                              setBalanceAdjustingAccount(accountKey);
-                              setBalanceSaving(true);
-                              setBalanceError(null);
 
-                              try {
-                                await adjustBankAccountBalance(
-                                  bank.scope,
-                                  account.iban,
-                                );
-                              } catch (error) {
-                                setBalanceError(
-                                  error instanceof Error
-                                    ? error.message
-                                    : "Saldo konnte nicht korrigiert werden.",
-                                );
-                              } finally {
-                                setBalanceSaving(false);
-                                setBalanceAdjustingAccount(null);
-                              }
-                            }}
-                            disabled={balanceSaving}
-                          >
-                            {balanceAdjustingAccount ===
-                            `${bank.scope}:${account.iban || account.account_name}` ? (
-                              <Loader2 className="!h-4 !w-4 animate-spin" />
-                            ) : (
-                              <RefreshCw className="!h-4 !w-4" />
-                            )}
-                            <span>
-                              {balanceAdjustingAccount ===
-                              `${bank.scope}:${account.iban || account.account_name}`
-                                ? "Korrigiere …"
-                                : "Saldo korrigieren"}
-                            </span>
-                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -287,8 +231,7 @@ export function Banks({ linkedBanks, deletingScope, onDeleteOne }: BanksProps) {
                                 scope: bank.scope,
                                 bankName: bank.bank_name ?? bank.bank_key,
                                 iban: account.iban,
-                                accountName:
-                                  account.account_name || "Unbenanntes Konto",
+                                accountName: account.account_name || "Unbenanntes Konto",
                                 key: accountKey,
                               })
                             }
@@ -299,11 +242,7 @@ export function Banks({ linkedBanks, deletingScope, onDeleteOne }: BanksProps) {
                             ) : (
                               <Trash2 className="!h-4 !w-4" />
                             )}
-                            <span>
-                              {deletingAccount === accountKey
-                                ? "Lösche …"
-                                : "Löschen"}
-                            </span>
+                            <span>{deletingAccount === accountKey ? "Lösche …" : "Löschen"}</span>
                           </Button>
                         </div>
                       </div>
@@ -325,15 +264,10 @@ export function Banks({ linkedBanks, deletingScope, onDeleteOne }: BanksProps) {
                         <DialogContent>
                           <DialogHeader>
                             <DialogTitle>Konto bearbeiten</DialogTitle>
-                            <DialogDescription>
-                              Name für dieses Konto ändern.
-                            </DialogDescription>
+                            <DialogDescription>Name für dieses Konto ändern.</DialogDescription>
                           </DialogHeader>
                           <div className="grid gap-2">
-                            <label
-                              className="text-sm font-medium"
-                              htmlFor="account-name"
-                            >
+                            <label className="text-sm font-medium" htmlFor="account-name">
                               Kontoname
                             </label>
                             <Input
@@ -341,9 +275,7 @@ export function Banks({ linkedBanks, deletingScope, onDeleteOne }: BanksProps) {
                               value={editing?.accountName ?? ""}
                               onChange={(e) =>
                                 setEditing((cur) =>
-                                  cur
-                                    ? { ...cur, accountName: e.target.value }
-                                    : cur,
+                                  cur ? { ...cur, accountName: e.target.value } : cur,
                                 )
                               }
                               autoComplete="off"
@@ -360,11 +292,9 @@ export function Banks({ linkedBanks, deletingScope, onDeleteOne }: BanksProps) {
                                 if (!editing) return;
                                 setSaving(true);
                                 try {
-                                  await updateBankAccount(
-                                    editing.scope,
-                                    editing.iban,
-                                    { account_name: editing.accountName },
-                                  );
+                                  await updateBankAccount(editing.scope, editing.iban, {
+                                    account_name: editing.accountName,
+                                  });
                                   setEditing(null);
                                 } finally {
                                   setSaving(false);
@@ -376,9 +306,7 @@ export function Banks({ linkedBanks, deletingScope, onDeleteOne }: BanksProps) {
                               ) : (
                                 <Check className="!h-4 !w-4" />
                               )}
-                              <span>
-                                {saving ? "Speichere …" : "Speichern"}
-                              </span>
+                              <span>{saving ? "Speichere …" : "Speichern"}</span>
                             </Button>
                           </DialogFooter>
                         </DialogContent>
@@ -426,9 +354,7 @@ export function Banks({ linkedBanks, deletingScope, onDeleteOne }: BanksProps) {
         title="Konto löschen"
         description={`Konto "${accountToDelete?.accountName ?? ""}" bei ${accountToDelete?.bankName ?? ""} wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`}
         confirmLabel="Löschen"
-        loading={
-          accountToDelete ? deletingAccount === accountToDelete.key : false
-        }
+        loading={accountToDelete ? deletingAccount === accountToDelete.key : false}
         onOpenChange={(open) => {
           if (!open) setAccountToDelete(null);
         }}

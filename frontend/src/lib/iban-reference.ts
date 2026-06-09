@@ -1,9 +1,9 @@
-import type { IbanKontoinhaberReference } from "@/types/iban-reference";
+import type { IbanZahlungspartnerReference } from "@/types/iban-reference";
 import type { Transaction } from "@/types/transaction";
 import { normalizeIban } from "@/lib/iban";
 
 export function buildIbanReferenceLookup(
-  references: IbanKontoinhaberReference[],
+  references: IbanZahlungspartnerReference[],
 ) {
   return new Map(
     references.map((reference) => [normalizeIban(reference.iban), reference]),
@@ -12,7 +12,7 @@ export function buildIbanReferenceLookup(
 
 export function resolveTransactionCounterparty(
   transaction: Transaction,
-  lookup: Map<string, IbanKontoinhaberReference>,
+  lookup: Map<string, IbanZahlungspartnerReference>,
 ): Transaction {
   const iban = normalizeIban(transaction.zahlungspartner.iban);
   const resolved = iban ? lookup.get(iban) : undefined;
@@ -22,20 +22,20 @@ export function resolveTransactionCounterparty(
     zahlungspartner: {
       ...transaction.zahlungspartner,
       datenbankName:
-        resolved?.kontoinhaberName || transaction.zahlungspartner.name || "",
-      website: resolved?.kontoinhaberWebsite ?? null,
+        resolved?.zahlungspartnerName || transaction.zahlungspartner.name || "",
+      website: resolved?.zahlungspartnerWebsite ?? null,
       logoUrl:
-        resolved?.resolvedLogoUrl ?? resolved?.kontoinhaberLogoUrl ?? null,
-      logoWhiteBackground: resolved?.kontoinhaberLogoWhiteBackground ?? false,
-      logoPadding: resolved?.kontoinhaberLogoPadding ?? false,
-      isCompany: resolved?.kontoinhaberIsCompany ?? true,
+        resolved?.resolvedLogoUrl ?? resolved?.zahlungspartnerLogoUrl ?? null,
+      logoWhiteBackground: resolved?.zahlungspartnerLogoWhiteBackground ?? false,
+      logoPadding: resolved?.zahlungspartnerLogoPadding ?? false,
+      isCompany: resolved?.zahlungspartnerIsCompany ?? true,
     },
   };
 }
 
 export function resolveTransactionsCounterparty(
   transactions: Transaction[],
-  lookup: Map<string, IbanKontoinhaberReference>,
+  lookup: Map<string, IbanZahlungspartnerReference>,
 ): Transaction[] {
   return transactions.map((transaction) =>
     resolveTransactionCounterparty(transaction, lookup),
