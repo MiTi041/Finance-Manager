@@ -16,16 +16,10 @@ import { BankLogo, BrandIcon } from "@/components/bank-logo";
 import { Button } from "@/components/ui/button";
 import { CategoryCombobox } from "@/components/category-combobox";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/searchable-select";
 
 import { type SelectedBankOption } from "@/lib/bank/selected";
-import { type Transaction } from "@/types/transaction";
+import { type Transaction, type TransactionSplit } from "@/types/transaction";
 
 import { formatAmount, formatDate } from "@/lib/utils/format";
 import { type TransactionCategoryOption, UNASSIGNED_CATEGORY_VALUE } from "@/lib/utils/categories";
@@ -53,6 +47,7 @@ type TransactionRowProps = {
   onSelectChange: (transactionId: number, selected: boolean) => void;
   onSaveCategory: (transactionId: number, categoryId: number | null) => void;
   onSaveNote: (transactionId: number, note: string | null) => Promise<void>;
+  onSaveSplits: (transactionId: number, splits: TransactionSplit[] | null) => void;
   onNoteDraftChange?: (draft: string) => void;
   onLinkIbanToZahlungspartner: (iban: string, zahlungspartnerId: number) => Promise<void>;
   onCreateZahlungspartnerForIban: (iban: string, name: string) => Promise<void>;
@@ -80,6 +75,7 @@ export function TransactionRow({
   onSelectChange,
   onSaveCategory,
   onSaveNote,
+  onSaveSplits,
   onNoteDraftChange,
   onLinkIbanToZahlungspartner,
   onCreateZahlungspartnerForIban,
@@ -88,9 +84,13 @@ export function TransactionRow({
   ownerId,
 }: TransactionRowProps) {
   const [noteDraft, setNoteDraft] = useState(transaction.texte.anmerkung);
+  const [splitDrafts, setSplitDrafts] = useState<TransactionSplit[] | null>(
+    transaction.technisch.splits ? transaction.technisch.splits.map((s) => ({ ...s })) : null,
+  );
   const [selectedZahlungspartnerId, setSelectedZahlungspartnerId] = useState("");
   const [newZahlungspartnerName, setNewZahlungspartnerName] = useState("");
   const [savingNote, setSavingNote] = useState(false);
+  const [savingSplits, setSavingSplits] = useState(false);
   const [isInTagMode, setIsInTagMode] = useState(false);
   const [savingIbanMapping, setSavingIbanMapping] = useState(false);
   const [confirmCloseDialogOpen, setConfirmCloseDialogOpen] = useState(false);
@@ -112,6 +112,7 @@ export function TransactionRow({
     : transaction.zahlungspartner.datenbankName || transaction.zahlungspartner.name || "–";
   const filteredCategoryOptions = categoryOptions;
 
+  const isSaving = savingNote || savingSplits;
   const trimmedSavedNote = transaction.texte.anmerkung.trim();
   const trimmedNoteDraft = noteDraft.trim();
   const noteChanged = trimmedNoteDraft !== trimmedSavedNote;
@@ -141,8 +142,13 @@ export function TransactionRow({
   useEffect(() => {
     if (!isExpanded) {
       setNoteDraft(transaction.texte.anmerkung);
+      setSplitDrafts(null);
+    } else {
+      setSplitDrafts(
+        transaction.technisch.splits ? transaction.technisch.splits.map((s) => ({ ...s })) : null,
+      );
     }
-  }, [isExpanded, transaction.texte.anmerkung]);
+  }, [isExpanded, transaction.texte.anmerkung, transaction.technisch.splits]);
 
   useEffect(() => {
     setSelectedZahlungspartnerId("");
@@ -159,6 +165,7 @@ export function TransactionRow({
 
   useEffect(() => {
     if (!isExpanded || currentCategoryId != null || predictedCategoryId == null) return;
+    if (transaction.technisch.splits) return;
 
     const handler = (e: globalThis.KeyboardEvent) => {
       if (e.key !== "g" && e.key !== "G") return;
@@ -172,7 +179,7 @@ export function TransactionRow({
   }, [isExpanded, currentCategoryId, predictedCategoryId, transaction.id, onSaveCategory]);
 
   const handleRequestClose = (closeAction: () => void) => {
-    if (noteChanged) {
+    if (noteChanged || splitsChanged) {
       pendingToggleAction.current = closeAction;
       setConfirmCloseDialogOpen(true);
     } else {
@@ -182,23 +189,33 @@ export function TransactionRow({
 
   const handleDiscardAndClose = () => {
     setNoteDraft(transaction.texte.anmerkung);
+    setSplitDrafts(
+      transaction.technisch.splits ? transaction.technisch.splits.map((s) => ({ ...s })) : null,
+    );
     pendingToggleAction.current?.();
     pendingToggleAction.current = null;
     setConfirmCloseDialogOpen(false);
   };
 
   const handleSaveAndClose = async () => {
-    if (!noteChanged) {
+    if (!noteChanged && !splitsChanged) {
       handleDiscardAndClose();
       return;
     }
-    setSavingNote(true);
+    setSavingNote(noteChanged);
+    setSavingSplits(splitsChanged);
     try {
-      await onSaveNote(transaction.id, trimmedNoteDraft || null);
+      if (noteChanged) {
+        await onSaveNote(transaction.id, trimmedNoteDraft || null);
+      }
+      if (splitsChanged) {
+        onSaveSplits(transaction.id, splitDrafts);
+      }
     } catch {
       // ignore – user can still discard or cancel
     } finally {
       setSavingNote(false);
+      setSavingSplits(false);
     }
     handleDiscardAndClose();
   };
@@ -224,7 +241,6 @@ export function TransactionRow({
   };
 
   const createOwnerForUnknownIban = async () => {
-
     const name = newZahlungspartnerName.trim();
     if (!unknownIban || !name || savingIbanMapping) return;
     setSavingIbanMapping(true);
@@ -234,6 +250,83 @@ export function TransactionRow({
       setSavingIbanMapping(false);
     }
   };
+
+  const hasSplits = splitDrafts != null && splitDrafts.length > 0;
+  const sign = transaction.betrag.wert < 0 ? -1 : 1;
+  const absTotal = Math.abs(transaction.betrag.wert);
+  const splitAbsSum = hasSplits ? splitDrafts.reduce((sum, s) => sum + Math.abs(s.betrag), 0) : 0;
+  const splitMatchesTotal = splitAbsSum === absTotal;
+
+  const initFirstSplit = () => {
+    const half = Math.round((absTotal / 2) * 100) / 100;
+    const rest = Math.round((absTotal - half) * 100) / 100;
+    setSplitDrafts([
+      { betrag: half * sign, kategorieId: null },
+      { betrag: rest * sign, kategorieId: null },
+    ]);
+  };
+
+  const handleAddSplit = () => {
+    setSplitDrafts((prev) => {
+      if (!prev) return prev;
+      const extra = Math.round((absTotal / (prev.length + 1)) * 100) / 100;
+      const redistributed = Array.from({ length: prev.length + 1 }, () => ({
+        betrag: extra * sign,
+        kategorieId: null as number | null,
+      }));
+      const diff = Math.round((absTotal - extra * redistributed.length) * 100) / 100;
+      if (diff !== 0) {
+        redistributed[redistributed.length - 1].betrag =
+          Math.round((redistributed[redistributed.length - 1].betrag + diff * sign) * 100) / 100;
+      }
+      return redistributed;
+    });
+  };
+
+  const handleRemoveSplit = (index: number) => {
+    if (!splitDrafts) return;
+    if (splitDrafts.length <= 2) {
+      handleRemoveAllSplits();
+      return;
+    }
+    setSplitDrafts((prev) => {
+      if (!prev) return prev;
+      const next = prev.filter((_, i) => i !== index);
+      const remainingAbsSum = next.reduce((s, x) => s + Math.abs(x.betrag), 0);
+      const diff = Math.round((absTotal - remainingAbsSum) * 100) / 100;
+      if (diff !== 0) {
+        next[next.length - 1].betrag =
+          Math.round((Math.abs(next[next.length - 1].betrag) + diff) * sign * 100) / 100;
+      }
+      return next;
+    });
+  };
+
+  const handleSplitAmountChange = (index: number, value: number) => {
+    setSplitDrafts((prev) => {
+      if (!prev) return prev;
+      const next = prev.map((s) => ({ ...s }));
+      next[index].betrag = value * sign;
+      return next;
+    });
+  };
+
+  const handleSplitCategoryChange = (index: number, categoryId: number | null) => {
+    setSplitDrafts((prev) => {
+      if (!prev) return prev;
+      const next = prev.map((s) => ({ ...s }));
+      next[index].kategorieId = categoryId;
+      return next;
+    });
+  };
+
+  const handleRemoveAllSplits = () => {
+    setSplitDrafts(null);
+    onSaveSplits(transaction.id, null);
+  };
+
+  const splitsChanged =
+    JSON.stringify(splitDrafts) !== JSON.stringify(transaction.technisch.splits);
 
   const getINGBankBLZ = () => {
     return "50010517";
@@ -375,11 +468,16 @@ export function TransactionRow({
           </div>
 
           <div className="flex shrink-0 items-center gap-3">
-            {isUnassigned ? (
+            {isUnassigned && !transaction.technisch.splits ? (
               <span
                 className="size-2 shrink-0 rounded-full bg-orange-500"
                 title="Unkategorisiert"
               />
+            ) : null}
+            {transaction.technisch.splits ? (
+              <span className="inline-flex items-center rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+                Gesplittet
+              </span>
             ) : null}
             <span
               className={
@@ -538,21 +636,18 @@ export function TransactionRow({
                                 Bestehenden Zahlungspartner verknüpfen
                               </p>
                               <div className="flex gap-2 flex-wrap items-center">
-                                <Select
+                                <SearchableSelect
                                   value={selectedZahlungspartnerId}
                                   onValueChange={setSelectedZahlungspartnerId}
-                                >
-                                  <SelectTrigger className="flex-1 text-xs shadow-none">
-                                    <SelectValue placeholder="Zahlungspartner wählen …" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {zahlungspartnerOptions.map((owner) => (
-                                      <SelectItem key={owner.id} value={String(owner.id)}>
-                                        {owner.name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
+                                  options={zahlungspartnerOptions.map((owner) => ({
+                                    value: String(owner.id),
+                                    label: owner.name,
+                                  }))}
+                                  placeholder="Zahlungspartner wählen …"
+                                  searchPlaceholder="Zahlungspartner suchen …"
+                                  emptyText="Kein Zahlungspartner gefunden"
+                                  triggerClassName="flex-1 text-xs shadow-none h-8"
+                                />
                                 <Button
                                   type="button"
                                   size="sm"
@@ -585,7 +680,9 @@ export function TransactionRow({
                               <div className="flex gap-2 flex-wrap items-center">
                                 <Input
                                   value={newZahlungspartnerName}
-                                  onChange={(event) => setNewZahlungspartnerName(event.target.value)}
+                                  onChange={(event) =>
+                                    setNewZahlungspartnerName(event.target.value)
+                                  }
                                   onKeyDown={(event) => event.stopPropagation()}
                                   placeholder="Name …"
                                   className="h-8 min-w-30 flex-1 rounded-md border border-input bg-background px-3 text-xs text-foreground shadow-xs outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
@@ -655,121 +752,253 @@ export function TransactionRow({
                 ) : null}
               </div>
 
-              {/* Kategorie */}
-              <div className="space-y-2 px-5 py-4" onClick={(event) => event.stopPropagation()}>
-                <p className="mb-3 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
-                  Kategorie
+              {/* Kategorie / Splits */}
+              <div className="space-y-3 px-5 py-4" onClick={(event) => event.stopPropagation()}>
+                <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
+                  {hasSplits ? "Splits" : "Kategorie"}
                 </p>
-                <CategoryCombobox
-                  value={
-                    currentCategoryId === null || currentCategoryId === undefined
-                      ? UNASSIGNED_CATEGORY_VALUE
-                      : String(currentCategoryId)
-                  }
-                  onValueChange={(value) => {
-                    onSaveCategory(
-                      transaction.id,
-                      value === UNASSIGNED_CATEGORY_VALUE ? null : Number(value),
-                    );
-                  }}
-                  options={filteredCategoryOptions}
-                  showNoneOption
-                  noneValue={UNASSIGNED_CATEGORY_VALUE}
-                  placeholder="Kategorie wählen"
-                  triggerRef={categoryTriggerRef}
-                  onKeyDown={(event) => {
-                    onRowKeyDown(event, transaction.id);
-                  }}
-                  className={
-                    currentCategoryId === null || currentCategoryId === undefined
-                      ? "h-8 w-full !border-orange-500/40 !bg-orange-500/10 hover:!bg-orange-700/10 text-xs text-orange-500 hover:!text-orange-500 shadow-none"
-                      : "h-8 w-full text-xs shadow-none"
-                  }
-                />
 
-                <style>{`
-                    .ai-icon-glow::after {
-                        content: ''; position: absolute; inset: -3px; border-radius: 12px;
-                        background: radial-gradient(circle, rgba(124,58,237,.2) 0%, transparent 70%);
-                        animation: ai-icon-pulse 3s ease-in-out infinite; z-index: -1;
-                    }
-                    @keyframes ai-icon-pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.4; transform:scale(.8); } }
-
-                    .ai-sparkle-icon {
-                        animation: ai-sparkle-bright 2s ease-in-out infinite;
-                    }
-                    @keyframes ai-sparkle-bright { 0%,100% { filter:brightness(1); } 50% { filter:brightness(1.4); } }
-
-                    .ai-pulse-dot { animation: ai-dot 2s ease-in-out infinite; }
-                    @keyframes ai-dot {
-                        0%,100% { opacity:1; box-shadow: 0 0 0 0 rgba(124,58,237,.4); }
-                        50% { opacity:.5; box-shadow: 0 0 0 4px rgba(124,58,237,0); }
-                    }
-                `}</style>
-
-                {currentCategoryId == null && predictedCategoryId != null && (
-                  <div className="relative rounded-[12px]">
-                    {/* Inner card */}
-                    <div className="relative z-10 rounded-[11px] overflow-hidden border border-violet-500/15 bg-violet-500/[0.03] dark:bg-violet-500/[0.06]">
-                      {/* Subtle top radial glow */}
-                      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(124,58,237,0.08),transparent_70%)]" />
-
-                      {/* Header */}
-                      <div className="flex items-center gap-2.5 px-3.5 pt-3 pb-2">
-                        <div className="ai-icon-glow relative flex size-8 shrink-0 items-center justify-center rounded-lg border border-violet-500/25 bg-gradient-to-br from-violet-500/18 to-blue-500/18">
-                          <Sparkles className="ai-sparkle-icon size-3.5 text-violet-600 dark:text-violet-400" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
-                            <span className="ai-pulse-dot inline-block size-[5px] rounded-full bg-violet-500" />
-                            KI-Vorschlag
-                          </p>
-                          {(() => {
-                            const predicted = filteredCategoryOptions.find(
-                              (o) => o.value === String(predictedCategoryId),
-                            );
-                            return (
-                              <p className="truncate text-lg font-medium">
-                                {predicted?.icon ? (
-                                  <span className="mr-1.5">{predicted.icon}</span>
-                                ) : null}
-                                {predicted?.label.replace(/^\s+/, "") ?? "Unbekannt"}
-                              </p>
-                            );
-                          })()}
-                        </div>
-                      </div>
-
-                      {/* Confidence bar */}
-                      <div className="flex items-center gap-2 px-3.5 pb-2.5">
-                        <div className="h-[2.5px] flex-1 overflow-hidden rounded-full bg-violet-500/12">
-                          <div
-                            className="h-full rounded-full bg-gradient-to-r from-violet-500 via-indigo-500 to-blue-500 transition-all duration-700"
-                            style={{ width: `${predictedSimilarityPercent}%` }}
+                {hasSplits ? (
+                  <div className="space-y-2">
+                    {splitDrafts.map((split, index) => (
+                      <div key={index} className="flex items-center gap-2">
+                        <div className="relative w-24 shrink-0">
+                          <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground/40">
+                            €
+                          </span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={Math.abs(split.betrag)}
+                            onChange={(e) => handleSplitAmountChange(index, Number(e.target.value))}
+                            onKeyDown={(e) => e.stopPropagation()}
+                            className="h-8 w-full rounded-md border border-input bg-background pl-6 pr-2 text-xs tabular-nums text-foreground shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                           />
                         </div>
-                        <span className="text-[10px] text-muted-foreground">
-                          {predictedSimilarityPercent}%
-                        </span>
+                        <CategoryCombobox
+                          value={
+                            split.kategorieId == null
+                              ? UNASSIGNED_CATEGORY_VALUE
+                              : String(split.kategorieId)
+                          }
+                          onValueChange={(value) => {
+                            handleSplitCategoryChange(
+                              index,
+                              value === UNASSIGNED_CATEGORY_VALUE ? null : Number(value),
+                            );
+                          }}
+                          options={filteredCategoryOptions}
+                          showNoneOption
+                          noneValue={UNASSIGNED_CATEGORY_VALUE}
+                          placeholder="Kategorie"
+                          onKeyDown={(e) => e.stopPropagation()}
+                          className={
+                            split.kategorieId == null
+                              ? "h-8 flex-1 !border-orange-500/40 !bg-orange-500/10 hover:!bg-orange-700/10 text-xs text-orange-500 hover:!text-orange-500 shadow-none"
+                              : "h-8 flex-1 text-xs shadow-none"
+                          }
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveSplit(index)}
+                          className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/40 hover:bg-destructive/10 hover:text-destructive"
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            className="size-3.5"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M18 6 6 18" />
+                            <path d="m6 6 12 12" />
+                          </svg>
+                        </button>
                       </div>
+                    ))}
 
-                      {/* Action */}
-                      <div className="px-2.5 pb-2.5">
+                    <div className="flex items-center gap-2 pt-1">
+                      <div className="flex-1 h-px bg-border/40" />
+                      <span
+                        className={`text-xs tabular-nums ${
+                          splitMatchesTotal ? "text-green-600" : "text-destructive"
+                        }`}
+                      >
+                        {formatAmount(splitAbsSum, transaction.betrag.waehrung)} /{" "}
+                        {formatAmount(absTotal, transaction.betrag.waehrung)}
+                        {splitMatchesTotal ? " ✓" : " ✗"}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={handleAddSplit}
+                      >
+                        + Split
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        onClick={handleRemoveAllSplits}
+                      >
+                        Splits entfernen
+                      </Button>
+                      {splitsChanged && splitMatchesTotal && (
                         <Button
                           type="button"
-                          variant="ghost"
-                          className="h-[26px] w-full !rounded-[5px] border border-violet-500/30 bg-transparent text-[11.5px] font-medium hover:border-violet-500/55 hover:bg-violet-500/8 hover:text-violet-600 dark:hover:text-violet-400"
-                          onClick={() => onSaveCategory(transaction.id, predictedCategoryId)}
+                          size="sm"
+                          className="h-7 ml-auto text-xs"
+                          onClick={() => onSaveSplits(transaction.id, splitDrafts)}
                         >
                           <Check className="mr-1 size-3" />
-                          Übernehmen
-                          <kbd className="ml-1.5 rounded-[3px] border border-current/20 px-1 py-[0.5px] text-[10px]">
-                            G
-                          </kbd>
+                          Speichern
                         </Button>
-                      </div>
+                      )}
                     </div>
                   </div>
+                ) : (
+                  <>
+                    <CategoryCombobox
+                      value={
+                        currentCategoryId === null || currentCategoryId === undefined
+                          ? UNASSIGNED_CATEGORY_VALUE
+                          : String(currentCategoryId)
+                      }
+                      onValueChange={(value) => {
+                        onSaveCategory(
+                          transaction.id,
+                          value === UNASSIGNED_CATEGORY_VALUE ? null : Number(value),
+                        );
+                      }}
+                      options={filteredCategoryOptions}
+                      showNoneOption
+                      noneValue={UNASSIGNED_CATEGORY_VALUE}
+                      placeholder="Kategorie wählen"
+                      triggerRef={categoryTriggerRef}
+                      onKeyDown={(event) => {
+                        onRowKeyDown(event, transaction.id);
+                      }}
+                      className={
+                        currentCategoryId === null || currentCategoryId === undefined
+                          ? "h-8 w-full !border-orange-500/40 !bg-orange-500/10 hover:!bg-orange-700/10 text-xs text-orange-500 hover:!text-orange-500 shadow-none"
+                          : "h-8 w-full text-xs shadow-none"
+                      }
+                    />
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 w-full text-xs"
+                      onClick={initFirstSplit}
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        className="mr-1.5 size-3.5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M22 12h-8" />
+                        <path d="M14 6v12" />
+                        <path d="M3 12h6" />
+                        <path d="M9 8v8" />
+                        <path d="M18 8.5V15" />
+                      </svg>
+                      Aufteilen
+                    </Button>
+
+                    <style>{`
+                        .ai-icon-glow::after {
+                            content: ''; position: absolute; inset: -3px; border-radius: 12px;
+                            background: radial-gradient(circle, rgba(124,58,237,.2) 0%, transparent 70%);
+                            animation: ai-icon-pulse 3s ease-in-out infinite; z-index: -1;
+                        }
+                        @keyframes ai-icon-pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.4; transform:scale(.8); } }
+
+                        .ai-sparkle-icon {
+                            animation: ai-sparkle-bright 2s ease-in-out infinite;
+                        }
+                        @keyframes ai-sparkle-bright { 0%,100% { filter:brightness(1); } 50% { filter:brightness(1.4); } }
+
+                        .ai-pulse-dot { animation: ai-dot 2s ease-in-out infinite; }
+                        @keyframes ai-dot {
+                            0%,100% { opacity:1; box-shadow: 0 0 0 0 rgba(124,58,237,.4); }
+                            50% { opacity:.5; box-shadow: 0 0 0 4px rgba(124,58,237,0); }
+                        }
+                    `}</style>
+
+                    {currentCategoryId == null && predictedCategoryId != null && (
+                      <div className="relative rounded-[12px]">
+                        <div className="relative z-10 rounded-[11px] overflow-hidden border border-violet-500/15 bg-violet-500/[0.03] dark:bg-violet-500/[0.06]">
+                          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(124,58,237,0.08),transparent_70%)]" />
+
+                          <div className="flex items-center gap-2.5 px-3.5 pt-3 pb-2">
+                            <div className="ai-icon-glow relative flex size-8 shrink-0 items-center justify-center rounded-lg border border-violet-500/25 bg-gradient-to-br from-violet-500/18 to-blue-500/18">
+                              <Sparkles className="ai-sparkle-icon size-3.5 text-violet-600 dark:text-violet-400" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
+                                <span className="ai-pulse-dot inline-block size-[5px] rounded-full bg-violet-500" />
+                                KI-Vorschlag
+                              </p>
+                              {(() => {
+                                const predicted = filteredCategoryOptions.find(
+                                  (o) => o.value === String(predictedCategoryId),
+                                );
+                                return (
+                                  <p className="truncate text-lg font-medium">
+                                    {predicted?.icon ? (
+                                      <span className="mr-1.5">{predicted.icon}</span>
+                                    ) : null}
+                                    {predicted?.label.replace(/^\s+/, "") ?? "Unbekannt"}
+                                  </p>
+                                );
+                              })()}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 px-3.5 pb-2.5">
+                            <div className="h-[2.5px] flex-1 overflow-hidden rounded-full bg-violet-500/12">
+                              <div
+                                className="h-full rounded-full bg-gradient-to-r from-violet-500 via-indigo-500 to-blue-500 transition-all duration-700"
+                                style={{ width: `${predictedSimilarityPercent}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] text-muted-foreground">
+                              {predictedSimilarityPercent}%
+                            </span>
+                          </div>
+
+                          <div className="px-2.5 pb-2.5">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="h-[26px] w-full !rounded-[5px] border border-violet-500/30 bg-transparent text-[11.5px] font-medium hover:border-violet-500/55 hover:bg-violet-500/8 hover:text-violet-600 dark:hover:text-violet-400"
+                              onClick={() => onSaveCategory(transaction.id, predictedCategoryId)}
+                            >
+                              <Check className="mr-1 size-3" />
+                              Übernehmen
+                              <kbd className="ml-1.5 rounded-[3px] border border-current/20 px-1 py-[0.5px] text-[10px]">
+                                G
+                              </kbd>
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -855,12 +1084,12 @@ export function TransactionRow({
       <ConfirmDialog
         open={confirmCloseDialogOpen}
         title="Ungespeicherte Änderungen"
-        description="Die Anmerkung wurde noch nicht gespeichert. Was möchtest du tun?"
+        description="Es gibt ungespeicherte Änderungen. Was möchtest du tun?"
         confirmLabel="Verwerfen"
         saveLabel="Speichern"
         cancelLabel="Abbrechen"
         destructive={false}
-        saving={savingNote}
+        saving={isSaving}
         onSave={() => void handleSaveAndClose()}
         onConfirm={handleDiscardAndClose}
         onOpenChange={(open) => {

@@ -7,6 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/searchable-select";
 import { Trash2 } from "lucide-react";
 import { type FinanceCategory } from "@/lib/categories/types";
 
@@ -126,7 +127,7 @@ export function CategoryForm({
               >
                 Übergeordnete Kategorie
               </label>
-              <Select
+              <SearchableSelect
                 value={form.parent_id || "none"}
                 onValueChange={(value) =>
                   setForm((current) => ({
@@ -134,24 +135,16 @@ export function CategoryForm({
                     parent_id: value === "none" ? "" : value,
                   }))
                 }
-              >
-                <SelectTrigger
-                  id={`category-parent-${category.id}`}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <SelectValue placeholder="Keine übergeordnete Kategorie" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">
-                    Keine übergeordnete Kategorie
-                  </SelectItem>
-                  {parentOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                options={parentOptions}
+                placeholder="Keine übergeordnete Kategorie"
+                searchPlaceholder="Kategorie suchen …"
+                emptyText="Keine Kategorie gefunden"
+                showNoneOption
+                noneLabel="Keine übergeordnete Kategorie"
+                noneValue="none"
+                triggerId={`category-parent-${category.id}`}
+                triggerClassName="h-10"
+              />
             </div>
           </div>
 

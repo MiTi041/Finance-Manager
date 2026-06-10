@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/searchable-select";
 
 type CategoryFormState = {
   name: string;
@@ -116,7 +117,7 @@ export function CategoryCreateDialog({
             <label className="text-sm font-medium" htmlFor="category-parent">
               Übergeordnete Kategorie
             </label>
-            <Select
+            <SearchableSelect
               value={form.parent_id || "none"}
               onValueChange={(value) =>
                 setForm((current) => ({
@@ -124,24 +125,16 @@ export function CategoryCreateDialog({
                   parent_id: value === "none" ? "" : value,
                 }))
               }
-            >
-              <SelectTrigger
-                id="category-parent"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <SelectValue placeholder="Keine übergeordnete Kategorie" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">
-                  Keine übergeordnete Kategorie
-                </SelectItem>
-                {parentOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              options={parentOptions}
+              placeholder="Keine übergeordnete Kategorie"
+              searchPlaceholder="Kategorie suchen …"
+              emptyText="Keine Kategorie gefunden"
+              showNoneOption
+              noneLabel="Keine übergeordnete Kategorie"
+              noneValue="none"
+              triggerId="category-parent"
+              triggerClassName="h-10"
+            />
           </div>
 
           {form.typ === "Ausgabe" && (

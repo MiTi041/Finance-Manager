@@ -49,7 +49,7 @@ from .subscription_identities import (
     update_subscription_identity,
 )
 from finance_server.core.schema import initialize_database
-from .transactions import delete_transaction, delete_transactions_batch, fetch_latest_transaction, fetch_transaction_balance, fetch_transactions, insert_transactions, row_to_dict, to_row_payload, update_transaction_note
+from .transactions import delete_transaction, delete_transactions_batch, fetch_latest_transaction, fetch_transaction_balance, fetch_transactions, insert_transactions, row_to_dict, to_row_payload, update_transaction_note, update_transaction_splits
 
 __all__ = [
     "bank_credentials_configured",
@@ -102,6 +102,7 @@ __all__ = [
     "update_transaction_category",
     "update_transactions_category_batch",
     "update_transaction_note",
+    "update_transaction_splits",
     "upsert_bank_accounts",
     "to_row_payload",
 ]

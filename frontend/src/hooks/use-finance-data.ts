@@ -187,10 +187,9 @@ export function useFinanceData(
     const onSelectionChange = (event: Event) => {
       const customEvent = event as CustomEvent<{
         accountIban?: string;
-        scope?: string;
       }>;
-      const nextSelection = customEvent.detail?.accountIban ?? customEvent.detail?.scope ?? "all";
-      setActiveAccountIban(resolveSelection(nextSelection));
+      const nextSelection = customEvent.detail?.accountIban ?? "all";
+      setActiveAccountIban(nextSelection);
     };
 
     const onBankCredentialsChanged = () => void loadBankMeta();

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { FileText, Gauge, Repeat } from "lucide-react";
+import { FileText, Gauge, Repeat, ScanSearch } from "lucide-react";
 
 import { normalizeIban } from "@/lib/iban";
 import { buildAccountOptions, resolveAccountSelection } from "@/lib/utils/accounts";
@@ -36,6 +36,11 @@ const navData = {
       title: "Abonnements",
       url: "/subscriptions",
       icon: Repeat,
+    },
+    {
+      title: "Analyse",
+      url: "/analytics",
+      icon: ScanSearch,
     },
   ],
 };
@@ -74,10 +79,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     );
   });
 
-  const accountOptions = React.useMemo(
-    () => buildAccountOptions(linkedBanks),
-    [linkedBanks],
-  );
+  const accountOptions = React.useMemo(() => buildAccountOptions(linkedBanks), [linkedBanks]);
 
   const resolveSelection = React.useCallback(
     (selection: string) => resolveAccountSelection(selection, accountOptions, linkedBanks),
@@ -98,6 +100,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const resolved = resolveSelection(storedSelection);
     setActiveAccountIban(resolved);
     window.localStorage.setItem(ACTIVE_BANK_STORAGE_KEY, resolved);
+    window.dispatchEvent(
+      new CustomEvent("finance-bank-selection-change", {
+        detail: { accountIban: resolved },
+      }),
+    );
   }, [accountOptions, resolveSelection]);
 
   const setActiveSelection = React.useCallback((accountIban: string) => {
@@ -198,13 +205,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       void fetchBankCredentials({ forceRefresh: true })
         .then((banks) => {
           setLinkedBanks(banks);
+          const localOptions = buildAccountOptions(banks);
           const storedSelection =
             window.localStorage.getItem(ACTIVE_BANK_STORAGE_KEY) ??
             window.localStorage.getItem(LEGACY_ACTIVE_BANK_STORAGE_KEY) ??
             "all";
-          const resolvedSelection = resolveSelection(storedSelection);
+          const resolvedSelection = resolveAccountSelection(storedSelection, localOptions, banks);
           setActiveAccountIban(resolvedSelection);
           window.localStorage.setItem(ACTIVE_BANK_STORAGE_KEY, resolvedSelection);
+          window.dispatchEvent(
+            new CustomEvent("finance-bank-selection-change", {
+              detail: { accountIban: resolvedSelection },
+            }),
+          );
         })
         .catch(() => {
           setLinkedBanks([]);

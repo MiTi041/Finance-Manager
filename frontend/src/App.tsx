@@ -9,6 +9,7 @@ import { AutoUpdateToast } from "@/components/auto-update-toast";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { ProductIdSetup, hasProductId } from "@/components/product-id-setup";
 import SubscriptionsPage from "@/pages/subscriptions/subscriptions-page";
+import AnalyticsPage from "@/pages/analytics/analytics-page";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8112/api";
 
@@ -43,6 +44,7 @@ export default function App() {
             <Route path="/transactions" element={<TransactionsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/subscriptions" element={<SubscriptionsPage />} />
+            <Route path="/analytics" element={<AnalyticsPage />} />
           </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

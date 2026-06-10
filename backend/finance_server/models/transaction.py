@@ -13,5 +13,9 @@ class TransactionNoteUpdateRequest(BaseModel):
     note: str | None = None
 
 
+class TransactionSplitUpdateRequest(BaseModel):
+    splits: list[dict[str, Any]] | None = None
+
+
 class BatchIdsRequest(BaseModel):
     transaction_ids: list[int]

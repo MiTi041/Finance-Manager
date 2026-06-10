@@ -120,6 +120,8 @@ export function mapTransaction(dto: TransactionDto): Transaction {
 
       kategorieId: dto.kategorie,
 
+      splits: dto.splits ?? null,
+
       transactionCode: dto.transaction_code,
 
       fundsCode: dto.funds_code,

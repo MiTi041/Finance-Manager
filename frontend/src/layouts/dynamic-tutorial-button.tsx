@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { Sparkles } from "lucide-react";
 
@@ -27,10 +27,15 @@ export function DynamicTutorialButton() {
   const { pathname } = useLocation();
   const config = tutorialMap[pathname];
 
-  const [open, setOpen] = useState(() => {
-    if (typeof window === "undefined" || !config) return false;
-    return window.localStorage.getItem(config.storageKey) !== "true";
-  });
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!config) return;
+    const dismissed = window.localStorage.getItem(config.storageKey) === "true";
+    if (!dismissed) {
+      setOpen(true);
+    }
+  }, [config]);
 
   const handleOpenChange = useCallback((newOpen: boolean) => {
     setOpen(newOpen);

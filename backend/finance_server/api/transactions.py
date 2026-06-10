@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from finance_server.models.transaction import TransactionImportRequest, TransactionNoteUpdateRequest, BatchIdsRequest
+from finance_server.models.transaction import TransactionImportRequest, TransactionNoteUpdateRequest, TransactionSplitUpdateRequest, BatchIdsRequest
 from finance_server.services.transaction_service import TransactionService
 from finance_server.api._crud import crud_delete
 from finance_server.api.deps import get_transaction_service
@@ -84,3 +84,16 @@ def set_transaction_note(
         raise HTTPException(status_code=404, detail="Transaktion nicht gefunden")
 
     return {"transaction_id": transaction_id, "note": request.note}
+
+
+@router.patch("/db/transactions/{transaction_id}/splits")
+def set_transaction_splits(
+    transaction_id: int,
+    request: TransactionSplitUpdateRequest,
+    service: TransactionService = Depends(get_transaction_service),
+) -> dict[str, Any]:
+    updated = service.update_splits(transaction_id, request.splits)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Transaktion nicht gefunden")
+
+    return {"transaction_id": transaction_id, "splits": request.splits}

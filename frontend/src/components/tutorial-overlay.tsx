@@ -15,7 +15,6 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -103,9 +102,9 @@ export function TutorialOverlay({ open, onOpenChange, slides, storageKey }: Tuto
             <DialogTitle className="text-center text-lg">
               {slide.title}
             </DialogTitle>
-            <DialogDescription className="text-center pt-2 text-foreground/80">
+            <div className="text-sm text-center pt-2 text-foreground/80">
               {slide.description}
-            </DialogDescription>
+            </div>
           </DialogHeader>
         </div>
 

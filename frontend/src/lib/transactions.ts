@@ -83,6 +83,24 @@ export async function deleteTransactionsBatch(
   return parseJsonResponse(response);
 }
 
+export async function updateTransactionSplits(
+  transactionId: number,
+  splits: { betrag: number; kategorieId: number | null }[] | null,
+): Promise<void> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/db/transactions/${transactionId}/splits`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ splits }),
+    },
+  );
+
+  await parseJsonResponse(response);
+}
+
 export async function updateTransactionNote(
   transactionId: number,
   note: string | null,

@@ -4,13 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { BrandIcon } from "@/components/bank-logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/searchable-select";
 import { type Subscription } from "@/pages/subscriptions/hooks/use-subscriptions";
 import { getServerBaseUrl } from "@/lib/bank/zahlungspartner-logo";
 import { type ZahlungspartnerRecord } from "@/lib/zahlungspartner";
@@ -269,21 +263,18 @@ export function SubscriptionRow({
                           Bestehenden Zahlungspartner verknüpfen
                         </p>
                         <div className="flex gap-2 flex-wrap items-center">
-                          <Select
+                          <SearchableSelect
                             value={selectedZahlungspartnerId}
                             onValueChange={setSelectedZahlungspartnerId}
-                          >
-                            <SelectTrigger className="flex-1 text-xs shadow-none">
-                              <SelectValue placeholder="Zahlungspartner wählen …" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {zahlungspartnerOptions.map((owner) => (
-                                <SelectItem key={owner.id} value={String(owner.id)}>
-                                  {owner.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            options={zahlungspartnerOptions.map((owner) => ({
+                              value: String(owner.id),
+                              label: owner.name,
+                            }))}
+                            placeholder="Zahlungspartner wählen …"
+                            searchPlaceholder="Zahlungspartner suchen …"
+                            emptyText="Kein Zahlungspartner gefunden"
+                            triggerClassName="flex-1 text-xs shadow-none h-8"
+                          />
                           <Button
                             type="button"
                             size="sm"

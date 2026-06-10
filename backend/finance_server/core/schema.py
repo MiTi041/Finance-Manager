@@ -3,7 +3,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-from finance_server.core.seed_data import SEED_CATEGORIES_SQL
+from finance_server.core.seed_data import SEED_CATEGORIES_SQL, SEED_ZAHLUNGSPARTNER_SQL, SEED_IBANS_SQL
 
 
 def create_umsaetze_table(connection: sqlite3.Connection) -> None:
@@ -295,15 +295,21 @@ def initialize_database(connection: sqlite3.Connection) -> None:
         {
             "dummy_entry": "INTEGER NOT NULL DEFAULT 0",
             "note": "TEXT",
+            "splits": "TEXT",
         },
     )
     create_reference_tables(connection)
     migrate_reference_tables(connection)
     create_categories_table(connection)
 
-    row_count = connection.execute("SELECT COUNT(*) FROM kategorien").fetchone()[0]
-    if row_count == 0:
-        connection.executescript(SEED_CATEGORIES_SQL)
+    for table, sql in [
+        ("kategorien", SEED_CATEGORIES_SQL),
+        ("zahlungspartner", SEED_ZAHLUNGSPARTNER_SQL),
+        ("ibans", SEED_IBANS_SQL),
+    ]:
+        row_count = connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+        if row_count == 0:
+            connection.executescript(sql)
 
     _ensure_table_columns(
         connection,

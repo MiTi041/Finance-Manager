@@ -102,6 +102,7 @@ function DynamicBreadcrumbs() {
     dashboard: "Dashboard",
     transactions: "Transaktionen",
     subscriptions: "Abonnements",
+    analytics: "Analyse",
   };
 
   return (

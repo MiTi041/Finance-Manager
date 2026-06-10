@@ -20,7 +20,7 @@ import {
   fetchZahlungspartnerReferenceData,
   type ZahlungspartnerRecord,
 } from "@/lib/zahlungspartner";
-import { deleteTransaction, updateTransactionNote } from "@/lib/transactions";
+import { deleteTransaction, updateTransactionNote, updateTransactionSplits } from "@/lib/transactions";
 import { updateIbanZahlungspartnerMapping } from "@/lib/reference-data";
 
 import { type Transaction } from "@/types/transaction";
@@ -252,6 +252,19 @@ export default function TransactionsPage() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Anmerkung konnte nicht gespeichert werden");
       throw err;
+    }
+  };
+
+  const saveTransactionSplits = async (
+    id: number,
+    splits: { betrag: number; kategorieId: number | null }[] | null,
+  ) => {
+    try {
+      await updateTransactionSplits(id, splits);
+      await reload();
+      toast.success("Splits gespeichert");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Splits konnten nicht gespeichert werden");
     }
   };
 
@@ -531,14 +544,18 @@ export default function TransactionsPage() {
         ]}
         filterItem={handleFilterTransaction}
         getItemKey={(transaction) => transaction.id}
-        getItemHeight={(transaction) =>
-          expandedTransactionId === transaction.id
-            ? normalizeIban(transaction.zahlungspartner.iban) &&
-              !ibanToZahlungspartner.has(normalizeIban(transaction.zahlungspartner.iban))
+        getItemHeight={(transaction) => {
+          if (expandedTransactionId !== transaction.id) return 88;
+          const splitHeight = transaction.technisch.splits
+            ? transaction.technisch.splits.length * 52 + 80
+            : 0;
+          const baseHeight =
+            normalizeIban(transaction.zahlungspartner.iban) &&
+            !ibanToZahlungspartner.has(normalizeIban(transaction.zahlungspartner.iban))
               ? 604
-              : 468
-            : 88
-        }
+              : 468;
+          return baseHeight + splitHeight;
+        }}
         renderItem={(transaction) => {
           const accountBank = linkedAccountByIban.get(normalizeIban(transaction.konto.iban));
           const partnerBank = linkedAccountByIban.get(
@@ -574,8 +591,9 @@ export default function TransactionsPage() {
               onSaveCategory={(transactionId, categoryId) => {
                 void saveTransactionCategory(transactionId, categoryId);
               }}
-              onSaveNote={saveTransactionNote}
-              onNoteDraftChange={(draft) => {
+               onSaveNote={saveTransactionNote}
+               onSaveSplits={saveTransactionSplits}
+               onNoteDraftChange={(draft) => {
                 if (expandedTransactionId === transaction.id) {
                   expandedNoteDraft.current = draft;
                 }

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Iterable
 import sqlite3
@@ -163,6 +164,7 @@ def row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
         "dummy_entry": bool(row["dummy_entry"]),
         "kategorie": row["kategorie"],
         "note": row["note"],
+        "splits": json.loads(row["splits"]) if row["splits"] else None,
         "created_at": row["created_at"],
         "bank_deleted": bool(dict(row).get("bank_deleted", False)),
     }
@@ -287,5 +289,16 @@ def update_transaction_note(transaction_id: int, note: str | None) -> bool:
         cursor = connection.execute(
             "UPDATE umsaetze SET note = ? WHERE id = ?",
             (stored_note, transaction_id),
+        )
+        return cursor.rowcount > 0
+
+
+def update_transaction_splits(transaction_id: int, splits: list[dict[str, Any]] | None) -> bool:
+    stored_splits = json.dumps(splits, ensure_ascii=False) if splits else None
+
+    with get_connection() as connection:
+        cursor = connection.execute(
+            "UPDATE umsaetze SET splits = ? WHERE id = ?",
+            (stored_splits, transaction_id),
         )
         return cursor.rowcount > 0

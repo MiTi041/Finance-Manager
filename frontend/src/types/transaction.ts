@@ -2,6 +2,11 @@
  * Rohdaten direkt aus Bank/API/CSV.
  * Entspricht 1:1 dem externen Datenformat.
  */
+export interface TransactionSplit {
+  betrag: number;
+  kategorieId: number | null;
+}
+
 export interface TransactionDto {
   id: number;
 
@@ -82,6 +87,7 @@ export interface TransactionDto {
 
   kategorie: number | null;
   note: string | null;
+  splits: TransactionSplit[] | null;
 
   created_at: Date;
   bank_deleted: boolean;
@@ -188,6 +194,8 @@ export interface Transaction {
     hash: string;
 
     kategorieId: number | null;
+
+    splits: TransactionSplit[] | null;
 
     transactionCode: string;
 
