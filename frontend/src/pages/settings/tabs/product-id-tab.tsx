@@ -34,16 +34,19 @@ export function ProductIdTab() {
   const [isConfigured, setIsConfigured] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     fetch(`${API_BASE}/product-id`)
       .then((res) => res.json())
       .then((data) => {
+        if (cancelled) return;
         if (data.product_id) {
           setValue(data.product_id);
           setIsConfigured(true);
         }
       })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .catch(() => { if (!cancelled) setMessage({ type: "error", text: "Produkt-ID konnte nicht geladen werden" }); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, []);
 
   const handleSave = async () => {
@@ -62,8 +65,8 @@ export function ProductIdTab() {
       if (!res.ok) throw new Error("Speichern fehlgeschlagen");
       setIsConfigured(true);
       setMessage({ type: "success", text: "Produkt-ID gespeichert." });
-    } catch (err: any) {
-      setMessage({ type: "error", text: err.message ?? "Verbindungsfehler" });
+    } catch (err: unknown) {
+      setMessage({ type: "error", text: err instanceof Error ? err.message : "Verbindungsfehler" });
     } finally {
       setSaving(false);
     }
@@ -81,8 +84,8 @@ export function ProductIdTab() {
       setValue("");
       setIsConfigured(false);
       setMessage({ type: "success", text: "Produkt-ID entfernt." });
-    } catch (err: any) {
-      setMessage({ type: "error", text: err.message ?? "Verbindungsfehler" });
+    } catch (err: unknown) {
+      setMessage({ type: "error", text: err instanceof Error ? err.message : "Verbindungsfehler" });
     } finally {
       setSaving(false);
     }

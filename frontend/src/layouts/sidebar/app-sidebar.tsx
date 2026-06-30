@@ -14,11 +14,9 @@ import {
   type FintsSyncStatusDetail,
 } from "@/lib/sync-events";
 import { UpdateBanner } from "@/components/update-banner";
+import { readActiveAccountIban, writeActiveAccountIban } from "@/lib/bank/active-storage";
 import { BankSelector } from "./bank-selector";
 import { SidebarFooterContent } from "./sidebar-footer-content";
-
-const ACTIVE_BANK_STORAGE_KEY = "finance.sidebar.active-account-iban.v1";
-const LEGACY_ACTIVE_BANK_STORAGE_KEY = "finance.sidebar.active-bank-scope.v1";
 
 const navData = {
   navMain: [
@@ -70,14 +68,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [isSyncing, setIsSyncing] = React.useState(false);
   const [syncStatusText, setSyncStatusText] = React.useState<string>("");
   const [linkedBanks, setLinkedBanks] = React.useState<StoredBankCredentials[]>([]);
-  const [activeAccountIban, setActiveAccountIban] = React.useState<string>(() => {
-    if (typeof window === "undefined") return "all";
-    return (
-      window.localStorage.getItem(ACTIVE_BANK_STORAGE_KEY) ??
-      window.localStorage.getItem(LEGACY_ACTIVE_BANK_STORAGE_KEY) ??
-      "all"
-    );
-  });
+  const [activeAccountIban, setActiveAccountIban] = React.useState<string>(() => readActiveAccountIban());
 
   const accountOptions = React.useMemo(() => buildAccountOptions(linkedBanks), [linkedBanks]);
 
@@ -92,14 +83,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     if (accountOptions.length === 0 || hasRestoredSelection.current) return;
     hasRestoredSelection.current = true;
 
-    const storedSelection =
-      window.localStorage.getItem(ACTIVE_BANK_STORAGE_KEY) ??
-      window.localStorage.getItem(LEGACY_ACTIVE_BANK_STORAGE_KEY) ??
-      "all";
-
+    const storedSelection = readActiveAccountIban();
     const resolved = resolveSelection(storedSelection);
     setActiveAccountIban(resolved);
-    window.localStorage.setItem(ACTIVE_BANK_STORAGE_KEY, resolved);
+    writeActiveAccountIban(resolved);
     window.dispatchEvent(
       new CustomEvent("finance-bank-selection-change", {
         detail: { accountIban: resolved },
@@ -109,7 +96,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   const setActiveSelection = React.useCallback((accountIban: string) => {
     setActiveAccountIban(accountIban);
-    window.localStorage.setItem(ACTIVE_BANK_STORAGE_KEY, accountIban);
+    writeActiveAccountIban(accountIban);
     window.dispatchEvent(
       new CustomEvent("finance-bank-selection-change", {
         detail: { accountIban },
@@ -206,13 +193,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         .then((banks) => {
           setLinkedBanks(banks);
           const localOptions = buildAccountOptions(banks);
-          const storedSelection =
-            window.localStorage.getItem(ACTIVE_BANK_STORAGE_KEY) ??
-            window.localStorage.getItem(LEGACY_ACTIVE_BANK_STORAGE_KEY) ??
-            "all";
+          const storedSelection = readActiveAccountIban();
           const resolvedSelection = resolveAccountSelection(storedSelection, localOptions, banks);
           setActiveAccountIban(resolvedSelection);
-          window.localStorage.setItem(ACTIVE_BANK_STORAGE_KEY, resolvedSelection);
+          writeActiveAccountIban(resolvedSelection);
           window.dispatchEvent(
             new CustomEvent("finance-bank-selection-change", {
               detail: { accountIban: resolvedSelection },

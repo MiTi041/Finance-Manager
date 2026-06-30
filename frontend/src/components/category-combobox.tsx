@@ -92,7 +92,7 @@ export function CategoryCombobox({
       <PopoverContent className="p-0" align="start" sideOffset={4}>
         <Command>
           <CommandInput placeholder="Kategorie suchen..." />
-          <CommandList>
+          <CommandList className="max-h-80">
             <CommandEmpty>Keine Kategorie gefunden</CommandEmpty>
             <CommandGroup className="[&_[cmdk-item]]:my-1">
               {showNoneOption && (

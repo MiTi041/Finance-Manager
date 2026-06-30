@@ -445,7 +445,36 @@ class SubscriptionService:
                     }
                 )
 
-        # ── Step 4: Filter out inactive subscriptions ──
+        # ── Step 4: Add refund info ──
+        all_tx_ids = [tid for r in results for tid in r["transactionIds"]]
+        if all_tx_ids:
+            placeholders = ",".join("?" for _ in all_tx_ids)
+            with get_connection() as connection:
+                refund_rows = connection.execute(
+                    f"""
+                    SELECT refund_ref_transaction_id, SUM(amount) as refund_total
+                    FROM umsaetze
+                    WHERE refund_ref_transaction_id IN ({placeholders})
+                    GROUP BY refund_ref_transaction_id
+                    """,
+                    all_tx_ids,
+                ).fetchall()
+            refund_map = {row["refund_ref_transaction_id"]: abs(row["refund_total"]) for row in refund_rows}
+        else:
+            refund_map = {}
+
+        for r in results:
+            refund_total = 0
+            net_sum = 0.0
+            for tx in r["transactions"]:
+                tx_refund = refund_map.get(tx["id"], 0)
+                refund_total += tx_refund
+                tx_net = max(0, abs(tx["amount"]) - tx_refund)
+                net_sum += tx_net
+            r["refundAmount"] = refund_total
+            r["effectiveAmount"] = round(net_sum / r["transactionCount"], 2) if r["transactionCount"] > 0 else r["amount"]
+
+        # ── Step 5: Filter out inactive subscriptions ──
         today = date.today()
         FREQUENCY_MAX_AGE_DAYS = {
             FREQUENCY_MONTHLY: 45,

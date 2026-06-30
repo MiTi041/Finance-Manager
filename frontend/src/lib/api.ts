@@ -23,19 +23,31 @@ export async function parseJsonResponse(response: Response, fallbackMessage?: st
   return payload;
 }
 
+export function createAbortableFetch(signal?: AbortSignal) {
+  return (url: string, init?: RequestInit) =>
+    fetch(url, { ...init, signal });
+}
+
 export async function fetchCachedResource<T>(
   key: string,
   urlPath: string,
   extract: (payload: any) => T,
-  options?: { forceRefresh?: boolean },
+  options?: { forceRefresh?: boolean; signal?: AbortSignal },
 ): Promise<T> {
   return fetchCachedJson({
     key,
     forceRefresh: options?.forceRefresh,
     fetcher: async () => {
-      const response = await fetch(`${getApiBaseUrl()}${urlPath}`);
+      const response = await fetch(`${getApiBaseUrl()}${urlPath}`, { signal: options?.signal });
       const payload = await parseJsonResponse(response);
       return extract(payload);
     },
   });
+}
+
+export class AbortError extends Error {
+  constructor() {
+    super("Request aborted");
+    this.name = "AbortError";
+  }
 }

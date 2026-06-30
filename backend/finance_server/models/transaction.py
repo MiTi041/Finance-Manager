@@ -2,11 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
-
-
-class TransactionImportRequest(BaseModel):
-    rows: list[dict[str, Any]] = Field(default_factory=list)
+from pydantic import BaseModel
 
 
 class TransactionNoteUpdateRequest(BaseModel):
@@ -19,3 +15,7 @@ class TransactionSplitUpdateRequest(BaseModel):
 
 class BatchIdsRequest(BaseModel):
     transaction_ids: list[int]
+
+
+class TransactionRefundLinkUpdateRequest(BaseModel):
+    refund_ref_transaction_id: int | None

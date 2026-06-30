@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from finance_server.models.transaction import TransactionImportRequest, TransactionNoteUpdateRequest, TransactionSplitUpdateRequest, BatchIdsRequest
+from finance_server.models.transaction import BatchIdsRequest, TransactionNoteUpdateRequest, TransactionRefundLinkUpdateRequest, TransactionSplitUpdateRequest
 from finance_server.services.transaction_service import TransactionService
 from finance_server.api._crud import crud_delete
 from finance_server.api.deps import get_transaction_service
@@ -40,17 +40,6 @@ def get_latest_transaction(
 ) -> dict[str, Any]:
     transaction = service.get_latest_transaction(iban=iban, blz=blz)
     return {"transaction": transaction}
-
-
-@router.post("/db/transactions/import")
-def import_transactions(
-    request: TransactionImportRequest,
-    service: TransactionService = Depends(get_transaction_service),
-) -> dict[str, Any]:
-    try:
-        return service.import_transactions(request.rows)
-    except ValueError as err:
-        raise HTTPException(status_code=400, detail=str(err)) from err
 
 
 @router.post("/db/transactions/batch-delete")
@@ -97,3 +86,19 @@ def set_transaction_splits(
         raise HTTPException(status_code=404, detail="Transaktion nicht gefunden")
 
     return {"transaction_id": transaction_id, "splits": request.splits}
+
+
+@router.patch("/db/transactions/{transaction_id}/refund-link")
+def set_transaction_refund_link(
+    transaction_id: int,
+    request: TransactionRefundLinkUpdateRequest,
+    service: TransactionService = Depends(get_transaction_service),
+) -> dict[str, Any]:
+    updated = service.update_refund_link(transaction_id, request.refund_ref_transaction_id)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Transaktion nicht gefunden")
+
+    return {
+        "transaction_id": transaction_id,
+        "refund_ref_transaction_id": request.refund_ref_transaction_id,
+    }

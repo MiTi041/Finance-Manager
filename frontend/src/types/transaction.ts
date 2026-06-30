@@ -5,6 +5,7 @@
 export interface TransactionSplit {
   betrag: number;
   kategorieId: number | null;
+  name?: string | null;
 }
 
 export interface TransactionDto {
@@ -91,6 +92,7 @@ export interface TransactionDto {
 
   created_at: Date;
   bank_deleted: boolean;
+  refund_ref_transaction_id: number | null;
 }
 
 /**
@@ -208,6 +210,8 @@ export interface Transaction {
     settlementTag: string;
 
     bankDeleted: boolean;
+
+    refundRefTransactionId: number | null;
   };
 }
 

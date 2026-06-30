@@ -142,6 +142,7 @@ export async function saveBankCredentials(
   const payload = await parseJsonResponse(response);
 
   try {
+    clearCachedJson("bank-credentials");
     window.dispatchEvent(
       new CustomEvent("finance-bank-credentials-changed", { detail: payload }),
     );
@@ -165,6 +166,7 @@ export async function deleteBankCredentials(scope?: string): Promise<void> {
   const payload = await parseJsonResponse(response);
 
   try {
+    clearCachedJson("bank-credentials");
     window.dispatchEvent(
       new CustomEvent("finance-bank-credentials-changed", { detail: payload }),
     );
@@ -188,6 +190,7 @@ export async function updateBankCredentials(
   const payloadData = await parseJsonResponse(response);
 
   try {
+    clearCachedJson("bank-credentials");
     window.dispatchEvent(
       new CustomEvent("finance-bank-credentials-changed", {
         detail: payloadData,
@@ -221,6 +224,7 @@ export async function updateBankAccount(
   const payloadData = await parseJsonResponse(response);
 
   try {
+    clearCachedJson("bank-credentials");
     window.dispatchEvent(
       new CustomEvent("finance-bank-credentials-changed", {
         detail: payloadData,
@@ -249,6 +253,7 @@ export async function deleteBankAccount(
   const payload = await parseJsonResponse(response);
 
   try {
+    clearCachedJson("bank-credentials");
     window.dispatchEvent(
       new CustomEvent("finance-bank-credentials-changed", { detail: payload }),
     );

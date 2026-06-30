@@ -7,3 +7,5 @@ cryptography
 python-multipart
 numpy
 scikit-learn
+easyocr
+Pillow

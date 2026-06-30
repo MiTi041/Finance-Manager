@@ -144,7 +144,7 @@ export function BalanceChart({ transactions, currentBalance }: BalanceChartProps
   return (
     <div className="min-w-0 flex-1 rounded-panel border border-border bg-card p-[22px_22px_14px]">
       <SectionHeading>{rangeLabel}</SectionHeading>
-      <div className="h-[200px]">
+      <div className="h-[200px]" role="img" aria-label="Kontostand-Entwicklung als Liniendiagramm">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
             <defs>

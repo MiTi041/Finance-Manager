@@ -8,6 +8,7 @@ from finance_server.services.subscription_service import SubscriptionService
 from finance_server.services.credentials_service import CredentialsService
 from finance_server.services.subscription_identity_service import SubscriptionIdentityService
 from finance_server.services.export_import_service import ExportImportService
+from finance_server.services.receipt_service import ReceiptService
 
 
 def get_transaction_service() -> TransactionService:
@@ -40,3 +41,7 @@ def get_subscription_identity_service() -> SubscriptionIdentityService:
 
 def get_export_import_service() -> ExportImportService:
     return ExportImportService()
+
+
+def get_receipt_service() -> ReceiptService:
+    return ReceiptService()

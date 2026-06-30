@@ -5,6 +5,7 @@ import { CircleX } from "lucide-react";
 
 type ErrorBoundaryProps = {
   children: ReactNode;
+  pageName?: string;
 };
 
 type ErrorBoundaryState = {
@@ -23,7 +24,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("ErrorBoundary caught:", error, info.componentStack);
+    console.error(`ErrorBoundary${this.props.pageName ? ` [${this.props.pageName}]` : ""} caught:`, error, info.componentStack);
   }
 
   handleReset = () => {
@@ -35,7 +36,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       return (
         <div className="flex flex-col items-center justify-center h-screen gap-4">
           <EmptyState
-            title="Ein Fehler ist aufgetreten"
+            title={`Fehler in${this.props.pageName ? ` "${this.props.pageName}"` : ""}`}
             text={this.state.error?.message ?? "Unerwarteter Fehler"}
             illustration={<CircleX />}
           />

@@ -24,6 +24,8 @@ export interface Subscription {
   logoPadding?: boolean;
   isCompany?: boolean;
   amount: number;
+  refundAmount: number;
+  effectiveAmount: number;
   frequency: SubscriptionFrequency;
   frequencyLabel: string;
   firstDate: string;

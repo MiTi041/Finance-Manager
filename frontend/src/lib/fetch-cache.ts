@@ -53,9 +53,10 @@ export function hasFreshCache(key: string, ttlMs = DEFAULT_TTL_MS): boolean {
 
 export async function fetchCachedJson<T>(options: {
   key: string;
-  fetcher: () => Promise<T>;
+  fetcher: (signal: AbortSignal) => Promise<T>;
   forceRefresh?: boolean;
   ttlMs?: number;
+  signal?: AbortSignal;
 }): Promise<T> {
   const ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
 
@@ -66,7 +67,7 @@ export async function fetchCachedJson<T>(options: {
     }
   }
 
-  const value = await options.fetcher();
+  const value = await options.fetcher(options.signal ?? new AbortController().signal);
   if (typeof window !== "undefined") {
     writeCache(options.key, value);
   }

@@ -8,6 +8,7 @@ export interface PartnerAnalytics {
   logoUrl: string | null;
   logoWhiteBackground: boolean;
   logoPadding: boolean;
+  isCompany: boolean;
 }
 
 export function usePartnerAnalytics({
@@ -38,6 +39,7 @@ export function usePartnerAnalytics({
           logoUrl: t.zahlungspartner.logoUrl,
           logoWhiteBackground: t.zahlungspartner.logoWhiteBackground,
           logoPadding: t.zahlungspartner.logoPadding,
+          isCompany: t.zahlungspartner.isCompany,
         });
       }
     });

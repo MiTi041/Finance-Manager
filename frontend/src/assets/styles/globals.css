@@ -170,6 +170,29 @@
   display: none;
 }
 
+/* Analytics-specific dark theme colors */
+:root .analytics-theme {
+  --analytics-card-bg: #0f0f1e;
+  --analytics-card-border: #1a1a2e;
+  --analytics-text-primary: #e8e8f5;
+  --analytics-text-secondary: #d0d0e8;
+  --analytics-text-muted: #a0a0c0;
+  --analytics-text-dim: #7070a0;
+  --analytics-text-faint: #5a5a7a;
+  --analytics-text-minimal: #3a3a5a;
+  --analytics-accent-violet: #7c6cff;
+  --analytics-accent-teal: #00d4a1;
+  --analytics-progress-bg: #1a1a2e;
+  --analytics-tooltip-bg: rgba(15, 15, 30, 0.95);
+  --analytics-tooltip-border: rgba(124, 108, 255, 0.25);
+  --analytics-icon-bg-violet: rgba(124, 108, 255, 0.12);
+  --analytics-icon-bg-teal: rgba(0, 212, 161, 0.12);
+}
+.dark .analytics-theme {
+  --analytics-card-bg: #0f0f1e;
+  --analytics-card-border: #1a1a2e;
+}
+
 /* Hide scrollbars on the document edges (useful for Chromium-based browsers like Arc) */
 html,
 body {

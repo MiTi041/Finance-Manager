@@ -89,11 +89,11 @@ export function MonthlyChart({ transactions }: MonthlyChartProps) {
           </div>
         ))}
       </div>
-      <div className="h-[164px]">
+      <div className="h-[164px]" role="img" aria-label="Monatliche Einnahmen und Ausgaben als Balkendiagramm">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={data}
-            barSize={8}
+            barSize={24}
             barGap={4}
             margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
           >
@@ -112,8 +112,8 @@ export function MonthlyChart({ transactions }: MonthlyChartProps) {
               width={52}
             />
             <Tooltip content={<BarTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
-            <Bar dataKey="einnahmen" fill={GREEN} radius={[3, 3, 0, 0]} fillOpacity={0.85} />
-            <Bar dataKey="ausgaben" fill={RED} radius={[3, 3, 0, 0]} fillOpacity={0.85} />
+            <Bar dataKey="einnahmen" fill={GREEN} radius={[2, 2, 0, 0]} fillOpacity={0.85} />
+            <Bar dataKey="ausgaben" fill={RED} radius={[2, 2, 0, 0]} fillOpacity={0.85} />
           </BarChart>
         </ResponsiveContainer>
       </div>

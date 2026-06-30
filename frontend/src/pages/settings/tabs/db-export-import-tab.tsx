@@ -6,7 +6,12 @@ import { Download, Upload, AlertCircle } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8112/api";
 
-const isElectron = typeof window !== "undefined" && !!(window as any).api;
+interface SaveFilePickerOptions {
+  suggestedName?: string;
+  types?: Array<{ description: string; accept: Record<string, string[]> }>;
+}
+
+  const isElectron = typeof window !== "undefined" && !!window.api;
 
 export function DbExportImportTab() {
   const [exporting, setExporting] = useState(false);
@@ -14,7 +19,7 @@ export function DbExportImportTab() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleExportViaElectron = useCallback(async () => {
-    const result = await (window as any).api.dbExport();
+    const result = await window.api.dbExport();
     if (result.success) {
       toast.success("Datenbank erfolgreich exportiert.");
     } else if (result.error && result.error !== "Abgebrochen") {
@@ -29,7 +34,9 @@ export function DbExportImportTab() {
     const blob = await res.blob();
 
     if ("showSaveFilePicker" in window) {
-      const handle = await (window as any).showSaveFilePicker({
+      const showPicker = (window as { showSaveFilePicker?: (opts: SaveFilePickerOptions) => Promise<{ createWritable: () => Promise<{ write: (blob: Blob) => Promise<void>; close: () => Promise<void> }> }> }).showSaveFilePicker;
+      if (!showPicker) throw new Error("File System Access API nicht verfügbar");
+      const handle = await showPicker({
         suggestedName: "finance-backup.zip",
         types: [
           {
@@ -62,15 +69,15 @@ export function DbExportImportTab() {
         await handleExportViaApi();
         toast.success("Datenbank erfolgreich exportiert.");
       }
-    } catch (err: any) {
-      toast.error(err.message ?? "Export fehlgeschlagen");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Export fehlgeschlagen");
     } finally {
       setExporting(false);
     }
   };
 
   const handleImportViaElectron = useCallback(async () => {
-    const result = await (window as any).api.dbImport();
+    const result = await window.api.dbImport();
     if (result.success) {
       toast.success("Datenbank importiert. Die Seite wird neu geladen…");
       setTimeout(() => window.location.reload(), 2000);
@@ -113,8 +120,8 @@ export function DbExportImportTab() {
       } else {
         await handleImportViaApi(file);
       }
-    } catch (err: any) {
-      toast.error(err.message ?? "Import fehlgeschlagen");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Import fehlgeschlagen");
     } finally {
       setImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = "";

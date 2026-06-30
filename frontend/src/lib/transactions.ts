@@ -1,43 +1,5 @@
 import { getApiBaseUrl, parseJsonResponse } from "./api";
 
-export async function uploadToDbTransactions(
-  rows: any[],
-  chunkSize = 500,
-  onProgress: (percent: number) => void,
-) {
-  const total = rows.length;
-
-  if (total === 0) {
-    onProgress(100);
-    return;
-  }
-
-  for (let index = 0; index < total; index += chunkSize) {
-    const chunk = rows.slice(index, index + chunkSize);
-    const response = await fetch(`${getApiBaseUrl()}/db/transactions/import`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ rows: chunk }),
-    });
-
-    const payload = await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        payload?.detail ?? "Lokale Datenbank konnte nicht aktualisiert werden",
-      );
-    }
-
-    const percent = Math.min(
-      100,
-      Math.round(((index + chunk.length) / total) * 100),
-    );
-    onProgress(percent);
-  }
-}
-
 export async function fetchLatestDbTransaction(
   iban?: string,
 ): Promise<any | null> {
@@ -85,7 +47,7 @@ export async function deleteTransactionsBatch(
 
 export async function updateTransactionSplits(
   transactionId: number,
-  splits: { betrag: number; kategorieId: number | null }[] | null,
+  splits: { betrag: number; kategorieId: number | null; name?: string | null }[] | null,
 ): Promise<void> {
   const response = await fetch(
     `${getApiBaseUrl()}/db/transactions/${transactionId}/splits`,
@@ -95,6 +57,22 @@ export async function updateTransactionSplits(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ splits }),
+    },
+  );
+
+  await parseJsonResponse(response);
+}
+
+export async function updateRefundLink(
+  transactionId: number,
+  refundRefTransactionId: number | null,
+): Promise<void> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/db/transactions/${transactionId}/refund-link`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refund_ref_transaction_id: refundRefTransactionId }),
     },
   );
 

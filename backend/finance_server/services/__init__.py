@@ -6,6 +6,7 @@ from .subscription_service import SubscriptionService
 from .credentials_service import CredentialsService
 from .subscription_identity_service import SubscriptionIdentityService
 from .export_import_service import ExportImportService
+from .receipt_service import ReceiptService
 
 from .rate_limiter import RateLimitExceeded, enforce_rate_limit, check_rate_limit
 
@@ -17,6 +18,7 @@ __all__ = [
     "CredentialsService",
     "SubscriptionIdentityService",
     "ExportImportService",
+    "ReceiptService",
     "RateLimitExceeded",
     "enforce_rate_limit",
     "check_rate_limit",

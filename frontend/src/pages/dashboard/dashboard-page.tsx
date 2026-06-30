@@ -23,9 +23,14 @@ import { MonthlyChart } from "./components/monthly-chart";
 import { DashboardSkeleton } from "./components/dashboard-skeleton";
 
 function computeDateFooter(dateFilter: DateFilterValue) {
-  if (!dateFilter.timeSpan && !dateFilter.timeRange) return null;
-  const span = dateFilter.timeSpan ?? getTimeSpanForRange(dateFilter.timeRange!);
-  return `${format(span.from, "dd.MM.yy")} – ${format(span.until, "dd.MM.yy")}`;
+  if (dateFilter.timeSpan) {
+    return `${format(dateFilter.timeSpan.from, "dd.MM.yy")} – ${format(dateFilter.timeSpan.until, "dd.MM.yy")}`;
+  }
+  if (dateFilter.timeRange) {
+    const span = getTimeSpanForRange(dateFilter.timeRange);
+    return `${format(span.from, "dd.MM.yy")} – ${format(span.until, "dd.MM.yy")}`;
+  }
+  return null;
 }
 
 export default function DashboardPage() {
@@ -48,10 +53,6 @@ export default function DashboardPage() {
   const savingsRate = incomes > 0 ? (((incomes - expenses) / incomes) * 100).toFixed(0) : "0";
   const expensePct = ((expenses / (incomes + expenses || 1)) * 100).toFixed(0);
   const incomePct = ((incomes / (incomes + expenses || 1)) * 100).toFixed(0);
-
-  if (transactions.length == 0) {
-    return <EmptyState title="Es gibt noch keine Daten" illustration={<CircleDashed />} />;
-  }
 
   if (error) {
     return (
@@ -77,6 +78,8 @@ export default function DashboardPage() {
 
       {loading ? (
         <DashboardSkeleton />
+      ) : transactions.length === 0 ? (
+        <EmptyState title="Es gibt noch keine Daten" illustration={<CircleDashed />} />
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3.5 xl:grid-cols-4">
@@ -87,7 +90,7 @@ export default function DashboardPage() {
               valueLocales="de-DE"
               accent={balance >= 0 ? "#00d4a1" : "#ff5c6c"}
               icon={Wallet}
-              footer={dateFooter!}
+              footer={dateFooter ?? undefined}
               accountBalances={activeAccountIban === "all" ? accountBalances : undefined}
             />
             <StatCard
@@ -99,7 +102,7 @@ export default function DashboardPage() {
               trend="up"
               accent="#00d4a1"
               icon={TrendingUp}
-              footer={dateFooter!}
+              footer={dateFooter ?? undefined}
             />
             <StatCard
               title="Ausgaben"
@@ -110,7 +113,7 @@ export default function DashboardPage() {
               trend="down"
               accent="#ff5c6c"
               icon={TrendingDown}
-              footer={dateFooter!}
+              footer={dateFooter ?? undefined}
             />
             <StatCard
               title="Transaktionen"
@@ -120,7 +123,7 @@ export default function DashboardPage() {
               sub={`${savingsRate} % Sparquote`}
               accent="#b47bff"
               icon={Receipt}
-              footer={dateFooter!}
+              footer={dateFooter ?? undefined}
             />
           </div>
 

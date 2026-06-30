@@ -244,6 +244,32 @@ def create_categories_table(connection: sqlite3.Connection) -> None:
     )
 
 
+def create_belege_table(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS belege (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            umsatz_id INTEGER NOT NULL,
+            image_filename TEXT NOT NULL,
+            image_path TEXT NOT NULL,
+            extracted_data TEXT,
+            store_name TEXT,
+            total_amount REAL,
+            receipt_date TEXT,
+            confidence REAL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (umsatz_id) REFERENCES umsaetze (id) ON DELETE CASCADE
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_belege_umsatz_id
+        ON belege (umsatz_id)
+        """
+    )
+
+
 def create_app_settings_table(connection: sqlite3.Connection) -> None:
     connection.execute(
         """
@@ -319,6 +345,15 @@ def initialize_database(connection: sqlite3.Connection) -> None:
         },
     )
 
+    _ensure_table_columns(
+        connection,
+        "umsaetze",
+        {
+            "refund_ref_transaction_id": "INTEGER",
+        },
+    )
+
+    create_belege_table(connection)
     create_subscription_identities_table(connection)
     migrate_subscription_identities(connection)
     create_app_settings_table(connection)

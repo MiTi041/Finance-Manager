@@ -129,6 +129,8 @@ export function mapTransaction(dto: TransactionDto): Transaction {
       settlementTag: dto.settlement_tag,
 
       bankDeleted: dto.bank_deleted,
+
+      refundRefTransactionId: dto.refund_ref_transaction_id ?? null,
     },
   };
 }

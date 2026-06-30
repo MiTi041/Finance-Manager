@@ -167,6 +167,7 @@ def row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
         "splits": json.loads(row["splits"]) if row["splits"] else None,
         "created_at": row["created_at"],
         "bank_deleted": bool(dict(row).get("bank_deleted", False)),
+        "refund_ref_transaction_id": row["refund_ref_transaction_id"],
     }
 
 
@@ -300,5 +301,14 @@ def update_transaction_splits(transaction_id: int, splits: list[dict[str, Any]] 
         cursor = connection.execute(
             "UPDATE umsaetze SET splits = ? WHERE id = ?",
             (stored_splits, transaction_id),
+        )
+        return cursor.rowcount > 0
+
+
+def update_transaction_refund_link(transaction_id: int, refund_ref_transaction_id: int | None) -> bool:
+    with get_connection() as connection:
+        cursor = connection.execute(
+            "UPDATE umsaetze SET refund_ref_transaction_id = ? WHERE id = ?",
+            (refund_ref_transaction_id, transaction_id),
         )
         return cursor.rowcount > 0

@@ -12,6 +12,7 @@ import { fetchLatestDbTransaction } from "@/lib/transactions";
 import { fetchBankCredentials } from "@/lib/bank/credentials";
 import { importFromFintsServer, RateLimitError } from "@/lib/upload-helper";
 import { getErrorMessage } from "@/lib/utils/error";
+import { dispatchRefresh } from "@/lib/refresh-store";
 
 const FALLBACK_SYNC_DAYS = Number(
   import.meta.env.VITE_FINTS_DAYS ?? "730",
@@ -109,8 +110,7 @@ export default function FintsAutoSync() {
           }
         }
 
-        window.dispatchEvent(new CustomEvent("finance-data-refresh"));
-        window.dispatchEvent(new CustomEvent("finance-bank-credentials-changed"));
+        dispatchRefresh();
       } catch (error) {
         if (error instanceof RateLimitError) {
           toast.error(error.message);

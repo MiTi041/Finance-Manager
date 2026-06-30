@@ -1,6 +1,8 @@
-export async function emitReferenceChange() {
+import { dispatchRefresh } from "@/lib/refresh-store";
+
+export function emitReferenceChange() {
   try {
-    window.dispatchEvent(new CustomEvent("finance-reference-data-changed"));
+    dispatchRefresh();
   } catch {
     // ignore if running in non-browser environment
   }

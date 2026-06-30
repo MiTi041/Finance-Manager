@@ -7,9 +7,9 @@ from finance_server.db import (
     delete_transactions_batch,
     fetch_latest_transaction,
     fetch_transactions,
-    insert_transactions,
     update_transaction_category,
     update_transaction_note,
+    update_transaction_refund_link,
     update_transaction_splits,
     update_transactions_category_batch,
 )
@@ -37,9 +37,6 @@ class TransactionService:
     ) -> dict[str, Any] | None:
         return fetch_latest_transaction(iban=iban, account_blz=blz)
 
-    def import_transactions(self, rows: list[dict[str, Any]]) -> dict[str, Any]:
-        return insert_transactions(rows)
-
     def delete_transaction(self, transaction_id: int) -> bool:
         return delete_transaction(transaction_id)
 
@@ -53,6 +50,11 @@ class TransactionService:
         self, transaction_id: int, splits: list[dict[str, Any]] | None
     ) -> bool:
         return update_transaction_splits(transaction_id, splits)
+
+    def update_refund_link(
+        self, transaction_id: int, refund_ref_transaction_id: int | None
+    ) -> bool:
+        return update_transaction_refund_link(transaction_id, refund_ref_transaction_id)
 
     def update_category(
         self, transaction_id: int, category_id: int | None

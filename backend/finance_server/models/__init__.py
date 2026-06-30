@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .bank import BankCredentials, AccountBalanceAdjustmentRequest
-from .transaction import TransactionImportRequest, TransactionNoteUpdateRequest, BatchIdsRequest
+from .transaction import TransactionNoteUpdateRequest, BatchIdsRequest
 from .category import (
     CategoryCreateRequest,
     CategoryUpdateRequest,
@@ -14,7 +14,6 @@ from .fints import AccountsRequest, TransactionsRequest, TransferRequest, Produc
 __all__ = [
     "BankCredentials",
     "AccountBalanceAdjustmentRequest",
-    "TransactionImportRequest",
     "TransactionNoteUpdateRequest",
     "BatchIdsRequest",
     "CategoryCreateRequest",

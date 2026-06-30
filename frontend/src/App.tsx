@@ -1,15 +1,17 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 import AppLayout from "@/layouts/app-layout";
 import NotFoundPage from "@/pages/not-found";
-import DashboardPage from "@/pages/dashboard/dashboard-page";
-import TransactionsPage from "@/pages/transactions/transactions-page";
-import SettingsPage from "@/pages/settings/settings-page";
 import { AutoUpdateToast } from "@/components/auto-update-toast";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { ProductIdSetup, hasProductId } from "@/components/product-id-setup";
-import SubscriptionsPage from "@/pages/subscriptions/subscriptions-page";
-import AnalyticsPage from "@/pages/analytics/analytics-page";
+
+const DashboardPage = lazy(() => import("@/pages/dashboard/dashboard-page"));
+const TransactionsPage = lazy(() => import("@/pages/transactions/transactions-page"));
+const SettingsPage = lazy(() => import("@/pages/settings/settings-page"));
+const SubscriptionsPage = lazy(() => import("@/pages/subscriptions/subscriptions-page"));
+const AnalyticsPage = lazy(() => import("@/pages/analytics/analytics-page"));
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8112/api";
 
@@ -21,10 +23,12 @@ export default function App() {
       setSetupDone(true);
       return;
     }
+    let cancelled = false;
     fetch(`${API_BASE}/product-id`)
       .then((r) => r.json())
-      .then((data) => setSetupDone(data.configured))
-      .catch(() => setSetupDone(false));
+      .then((data) => { if (!cancelled) setSetupDone(data.configured); })
+      .catch(() => { if (!cancelled) setSetupDone(false); });
+    return () => { cancelled = true; };
   }, []);
 
   if (setupDone === null) return null;
@@ -36,18 +40,20 @@ export default function App() {
   return (
     <HashRouter>
       <AutoUpdateToast />
-      <ErrorBoundary>
-        <Routes>
-          <Route element={<AppLayout />}>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/transactions" element={<TransactionsPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/subscriptions" element={<SubscriptionsPage />} />
-            <Route path="/analytics" element={<AnalyticsPage />} />
-          </Route>
-          <Route path="*" element={<NotFoundPage />} />
-        </Routes>
+      <ErrorBoundary pageName="App">
+        <Suspense fallback={<div className="flex h-screen items-center justify-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>}>
+          <Routes>
+            <Route element={<AppLayout />}>
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/dashboard" element={<ErrorBoundary pageName="Dashboard"><DashboardPage /></ErrorBoundary>} />
+              <Route path="/transactions" element={<ErrorBoundary pageName="Transaktionen"><TransactionsPage /></ErrorBoundary>} />
+              <Route path="/settings" element={<ErrorBoundary pageName="Einstellungen"><SettingsPage /></ErrorBoundary>} />
+              <Route path="/subscriptions" element={<ErrorBoundary pageName="Abonnements"><SubscriptionsPage /></ErrorBoundary>} />
+              <Route path="/analytics" element={<ErrorBoundary pageName="Analysen"><AnalyticsPage /></ErrorBoundary>} />
+            </Route>
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
+        </Suspense>
       </ErrorBoundary>
     </HashRouter>
   );

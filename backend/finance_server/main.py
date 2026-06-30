@@ -17,6 +17,8 @@ from finance_server.api.categories import router as categories_router
 from finance_server.api.db_export_import import router as db_export_import_router
 from finance_server.api.subscriptions import router as subscriptions_router
 from finance_server.api.subscription_identities import router as subscription_identities_router
+from finance_server.api.receipts import router as receipts_router
+from finance_server.api.analytics import router as analytics_router
 
 # .env laden
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -61,6 +63,8 @@ app.include_router(categories_router, prefix="/api")
 app.include_router(db_export_import_router, prefix="")
 app.include_router(subscriptions_router, prefix="/api")
 app.include_router(subscription_identities_router, prefix="/api")
+app.include_router(receipts_router, prefix="/api")
+app.include_router(analytics_router, prefix="/api")
 
 
 @app.get("/health")

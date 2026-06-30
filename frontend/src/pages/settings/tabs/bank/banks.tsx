@@ -165,7 +165,7 @@ export function Banks({ linkedBanks, deletingScope, onDeleteOne }: BanksProps) {
                     <span className="text-xs text-muted-foreground">{bank.username}</span>
                   )}
                   <span className="text-xs text-muted-foreground">
-                    · {accounts.length} Konto{accounts.length !== 1 ? "s" : ""}
+                    · {accounts.length} Kont{accounts.length !== 1 ? "en" : "o"}
                   </span>
                 </div>
               </div>

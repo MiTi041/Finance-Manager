@@ -1,12 +1,6 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import type { BankDefinition } from "@/lib/bank/definitions";
 import type { StoredBankCredentials } from "@/lib/bank/credentials";
@@ -19,13 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  CheckCircle2,
-  Loader2,
-  ShieldCheck,
-  Smartphone,
-  X,
-} from "lucide-react";
+import { CheckCircle2, Loader2, ShieldCheck, Smartphone, X } from "lucide-react";
 import {
   deleteBankCredentials,
   fetchAvailableBanks,
@@ -51,9 +39,7 @@ const INITIAL_FORM_STATE: SettingsFormState = {
 
 export function BankAccessTab() {
   const [form, setForm] = useState<SettingsFormState>(INITIAL_FORM_STATE);
-  const [linkedAccounts, setLinkedAccounts] = useState<StoredBankCredentials[]>(
-    [],
-  );
+  const [linkedAccounts, setLinkedAccounts] = useState<StoredBankCredentials[]>([]);
   const [availableBanks, setAvailableBanks] = useState<BankDefinition[]>([]);
   const [deletingScope, setDeletingScope] = useState<string | null>(null);
   const [isChecking, setIsChecking] = useState(false);
@@ -77,12 +63,8 @@ export function BankAccessTab() {
     }
 
     const [banks, credentials] = await Promise.all([
-      fetchAvailableBanks({ forceRefresh: options?.forceRefresh }).catch(
-        () => [],
-      ),
-      fetchBankCredentials({ forceRefresh: options?.forceRefresh }).catch(
-        () => [],
-      ),
+      fetchAvailableBanks({ forceRefresh: options?.forceRefresh }).catch(() => []),
+      fetchBankCredentials({ forceRefresh: options?.forceRefresh }).catch(() => []),
     ]);
 
     setAvailableBanks(banks);
@@ -96,16 +78,10 @@ export function BankAccessTab() {
       void loadData({ forceRefresh: true });
     };
 
-    window.addEventListener(
-      "finance-bank-credentials-changed",
-      onCredentialsChanged,
-    );
+    window.addEventListener("finance-bank-credentials-changed", onCredentialsChanged);
 
     return () => {
-      window.removeEventListener(
-        "finance-bank-credentials-changed",
-        onCredentialsChanged,
-      );
+      window.removeEventListener("finance-bank-credentials-changed", onCredentialsChanged);
     };
   }, []);
 
@@ -131,8 +107,7 @@ export function BankAccessTab() {
 
     const hasDuplicateCredentials = linkedAccounts.some(
       (credential) =>
-        credential.bank_key === form.bank_key &&
-        credential.username === form.username,
+        credential.bank_key === form.bank_key && credential.username === form.username,
     );
 
     if (hasDuplicateCredentials) {
@@ -150,9 +125,7 @@ export function BankAccessTab() {
 
     const tanHintTimer = setTimeout(() => {
       setCheckIsWarning(true);
-      setCheckMessage(
-        "Eventuell musst du die Verbindung in deiner Banking-App bestätigen.",
-      );
+      setCheckMessage("Eventuell musst du die Verbindung in deiner Banking-App bestätigen.");
     }, 4000);
 
     try {
@@ -195,9 +168,7 @@ export function BankAccessTab() {
         return;
       }
       const message =
-        error instanceof Error
-          ? error.message
-          : "Bankzugang konnte nicht geprüft werden.";
+        error instanceof Error ? error.message : "Bankzugang konnte nicht geprüft werden.";
       setCheckError(message);
       setCheckMessage("");
     } finally {
@@ -216,9 +187,7 @@ export function BankAccessTab() {
   };
 
   const canCheck =
-    form.bank_key.trim() !== "" &&
-    form.username.trim() !== "" &&
-    form.pin.trim() !== "";
+    form.bank_key.trim() !== "" && form.username.trim() !== "" && form.pin.trim() !== "";
 
   return (
     <div className="grid gap-6">
@@ -230,9 +199,7 @@ export function BankAccessTab() {
             </div>
             <div>
               <CardTitle>Bankzugangsdaten</CardTitle>
-              <CardDescription>
-                Hier kannst du dich mit deinen Banken verbinden.
-              </CardDescription>
+              <CardDescription>Hier kannst du dich mit deinen Banken verbinden.</CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -288,10 +255,7 @@ export function BankAccessTab() {
         </CardContent>
       </Card>
 
-      <Dialog
-        open={checkDialogOpen}
-        onOpenChange={(open) => !open && closeDialog()}
-      >
+      <Dialog open={checkDialogOpen} onOpenChange={(open) => !open && closeDialog()}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
@@ -316,9 +280,7 @@ export function BankAccessTab() {
                 <Smartphone className="h-5 w-5 shrink-0 mt-0.5 text-blue-500" />
                 <div className="space-y-2">
                   <p className="font-semibold">
-                    {checkTanRequired.decoupled
-                      ? "Bestätigung in der Banking-App"
-                      : "TAN eingeben"}
+                    {checkTanRequired.decoupled ? "Bestätigung in der Banking-App" : "TAN eingeben"}
                   </p>
                   <p>
                     {checkTanRequired.decoupled
@@ -334,7 +296,9 @@ export function BankAccessTab() {
             </div>
           ) : !checkError ? (
             <div className="space-y-4">
-              <div className={`flex items-center gap-3 rounded-lg border p-4 text-sm ${checkIsWarning ? "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300" : "bg-muted/40"}`}>
+              <div
+                className={`flex items-center gap-3 rounded-lg border p-4 text-sm ${checkIsWarning ? "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300" : "bg-muted/40"}`}
+              >
                 <Loader2 className="h-4 w-4 animate-spin shrink-0" />
                 <span>{checkMessage || "Verbindung wird getestet ..."}</span>
               </div>

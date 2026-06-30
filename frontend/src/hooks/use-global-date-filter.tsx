@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 
 import { DateFilterValue } from "@/types/date-filter";
 
@@ -18,8 +18,10 @@ export function GlobalDateFilterProvider({
 }) {
   const [dateFilter, setDateFilter] = useState<DateFilterValue>({});
 
+  const value = useMemo(() => ({ dateFilter, setDateFilter }), [dateFilter]);
+
   return (
-    <GlobalDateFilterContext.Provider value={{ dateFilter, setDateFilter }}>
+    <GlobalDateFilterContext.Provider value={value}>
       {children}
     </GlobalDateFilterContext.Provider>
   );
