@@ -76,7 +76,7 @@ export function MonthlyChart({ transactions }: MonthlyChartProps) {
   const data = useMemo(() => buildMonthlyBreakdown(transactions), [transactions]);
 
   return (
-    <div className="min-w-0 flex-[0_0_320px] rounded-panel border border-border bg-card p-[22px_22px_14px]">
+    <div className="min-w-0 flex-[0_0_320px] rounded-panel border border-border bg-card p-[22px_22px_14px] outline-none">
       <SectionHeading>Einnahmen vs. Ausgaben</SectionHeading>
       <div className="mb-4 flex gap-3">
         {[
@@ -89,7 +89,7 @@ export function MonthlyChart({ transactions }: MonthlyChartProps) {
           </div>
         ))}
       </div>
-      <div className="h-[164px]" role="img" aria-label="Monatliche Einnahmen und Ausgaben als Balkendiagramm">
+      <div className="h-[164px] [&_svg]:outline-none" role="img" aria-label="Monatliche Einnahmen und Ausgaben als Balkendiagramm">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={data}

@@ -1,6 +1,6 @@
 import React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CircleX, Repeat } from "lucide-react";
+import { CircleX, Repeat, Wallet } from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
 import {
@@ -21,9 +21,11 @@ import {
 } from "@/pages/subscriptions/hooks/use-subscriptions";
 import { createZahlungspartner, fetchZahlungspartnerReferenceData } from "@/lib/zahlungspartner";
 import type { ZahlungspartnerRecord } from "@/lib/zahlungspartner";
+import { StatCard } from "@/pages/dashboard/components/stat-card";
 import { toast } from "sonner";
 
 import { SubscriptionRow } from "./components/subscription-row";
+import { SubscriptionMonthlyChart } from "./components/subscription-monthly-chart";
 
 const FREQUENCY_ORDER: SubscriptionFrequency[] = ["MONTHLY", "SEMI_ANNUAL", "ANNUAL"];
 
@@ -57,11 +59,11 @@ const FREQUENCY_OPTIONS: { value: "ALL" | SubscriptionFrequency; label: string }
 type SortKey = "amount" | "nextDate";
 
 export default function SubscriptionsPage() {
-  const { loading, error, grouped, reload, removeSubscription } = useSubscriptions();
+  const { loading, error, grouped, subscriptions, reload, removeSubscription } = useSubscriptions();
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [zahlungspartnerList, setZahlungspartnerList] = useState<ZahlungspartnerRecord[]>([]);
   const [frequencyFilter, setFrequencyFilter] = useState<"ALL" | SubscriptionFrequency>("ALL");
-  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey | null>("nextDate");
   const [sortAsc, setSortAsc] = useState(true);
 
   useEffect(() => {
@@ -212,6 +214,30 @@ export default function SubscriptionsPage() {
     }
   };
 
+  const monthlyTotal = useMemo(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    const isDateThisMonth = (dateStr: string) => {
+      const d = new Date(dateStr);
+      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+    };
+
+    const isDueThisMonth = (s: Subscription) =>
+      isDateThisMonth(s.nextDate) || isDateThisMonth(s.lastDate);
+
+    const monthlyDue = grouped.MONTHLY.filter(isDueThisMonth);
+    const semiAnnualDue = grouped.SEMI_ANNUAL.filter(isDueThisMonth);
+    const annualDue = grouped.ANNUAL.filter(isDueThisMonth);
+
+    const monthlyTotal = monthlyDue.reduce((sum, s) => sum + s.effectiveAmount, 0);
+    const semiAnnualMonthly = semiAnnualDue.reduce((sum, s) => sum + s.effectiveAmount / 6, 0);
+    const annualMonthly = annualDue.reduce((sum, s) => sum + s.effectiveAmount / 12, 0);
+
+    return monthlyTotal + semiAnnualMonthly + annualMonthly;
+  }, [grouped]);
+
   if (error) {
     return (
       <EmptyState
@@ -236,7 +262,22 @@ export default function SubscriptionsPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 py-6">
-      <VirtualizedList
+      <div className="w-full max-w-xs">
+        <StatCard
+          title="Monatliche Ausgaben"
+          value={monthlyTotal}
+          valueFormat={{ style: "currency", currency: "EUR" }}
+          valueLocales="de-DE"
+          accent="#ff5c6c"
+          icon={Wallet}
+        />
+      </div>
+      {!loading && subscriptions.length > 0 && (
+        <SubscriptionMonthlyChart subscriptions={subscriptions} />
+      )}
+      <div className="h-[750px]">
+        <VirtualizedList
+        className="!h-full"
         items={flatItems}
         loading={loading}
         getItemKey={(item) =>
@@ -302,6 +343,7 @@ export default function SubscriptionsPage() {
           );
         }}
       />
+      </div>
     </div>
   );
 }

@@ -40,6 +40,8 @@ type SearchableSelectProps = {
   showNoneOption?: boolean;
   noneLabel?: string;
   noneValue?: string;
+  renderOption?: (option: SelectOption) => React.ReactNode;
+  renderSelected?: (option: SelectOption) => React.ReactNode;
 };
 
 export function SearchableSelect({
@@ -58,6 +60,8 @@ export function SearchableSelect({
   showNoneOption = false,
   noneLabel = "Keine Auswahl",
   noneValue = "__none__",
+  renderOption,
+  renderSelected,
 }: SearchableSelectProps) {
   const [open, setOpen] = React.useState(false);
 
@@ -79,7 +83,7 @@ export function SearchableSelect({
             triggerClassName,
           )}
         >
-          {selected ? selected.label : placeholder}
+          {selected ? (renderSelected ? renderSelected(selected) : selected.label) : placeholder}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -119,7 +123,11 @@ export function SearchableSelect({
                     setOpen(false);
                   }}
                 >
-                  {option.label}
+                  {renderOption ? (
+                    renderOption(option)
+                  ) : (
+                    <span className="flex-1 truncate">{option.label}</span>
+                  )}
                   <Check
                     className={cn(
                       "ml-auto h-4 w-4 shrink-0",

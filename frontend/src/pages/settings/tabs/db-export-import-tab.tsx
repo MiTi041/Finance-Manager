@@ -28,15 +28,12 @@ export function DbExportImportTab() {
   }, []);
 
   const handleExportViaApi = useCallback(async () => {
-    const res = await fetch(`${API_BASE}/db/export`);
-    if (!res.ok) throw new Error("Export fehlgeschlagen");
+    const hasPicker = "showSaveFilePicker" in window;
 
-    const blob = await res.blob();
-
-    if ("showSaveFilePicker" in window) {
-      const showPicker = (window as { showSaveFilePicker?: (opts: SaveFilePickerOptions) => Promise<{ createWritable: () => Promise<{ write: (blob: Blob) => Promise<void>; close: () => Promise<void> }> }> }).showSaveFilePicker;
-      if (!showPicker) throw new Error("File System Access API nicht verfügbar");
-      const handle = await showPicker({
+    let fileHandle: { createWritable: () => Promise<{ write: (blob: Blob) => Promise<void>; close: () => Promise<void> }> } | null = null;
+    if (hasPicker) {
+      const showPicker = (window as { showSaveFilePicker?: (opts: SaveFilePickerOptions) => Promise<typeof fileHandle> }).showSaveFilePicker!;
+      fileHandle = await showPicker({
         suggestedName: "finance-backup.zip",
         types: [
           {
@@ -45,7 +42,14 @@ export function DbExportImportTab() {
           },
         ],
       });
-      const writable = await handle.createWritable();
+    }
+
+    const res = await fetch(`${API_BASE}/db/export`);
+    if (!res.ok) throw new Error("Export fehlgeschlagen");
+    const blob = await res.blob();
+
+    if (fileHandle) {
+      const writable = await fileHandle.createWritable();
       await writable.write(blob);
       await writable.close();
     } else {

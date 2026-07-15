@@ -6,9 +6,12 @@ import {
   CircleAlert,
   Loader2,
   Pencil,
+  Repeat,
+  Search,
   Sparkles,
   Trash2,
   TriangleAlert,
+  Undo2,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -17,6 +20,22 @@ import { Button } from "@/components/ui/button";
 import { CategoryCombobox } from "@/components/category-combobox";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { SearchableSelect } from "@/components/searchable-select";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 
 import { type SelectedBankOption } from "@/lib/bank/selected";
 import { type Transaction, type TransactionSplit } from "@/types/transaction";
@@ -24,6 +43,7 @@ import { type Transaction, type TransactionSplit } from "@/types/transaction";
 import { formatAmount, formatDate } from "@/lib/utils/format";
 import { type TransactionCategoryOption, UNASSIGNED_CATEGORY_VALUE } from "@/lib/utils/categories";
 import { type ZahlungspartnerRecord } from "@/lib/zahlungspartner";
+import { updateRefundLink } from "@/lib/transactions";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { extractHashtags, extractTagsFromPurpose, isTypingHashtag } from "../utils/tags";
@@ -31,6 +51,7 @@ import { extractHashtags, extractTagsFromPurpose, isTypingHashtag } from "../uti
 type TransactionRowProps = {
   transaction: Transaction;
   isExpanded: boolean;
+  isSubscriptionTransaction: boolean;
   isUnassigned: boolean;
   isSelected: boolean;
   predictedCategoryId: number | null;
@@ -54,11 +75,14 @@ type TransactionRowProps = {
   onDelete: (transaction: Transaction) => void;
   categoryTriggerRef: (node: HTMLButtonElement | null) => void;
   ownerId?: number | undefined;
+  allTransactions: Transaction[];
+  onRefundLinkChange: () => void;
 };
 
 export function TransactionRow({
   transaction,
   isExpanded,
+  isSubscriptionTransaction,
   isUnassigned,
   isSelected,
   predictedCategoryId,
@@ -82,6 +106,8 @@ export function TransactionRow({
   onDelete,
   categoryTriggerRef,
   ownerId,
+  allTransactions,
+  onRefundLinkChange,
 }: TransactionRowProps) {
   const [noteDraft, setNoteDraft] = useState(transaction.texte.anmerkung);
   const [splitDrafts, setSplitDrafts] = useState<TransactionSplit[] | null>(
@@ -97,6 +123,22 @@ export function TransactionRow({
   const pendingToggleAction = useRef<(() => void) | null>(null);
 
   const predictedSimilarityPercent = Math.round((predictedSimilarity ?? 0) * 100);
+
+  const isRefund =
+    transaction.betrag.wert > 0 && transaction.technisch.refundRefTransactionId != null;
+
+  const linkedRefundTotal = useMemo(() => {
+    if (transaction.betrag.wert >= 0) return 0;
+    return allTransactions
+      .filter((t) => t.technisch.refundRefTransactionId === transaction.id)
+      .reduce((sum, t) => sum + Math.abs(t.betrag.wert), 0);
+  }, [transaction, allTransactions]);
+
+  const hasRefunds = linkedRefundTotal > 0;
+  const showRefundSection =
+    transaction.betrag.wert > 0 ||
+    (transaction.betrag.wert < 0 &&
+      allTransactions.some((t) => t.technisch.refundRefTransactionId === transaction.id));
 
   const purpose = transaction.texte.verwendungszweck || "";
   const additionalPurpose = transaction.texte.zusatzVerwendungszweck || "";
@@ -479,14 +521,45 @@ export function TransactionRow({
                 Gesplittet
               </span>
             ) : null}
-            <span
-              className={
-                transaction.betrag.wert < 0
-                  ? "text-sm font-semibold tabular-nums text-destructive"
-                  : "text-sm font-semibold tabular-nums text-green-600"
-              }
-            >
-              {formatAmount(transaction.betrag.wert, transaction.betrag.waehrung)}
+            {isSubscriptionTransaction ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                <Repeat className="size-3" />
+                Abonnement
+              </span>
+            ) : null}
+            <span className="flex items-center gap-1.5">
+              {isRefund && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="flex items-center gap-0.5 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                      <Undo2 className="size-3" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">Rückerstattung</TooltipContent>
+                </Tooltip>
+              )}
+              {hasRefunds && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400 tabular-nums">
+                      {formatAmount(
+                        transaction.betrag.wert + linkedRefundTotal,
+                        transaction.betrag.waehrung,
+                      )}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">Nettopreis inkl. Rückerstattung</TooltipContent>
+                </Tooltip>
+              )}
+              <span
+                className={
+                  transaction.betrag.wert < 0
+                    ? "text-sm font-semibold tabular-nums text-destructive"
+                    : "text-sm font-semibold tabular-nums text-green-600"
+                }
+              >
+                {formatAmount(transaction.betrag.wert, transaction.betrag.waehrung)}
+              </span>
             </span>
             <span
               className={
@@ -1006,62 +1079,91 @@ export function TransactionRow({
 
           {/* ── Bottom actions row ── */}
           <div className="flex flex-col gap-0 divide-y divide-border/60">
-            {/* Note */}
-            <div className="px-4 py-4" onClick={(event) => event.stopPropagation()}>
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
-                  Anmerkung
-                </p>
+            <div
+              className={cn(
+                "grid grid-cols-1 divide-y divide-border/60",
+                showRefundSection && "sm:grid-cols-2 sm:divide-x sm:divide-y-0",
+              )}
+            >
+              {/* Note */}
+              <div
+                className={cn("px-4 py-4", showRefundSection && "sm:border-r sm:border-border/60")}
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
+                    Anmerkung
+                  </p>
 
-                {isInTagMode && (
-                  <div className="text-[10px] flex items-center gap-1.5 text-xs text-violet-600 dark:text-violet-400">
-                    <span className="inline-block size-1.5 animate-pulse rounded-full bg-violet-500" />
-                    Hashtag eingabe erkannt
-                  </div>
-                )}
-              </div>
-              <textarea
-                value={noteDraft}
-                onChange={(event) => setNoteDraft(event.target.value)}
-                onKeyDown={(event) => event.stopPropagation()}
-                placeholder="Anmerkung zu dieser Transaktion"
-                className={cn(
-                  "h-18 w-full resize-none rounded-md border bg-background px-3 py-2 text-sm text-foreground shadow-xs outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50",
-                  isInTagMode
-                    ? "border-violet-400 focus-visible:border-violet-400 focus-visible:ring-violet-500/30"
-                    : "border-input focus-visible:border-ring",
-                )}
-              />
-              <div className="flex items-start justify-between gap-3 mt-2">
-                <div className="flex flex-col items-start gap-1.5">
-                  {allTags.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {allTags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="inline-flex items-center rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-medium text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"
-                        >
-                          #{tag}
-                        </span>
-                      ))}
+                  {isInTagMode && (
+                    <div className="text-[10px] flex items-center gap-1.5 text-xs text-violet-600 dark:text-violet-400">
+                      <span className="inline-block size-1.5 animate-pulse rounded-full bg-violet-500" />
+                      Hashtag eingabe erkannt
                     </div>
                   )}
                 </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  disabled={!noteChanged || savingNote}
-                  onClick={() => void saveNote()}
-                >
-                  {savingNote ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <Check className="size-3.5" />
+                <textarea
+                  value={noteDraft}
+                  onChange={(event) => setNoteDraft(event.target.value)}
+                  onKeyDown={(event) => event.stopPropagation()}
+                  placeholder="Anmerkung zu dieser Transaktion"
+                  className={cn(
+                    "h-18 w-full resize-none rounded-md border bg-background px-3 py-2 text-sm text-foreground shadow-xs outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50",
+                    isInTagMode
+                      ? "border-violet-400 focus-visible:border-violet-400 focus-visible:ring-violet-500/30"
+                      : "border-input focus-visible:border-ring",
                   )}
-                  {savingNote ? "Speichere …" : "Anmerkung speichern"}
-                </Button>
+                />
+                <div className="flex items-start justify-between gap-3 mt-2">
+                  <div className="flex flex-col items-start gap-1.5">
+                    {allTags.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {allTags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="inline-flex items-center rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-medium text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"
+                          >
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    disabled={!noteChanged || savingNote}
+                    onClick={() => void saveNote()}
+                  >
+                    {savingNote ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Check className="size-3.5" />
+                    )}
+                    {savingNote ? "Speichere …" : "Anmerkung speichern"}
+                  </Button>
+                </div>
               </div>
+
+              {/* Rückerstattung */}
+              {showRefundSection ? (
+                <div className="px-5 py-4" onClick={(event) => event.stopPropagation()}>
+                  {transaction.betrag.wert > 0 ? (
+                    <RefundSectionIncoming
+                      transaction={transaction}
+                      allTransactions={allTransactions}
+                      onRefundLinkChange={onRefundLinkChange}
+                    />
+                  ) : (
+                    <RefundSectionOutgoing
+                      transaction={transaction}
+                      allTransactions={allTransactions}
+                      onRefundLinkChange={onRefundLinkChange}
+                    />
+                  )}
+                </div>
+              ) : null}
             </div>
 
             {/* Delete */}
@@ -1098,6 +1200,222 @@ export function TransactionRow({
           pendingToggleAction.current = null;
         }}
       />
+    </div>
+  );
+}
+
+function RefundSectionIncoming({
+  transaction,
+  allTransactions,
+  onRefundLinkChange,
+}: {
+  transaction: Transaction;
+  allTransactions: Transaction[];
+  onRefundLinkChange: () => void;
+}) {
+  const [linkingId, setLinkingId] = useState<number | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  const linkedTransaction = transaction.technisch.refundRefTransactionId
+    ? allTransactions.find((t) => t.id === transaction.technisch.refundRefTransactionId)
+    : null;
+
+  const outgoingList = useMemo(
+    () => allTransactions.filter((t) => t.betrag.wert < 0),
+    [allTransactions],
+  );
+
+  const handleLink = async (targetId: number) => {
+    setLinkingId(targetId);
+    try {
+      await updateRefundLink(transaction.id, targetId);
+      onRefundLinkChange();
+      setDialogOpen(false);
+    } finally {
+      setLinkingId(null);
+    }
+  };
+
+  const handleUnlink = async () => {
+    if (!transaction) return;
+    setLinkingId(transaction.id);
+    try {
+      await updateRefundLink(transaction.id, null);
+      onRefundLinkChange();
+    } finally {
+      setLinkingId(null);
+    }
+  };
+
+  return (
+    <div>
+      <p className="mb-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
+        Diese Gutschrift ist eine Rückerstattung für
+      </p>
+      {linkedTransaction ? (
+        <div className="flex items-center justify-between gap-2 text-sm">
+          <span className="min-w-0 truncate text-muted-foreground">
+            <span className="font-medium text-foreground">
+              {linkedTransaction.zahlungspartner.datenbankName ||
+                linkedTransaction.zahlungspartner.name ||
+                "–"}
+            </span>
+            <span>
+              {" · "}
+              {formatDate(linkedTransaction.daten.buchungsdatum)}
+            </span>
+            <span className="tabular-nums text-red-500">
+              {" · "}
+              {formatAmount(Math.abs(linkedTransaction.betrag.wert), linkedTransaction.betrag.waehrung)}
+            </span>
+          </span>
+          <button
+            type="button"
+            disabled={linkingId !== null}
+            onClick={() => void handleUnlink()}
+            className="shrink-0 text-xs text-destructive underline-offset-2 hover:underline disabled:opacity-50"
+          >
+            {linkingId === transaction.id ? (
+              <Loader2 className="size-3 animate-spin" />
+            ) : (
+              "Entfernen"
+            )}
+          </button>
+        </div>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setDialogOpen(true)}
+          className="flex w-full justify-start gap-2 shadow-none h-8 text-muted-foreground font-normal"
+        >
+          <Search className="size-3.5 shrink-0 opacity-50" />
+          <span>Ausgehende Zahlung auswählen …</span>
+        </Button>
+      )}
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="p-0 gap-0 max-w-lg" showCloseButton={false}>
+          <DialogHeader className="sr-only">
+            <DialogTitle>Ausgehende Zahlung auswählen</DialogTitle>
+            <DialogDescription>
+              Wähle die ursprüngliche Zahlung aus, auf die sich diese Rückerstattung bezieht
+            </DialogDescription>
+          </DialogHeader>
+          <Command>
+            <CommandInput placeholder="Nach Name, Betrag oder Datum suchen …" />
+            <CommandList>
+              <CommandEmpty>Keine ausgehende Zahlung gefunden</CommandEmpty>
+              <CommandGroup>
+                {outgoingList.map((t) => (
+                  <CommandItem
+                    key={t.id}
+                    value={`${t.zahlungspartner.name || ""} ${formatAmount(Math.abs(t.betrag.wert), t.betrag.waehrung)} ${formatDate(t.daten.buchungsdatum)}`}
+                    onSelect={() => void handleLink(t.id)}
+                    disabled={linkingId === t.id}
+                  >
+                    <BrandIcon
+                      src={t.zahlungspartner.logoUrl || undefined}
+                      alt={t.zahlungspartner.datenbankName || t.zahlungspartner.name || "?"}
+                      sizeClassName="size-9 shrink-0"
+                      backgroundClassName={
+                        t.zahlungspartner.logoWhiteBackground ? "bg-white" : "bg-zinc-900"
+                      }
+                      kind={t.zahlungspartner.isCompany ? "company" : "person"}
+                      imgNoPadding={!t.zahlungspartner.logoPadding}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {t.zahlungspartner.datenbankName || t.zahlungspartner.name || "–"}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {formatDate(t.daten.buchungsdatum)}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-sm tabular-nums text-red-500">
+                      {formatAmount(Math.abs(t.betrag.wert), t.betrag.waehrung)}
+                    </span>
+                    {linkingId === t.id ? (
+                      <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
+                    ) : null}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function RefundSectionOutgoing({
+  transaction,
+  allTransactions,
+  onRefundLinkChange,
+}: {
+  transaction: Transaction;
+  allTransactions: Transaction[];
+  onRefundLinkChange: () => void;
+}) {
+  const [unlinkingId, setUnlinkingId] = useState<number | null>(null);
+
+  const refundTransactions = useMemo(() => {
+    return allTransactions.filter((t) => t.technisch.refundRefTransactionId === transaction.id);
+  }, [allTransactions, transaction.id]);
+
+  const handleUnlink = async (refundTransactionId: number) => {
+    setUnlinkingId(refundTransactionId);
+    try {
+      await updateRefundLink(refundTransactionId, null);
+      onRefundLinkChange();
+    } finally {
+      setUnlinkingId(null);
+    }
+  };
+
+  if (refundTransactions.length === 0) return null;
+
+  return (
+    <div>
+      <p className="mb-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
+        Rückerstattungen für diese Ausgabe
+      </p>
+      <div className="space-y-1">
+        {refundTransactions.map((refund) => (
+          <div
+            key={refund.id}
+            className="flex items-center justify-between gap-2 text-sm"
+          >
+            <span className="min-w-0 truncate text-muted-foreground">
+              <span className="font-medium text-foreground">
+                {refund.zahlungspartner.datenbankName || refund.zahlungspartner.name || "–"}
+              </span>
+              <span>
+                {" · "}
+                {formatDate(refund.daten.buchungsdatum)}
+              </span>
+              <span className="tabular-nums text-green-500">
+                {" · "}
+                +{formatAmount(Math.abs(refund.betrag.wert), refund.betrag.waehrung)}
+              </span>
+            </span>
+            <button
+              type="button"
+              disabled={unlinkingId !== null}
+              onClick={() => void handleUnlink(refund.id)}
+              className="shrink-0 text-xs text-destructive underline-offset-2 hover:underline disabled:opacity-50"
+            >
+              {unlinkingId === refund.id ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                "Entfernen"
+              )}
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

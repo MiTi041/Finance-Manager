@@ -24,6 +24,8 @@ import { deleteTransaction, updateTransactionNote, updateTransactionSplits } fro
 import { updateIbanZahlungspartnerMapping } from "@/lib/reference-data";
 
 import { type Transaction } from "@/types/transaction";
+import { getApiBaseUrl } from "@/lib/api";
+import { type Subscription } from "@/pages/subscriptions/hooks/use-subscriptions";
 
 import { TransactionRow } from "./components/transaction-row";
 import { TransactionsFilterBar } from "./components/transactions-filter-bar";
@@ -66,6 +68,7 @@ export default function TransactionsPage() {
   const [pendingCategoryFocusId, setPendingCategoryFocusId] = useState<number | null>(null);
   const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
   const [deletingTransaction, setDeletingTransaction] = useState(false);
+  const [subscriptionTransactionIds, setSubscriptionTransactionIds] = useState<Set<number>>(new Set());
   const categoryTriggerRefs = useRef(new Map<number, HTMLButtonElement | null>());
   const virtualListRef = useRef<VirtualizedListRef>(null);
 
@@ -128,6 +131,24 @@ export default function TransactionsPage() {
     return () => {
       active = false;
     };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    fetch(`${getApiBaseUrl()}/db/subscriptions?days=36500`)
+      .then((res) => res.json())
+      .then((data: { subscriptions: Subscription[] }) => {
+        if (!active) return;
+        const ids = new Set<number>();
+        for (const sub of data.subscriptions ?? []) {
+          for (const tid of sub.transactionIds) {
+            ids.add(tid);
+          }
+        }
+        setSubscriptionTransactionIds(ids);
+      })
+      .catch(() => {});
+    return () => { active = false; };
   }, []);
 
   const linkedAccountByIban = useMemo(
@@ -573,6 +594,7 @@ export default function TransactionsPage() {
             <TransactionRow
               transaction={transaction}
               isExpanded={expandedTransactionId === transaction.id}
+              isSubscriptionTransaction={subscriptionTransactionIds.has(transaction.id)}
               isUnassigned={currentCategoryId == null}
               isSelected={selectedTransactionIds.has(transaction.id)}
               predictedCategoryId={predictedCategoryId}
@@ -604,6 +626,8 @@ export default function TransactionsPage() {
               categoryTriggerRef={(node) => {
                 categoryTriggerRefs.current.set(transaction.id, node);
               }}
+              allTransactions={transactions}
+              onRefundLinkChange={() => { void reload(); }}
             />
           );
         }}

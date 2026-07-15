@@ -151,8 +151,15 @@ export function SubscriptionRow({
           </div>
 
           <div className="flex shrink-0 items-center gap-3">
-            <span className="text-sm font-semibold tabular-nums text-destructive">
-              {formatAmount(subscription.amount)}
+              <span className="flex flex-col items-end gap-0">
+              <span className="text-sm font-semibold tabular-nums text-destructive">
+                {formatAmount(subscription.amount)}
+              </span>
+              {subscription.refundAmount > 0 && (
+                <span className="text-[10px] text-muted-foreground/60 tabular-nums">
+                  inkl. {formatAmount(subscription.refundAmount)} Rückerstattung
+                </span>
+              )}
             </span>
             <span
               className={cn(
@@ -210,7 +217,7 @@ export function SubscriptionRow({
                       <div className="flex items-center gap-2 p-2 rounded-md bg-muted/70 rounded-lg hover:bg-muted/40 transition-colors justify-between">
                         <div className="flex items-center gap-4">
                           <BrandIcon
-                            src={subscription.recipientLogo}
+                            src={logoUrl}
                             alt={subscription.datenbankName || subscription.name || "Bank"}
                             sizeClassName="size-12 shrink-0"
                             backgroundClassName={

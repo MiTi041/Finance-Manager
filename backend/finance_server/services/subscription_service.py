@@ -499,5 +499,5 @@ class SubscriptionService:
             and (r.get("_counterpartyName"), r.get("amount")) not in dismissed_keys
         ]
 
-        results.sort(key=lambda r: r["lastDate"], reverse=True)
+        results.sort(key=lambda r: r["nextDate"])
         return results
