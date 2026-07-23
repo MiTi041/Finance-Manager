@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import uuid
 from datetime import datetime, timezone
 from typing import Any
 
 from finance_server.core.database import get_connection
-from finance_server.db.settings import get_setting, set_setting
 
 
 def get_or_create_device_id() -> str:
@@ -39,7 +39,6 @@ def log_sync_op(
     data_json = json.dumps(data, ensure_ascii=False, default=str) if data else None
     checksum = None
     if data_json:
-        import hashlib
         checksum = hashlib.sha256(data_json.encode("utf-8")).hexdigest()
 
     with get_connection() as connection:
@@ -121,8 +120,6 @@ def get_sync_state(key: str) -> str | None:
 
 
 def set_sync_state(key: str, value: str) -> None:
-    from datetime import datetime, timezone
-    now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     with get_connection() as connection:
         connection.execute(
             "INSERT INTO sync_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
