@@ -19,12 +19,25 @@ from finance_server.api.subscriptions import router as subscriptions_router
 from finance_server.api.subscription_identities import router as subscription_identities_router
 from finance_server.api.receipts import router as receipts_router
 from finance_server.api.analytics import router as analytics_router
+from finance_server.services.sync_service import SyncService
 
 # .env laden
 BASE_DIR = Path(__file__).resolve().parents[1]
 load_dotenv(BASE_DIR / ".env")
 
 app = FastAPI(title="FinTS Server", version="1.0.0")
+
+sync_service = SyncService()
+
+
+@app.on_event("startup")
+def start_sync_service() -> None:
+    sync_service.start()
+
+
+@app.on_event("shutdown")
+def stop_sync_service() -> None:
+    sync_service.stop()
 
 
 @app.exception_handler(RateLimitExceeded)
