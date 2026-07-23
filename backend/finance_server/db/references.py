@@ -11,7 +11,13 @@ import sqlite3
 
 from finance_server.core.config import settings
 from finance_server.core.database import get_connection
+
 from .utils import normalize_text
+
+
+def _log(table_name: str, row_id: int | None, op_type: str, data: Any = None) -> None:
+    from finance_server.services.sync_logger import log_crud_event
+    _log(table_name, row_id, op_type, data)
 
 
 def _coerce_bool(value: Any, default: bool = True) -> int:
@@ -233,6 +239,7 @@ def create_zahlungspartner_record(payload: dict[str, Any]) -> dict[str, Any]:
             "ibans": [],
         }
 
+    _log("zahlungspartner", zahlungspartner_id, "INSERT", record)
     return record
 
 
@@ -319,6 +326,7 @@ def update_zahlungspartner_record(zahlungspartner_id: int, payload: dict[str, An
         )
         updated = get_zahlungspartner_record(zahlungspartner_id)
 
+    _log("zahlungspartner", zahlungspartner_id, "UPDATE", updated)
     return updated
 
 
@@ -340,6 +348,7 @@ def delete_zahlungspartner_record(zahlungspartner_id: int) -> bool:
             (zahlungspartner_id,),
         )
 
+    _log("zahlungspartner", zahlungspartner_id, "DELETE")
     return True
 
 
@@ -506,6 +515,7 @@ def create_empfaengerkonto_record(payload: dict[str, Any]) -> dict[str, Any]:
             "is_donation_account": bool(is_donation_account),
         }
 
+    _log("empfaengerkonten", empfaengerkonto_id, "INSERT", record)
     return record
 
 
@@ -577,7 +587,9 @@ def update_empfaengerkonto_record(
         if cursor.rowcount <= 0:
             return None
 
-    return get_empfaengerkonto_record(empfaengerkonto_id)
+    record = get_empfaengerkonto_record(empfaengerkonto_id)
+    _log("empfaengerkonten", empfaengerkonto_id, "UPDATE", record)
+    return record
 
 
 def delete_empfaengerkonto_record(empfaengerkonto_id: int) -> bool:
@@ -587,7 +599,9 @@ def delete_empfaengerkonto_record(empfaengerkonto_id: int) -> bool:
             (empfaengerkonto_id,),
         )
 
-    return cursor.rowcount > 0
+    result = cursor.rowcount > 0
+    _log("empfaengerkonten", empfaengerkonto_id, "DELETE")
+    return result
 
 
 def update_zahlungspartner_iban_mapping(iban: str, zahlungspartner_id: int) -> bool:

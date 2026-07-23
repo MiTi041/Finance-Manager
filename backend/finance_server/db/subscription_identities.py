@@ -5,6 +5,11 @@ from typing import Any, cast
 from finance_server.core.database import get_connection
 
 
+def _log(table_name: str, row_id: int | None, op_type: str, data: Any = None) -> None:
+    from finance_server.services.sync_logger import log_crud_event
+    _log(table_name, row_id, op_type, data)
+
+
 def _serialize_row(row: Any) -> dict[str, Any]:
     return {
         "id": row["id"],
@@ -98,6 +103,7 @@ def create_subscription_identity(payload: dict[str, Any]) -> dict[str, Any]:
     if record is None:
         raise RuntimeError("Fehler beim Erstellen der Subscription-Identität.")
 
+    _log("subscription_identities", record["id"], "INSERT", record)
     return record
 
 
@@ -138,7 +144,9 @@ def update_subscription_identity(
         if cursor.rowcount <= 0:
             return None
 
-    return get_subscription_identity(identity_id)
+    updated = get_subscription_identity(identity_id)
+    _log("subscription_identities", identity_id, "UPDATE", updated)
+    return updated
 
 
 def delete_subscription_identity(identity_id: int) -> bool:
@@ -148,4 +156,6 @@ def delete_subscription_identity(identity_id: int) -> bool:
             (identity_id,),
         )
 
-    return cursor.rowcount > 0
+    result = cursor.rowcount > 0
+    _log("subscription_identities", identity_id, "DELETE")
+    return result

@@ -3,7 +3,13 @@ from __future__ import annotations
 from typing import Any
 
 from finance_server.core.database import get_connection
+
 from .utils import normalize_text
+
+
+def _log(table_name: str, row_id: int | None, op_type: str, data: Any = None) -> None:
+    from finance_server.services.sync_logger import log_crud_event
+    log_crud_event(table_name, row_id, op_type, data)
 
 
 def _serialize_category_row(row: Any) -> dict[str, Any]:
@@ -160,6 +166,7 @@ def create_category_record(payload: dict[str, Any]) -> dict[str, Any]:
             "icon": icon,
         }
 
+    _log("kategorien", category_id, "INSERT", record)
     return record
 
 
@@ -224,7 +231,9 @@ def update_category_record(
         if cursor.rowcount <= 0:
             return None
 
-    return get_category_record(category_id)
+    updated = get_category_record(category_id)
+    _log("kategorien", category_id, "UPDATE", updated)
+    return updated
 
 
 def delete_category_record(category_id: int) -> bool:
@@ -234,7 +243,9 @@ def delete_category_record(category_id: int) -> bool:
             (category_id,),
         )
 
-    return cursor.rowcount > 0
+    result = cursor.rowcount > 0
+    _log("kategorien", category_id, "DELETE")
+    return result
 
 
 def update_transaction_category(transaction_id: int, category_id: int | None) -> None:
@@ -243,6 +254,8 @@ def update_transaction_category(transaction_id: int, category_id: int | None) ->
             "UPDATE umsaetze SET kategorie = ? WHERE id = ?",
             (category_id, transaction_id),
         )
+
+    _log("umsaetze", transaction_id, "UPDATE", {"id": transaction_id, "kategorie": category_id})
 
 
 def update_transactions_category_batch(transaction_ids: list[int], category_id: int | None) -> int:

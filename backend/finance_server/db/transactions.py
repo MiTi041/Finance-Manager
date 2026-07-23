@@ -6,7 +6,13 @@ from typing import Any, Iterable
 import sqlite3
 
 from finance_server.core.database import get_connection
+
 from .utils import build_transaction_hash, normalize_local_amount, normalize_text
+
+
+def _log(table_name: str, row_id: int | None, op_type: str, data: Any = None) -> None:
+    from finance_server.services.sync_logger import log_crud_event
+    _log(table_name, row_id, op_type, data)
 
 
 def to_row_payload(tx: dict[str, Any]) -> dict[str, Any]:
@@ -267,7 +273,9 @@ def fetch_transaction_balance(account_iban: str) -> float:
 def delete_transaction(transaction_id: int) -> bool:
     with get_connection() as connection:
         cursor = connection.execute("DELETE FROM umsaetze WHERE id = ?", (transaction_id,))
-        return cursor.rowcount > 0
+        result = cursor.rowcount > 0
+        _log("umsaetze", transaction_id, "DELETE")
+        return result
 
 
 def delete_transactions_batch(transaction_ids: list[int]) -> int:
@@ -291,7 +299,9 @@ def update_transaction_note(transaction_id: int, note: str | None) -> bool:
             "UPDATE umsaetze SET note = ? WHERE id = ?",
             (stored_note, transaction_id),
         )
-        return cursor.rowcount > 0
+        result = cursor.rowcount > 0
+        _log("umsaetze", transaction_id, "UPDATE", {"id": transaction_id, "note": note})
+        return result
 
 
 def update_transaction_splits(transaction_id: int, splits: list[dict[str, Any]] | None) -> bool:
@@ -302,7 +312,9 @@ def update_transaction_splits(transaction_id: int, splits: list[dict[str, Any]] 
             "UPDATE umsaetze SET splits = ? WHERE id = ?",
             (stored_splits, transaction_id),
         )
-        return cursor.rowcount > 0
+        result = cursor.rowcount > 0
+        _log("umsaetze", transaction_id, "UPDATE", {"id": transaction_id, "splits": splits})
+        return result
 
 
 def update_transaction_refund_link(transaction_id: int, refund_ref_transaction_id: int | None) -> bool:
@@ -311,4 +323,6 @@ def update_transaction_refund_link(transaction_id: int, refund_ref_transaction_i
             "UPDATE umsaetze SET refund_ref_transaction_id = ? WHERE id = ?",
             (refund_ref_transaction_id, transaction_id),
         )
-        return cursor.rowcount > 0
+        result = cursor.rowcount > 0
+        _log("umsaetze", transaction_id, "UPDATE", {"id": transaction_id, "refund_ref_transaction_id": refund_ref_transaction_id})
+        return result
