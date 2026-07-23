@@ -1,5 +1,5 @@
 import * as React from "react";
-import { FileText, Gauge, Repeat, ScanSearch } from "lucide-react";
+import { FileText, Gauge, RefreshCw, Repeat, ScanSearch } from "lucide-react";
 
 import { normalizeIban } from "@/lib/iban";
 import { buildAccountOptions, resolveAccountSelection } from "@/lib/utils/accounts";
@@ -39,6 +39,11 @@ const navData = {
       title: "Analyse",
       url: "/analytics",
       icon: ScanSearch,
+    },
+    {
+      title: "Sync",
+      url: "/sync",
+      icon: RefreshCw,
     },
   ],
 };
