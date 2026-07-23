@@ -311,6 +311,37 @@ def migrate_subscription_identities(connection: sqlite3.Connection) -> None:
     )
 
 
+def create_sync_tables(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sync_ops (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            device_id   TEXT NOT NULL,
+            seq         INTEGER NOT NULL,
+            table_name  TEXT NOT NULL,
+            row_id      INTEGER,
+            op_type     TEXT NOT NULL CHECK(op_type IN ('INSERT', 'UPDATE', 'DELETE')),
+            data        TEXT,
+            checksum    TEXT,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_sync_ops_device_seq ON sync_ops(device_id, seq)"
+    )
+    connection.execute("CREATE INDEX IF NOT EXISTS idx_sync_ops_id ON sync_ops(id)")
+
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sync_state (
+            key   TEXT PRIMARY KEY,
+            value TEXT
+        )
+        """
+    )
+
+
 def initialize_database(connection: sqlite3.Connection) -> None:
     create_umsaetze_table(connection)
     create_bank_credentials_table(connection)
@@ -357,3 +388,4 @@ def initialize_database(connection: sqlite3.Connection) -> None:
     create_subscription_identities_table(connection)
     migrate_subscription_identities(connection)
     create_app_settings_table(connection)
+    create_sync_tables(connection)
