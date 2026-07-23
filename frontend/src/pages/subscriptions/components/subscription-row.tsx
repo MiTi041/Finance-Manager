@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
-import { Check, FileText, Loader2, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Check, FileText, Loader2, Pencil, Plus, RotateCcw, Trash2, Undo2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { BrandIcon } from "@/components/bank-logo";
+import { HelpButton } from "@/components/ui/help-button";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/searchable-select";
 import { type Subscription } from "@/pages/subscriptions/hooks/use-subscriptions";
@@ -29,6 +31,7 @@ type Props = {
   ) => Promise<void>;
   onDismissIdentity: (counterpartyName: string, amount: number) => Promise<void>;
   onRemoveIdentity: (counterpartyName: string, amount: number) => Promise<void>;
+  onRestoreSubscription?: (identityId: number) => Promise<void>;
 };
 
 export function SubscriptionRow({
@@ -40,6 +43,7 @@ export function SubscriptionRow({
   onCreateAndLinkIdentity,
   onDismissIdentity,
   onRemoveIdentity,
+  onRestoreSubscription,
 }: Props) {
   const hasOverride =
     subscription._counterpartyName !== undefined &&
@@ -109,13 +113,56 @@ export function SubscriptionRow({
     }
   };
 
+  const lastRefundAmount = Math.max(0, subscription.lastRefundAmount);
+  const hasRefunds = lastRefundAmount > 0;
+
+  const paidInPeriod = useMemo(() => {
+    const now = new Date();
+    const periodMonths = subscription.frequency === "MONTHLY" ? 1 : subscription.frequency === "SEMI_ANNUAL" ? 6 : 12;
+    const cutoff = new Date(now.getFullYear(), now.getMonth() - periodMonths + 1, 1);
+
+    for (const t of subscription.transactions) {
+      const dateStr = t.date?.split(" ")[0]?.split("T")[0];
+      if (!dateStr) continue;
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) continue;
+      if (d >= cutoff) return true;
+    }
+    return false;
+  }, [subscription.transactions, subscription.frequency]);
+
+  const paidLabel = subscription.frequency === "MONTHLY" ? "Diesen Monat gezahlt"
+    : subscription.frequency === "SEMI_ANNUAL" ? "Dieses Halbjahr gezahlt"
+    : "Dieses Jahr gezahlt";
+
+  const isDismissed = subscription.dismissed;
+
+  const handleRestore = async () => {
+    if (!onRestoreSubscription || !subscription.subscriptionIdentityId || saving) return;
+    setSaving(true);
+    try {
+      await onRestoreSubscription(subscription.subscriptionIdentityId);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRowClick = isDismissed ? undefined : onToggle;
+
   return (
     <div className="w-full">
-      <div className="flex w-full items-center border-b border-muted/60 bg-background text-left transition-colors hover:bg-muted/40">
-        <button
-          type="button"
-          onClick={onToggle}
-          className="flex w-full cursor-pointer items-center gap-4 px-4 py-3"
+      <div className={cn(
+        "flex w-full items-center border-b border-muted/60 text-left transition-colors",
+        isDismissed
+          ? "bg-muted/40 hover:bg-muted/60"
+          : "bg-background hover:bg-muted/40",
+      )}>
+        <div
+          className="flex w-full items-center gap-4 px-4 py-3"
+          onClick={isDismissed ? undefined : handleRowClick}
+          role={isDismissed ? undefined : "button"}
+          tabIndex={isDismissed ? -1 : 0}
+          onKeyDown={isDismissed ? undefined : (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleRowClick?.(); } }}
         >
           <BrandIcon
             src={logoUrl}
@@ -128,21 +175,33 @@ export function SubscriptionRow({
 
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <p className="truncate text-sm font-medium text-foreground">
+              <p className={cn("truncate text-sm font-medium", isDismissed ? "text-muted-foreground" : "text-foreground")}>
                 {displayName}
                 {displayName !== subscription.name && subscription.name ? (
                   <span className="ml-1 text-xs text-muted-foreground">{subscription.name}</span>
                 ) : null}
               </p>
-              <Badge variant="secondary" className="shrink-0 px-1.5 py-0 text-[10px] leading-4">
-                {subscription.frequencyLabel}
-              </Badge>
+              {isDismissed ? (
+                <span className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                  Ausgeblendet
+                </span>
+              ) : (
+                <Badge variant="secondary" className="shrink-0 px-1.5 py-0 text-[10px] leading-4">
+                  {subscription.frequencyLabel}
+                </Badge>
+              )}
+              {paidInPeriod && !isDismissed && (
+                <span className="inline-flex items-center gap-1 rounded-md bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium text-green-600 dark:text-green-400">
+                  <Check className="size-3" />
+                  {paidLabel}
+                </span>
+              )}
             </div>
             <div className="mt-0.5 flex items-center gap-2">
               <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
                 Nächste: {new Intl.DateTimeFormat("de-DE").format(nextDate)}
               </span>
-              {daysUntil >= 0 && daysUntil <= 7 && (
+              {daysUntil >= 0 && daysUntil <= 7 && !isDismissed && (
                 <Badge variant="destructive" className="px-1.5 py-0 text-[10px] leading-4">
                   in {daysUntil} {daysUntil === 1 ? "Tag" : "Tagen"}
                 </Badge>
@@ -151,54 +210,88 @@ export function SubscriptionRow({
           </div>
 
           <div className="flex shrink-0 items-center gap-3">
-              <span className="flex flex-col items-end gap-0">
-              <span className="text-sm font-semibold tabular-nums text-destructive">
-                {formatAmount(subscription.amount)}
-              </span>
-              {subscription.refundAmount > 0 && (
-                <span className="text-[10px] text-muted-foreground/60 tabular-nums">
-                  inkl. {formatAmount(subscription.refundAmount)} Rückerstattung
-                </span>
-              )}
-            </span>
-            <span
-              className={cn(
-                "text-muted-foreground/40 transition-transform duration-200",
-                isExpanded && "rotate-180",
-              )}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="m6 9 6 6 6-6" />
-              </svg>
-            </span>
-          </div>
-        </button>
-      </div>
-
-      {isExpanded && (
-        <div className="border-b border-muted/60 bg-muted/20 text-sm">
-          <div className="flex w-full flex-col">
-            <div className="flex justify-end px-4 py-2 gap-2 border-b border-muted">
+            {isDismissed ? (
               <Button
                 type="button"
                 size="sm"
                 variant="secondary"
                 disabled={saving}
-                onClick={() => void handleDismiss()}
-                className="text-muted-foreground hover:text-foreground"
+                onClick={(e) => { e.stopPropagation(); void handleRestore(); }}
+                className="gap-1.5"
               >
-                <X className="size-3.5" />
-                Kein Abonnement
+                {saving ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <RotateCcw className="size-3.5" />
+                )}
+                Wiederherstellen
               </Button>
+            ) : (
+              <>
+                {hasRefunds && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400 tabular-nums">
+                        <Undo2 className="size-3" />
+                        {formatAmount(lastRefundAmount)}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">Rückerstattungsbetrag</TooltipContent>
+                  </Tooltip>
+                )}
+                <span className="text-sm font-semibold tabular-nums text-destructive">
+                  {formatAmount(subscription.effectiveAmount)}
+                </span>
+              </>
+            )}
+            {!isDismissed && (
+              <span
+                className={cn(
+                  "text-muted-foreground/40 transition-transform duration-200",
+                  isExpanded && "rotate-180",
+                )}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {!isDismissed && isExpanded && (
+        <div className="border-b border-muted/60 bg-muted/20 text-sm">
+          <div className="flex w-full flex-col">
+            <div className="flex justify-end px-4 py-2 gap-2 border-b border-muted">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    disabled={saving}
+                    onClick={() => void handleDismiss()}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="size-3.5" />
+                    Kein Abonnement
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[260px] space-y-2 text-xs">
+                  <p>Hierdurch wird die Erkennung als Abonnement für diese Buchung aufgehoben. Die Transaktionen bleiben erhalten und werden nicht gelöscht.</p>
+                  <p className="text-muted-foreground">Sollte die Buchung erneut als Abonnement erkannt werden, erscheint sie wieder in dieser Liste.</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
 
             <div className="grid grid-cols-1 divide-y divide-border/60  sm:grid-cols-3 sm:divide-x sm:divide-y-0">
@@ -260,8 +353,12 @@ export function SubscriptionRow({
                   </div>
                 ) : (
                   <>
-                    <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
+                    <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
                       Zahlungspartner ändern
+                      <HelpButton>
+                        <p>Lege hier fest, welcher Zahlungspartner diesem Abonnement zugeordnet werden soll. Der ausgewählte Name wird in allen Analysen sowie in den Transaktionslisten als Empfänger angezeigt.</p>
+                        <p className="text-muted-foreground">Beispiel: Wird ein Abonnement über eine Privatperson abgewickelt, kannst du hier den tatsächlichen Dienstnamen (z. B. „Spotify") hinterlegen, damit dieser statt des privaten Namens in der Übersicht erscheint.</p>
+                      </HelpButton>
                     </p>
                     <div className="flex flex-col gap-4 ">
                       {/* Link to existing owner */}

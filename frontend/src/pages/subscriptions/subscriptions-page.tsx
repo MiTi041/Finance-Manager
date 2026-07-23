@@ -1,8 +1,9 @@
 import React from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { CircleX, Repeat, Wallet } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CircleX, EyeOff, Repeat, Wallet } from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -10,11 +11,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { VirtualizedList } from "@/components/virtualized-list";
+import { useSearchParams } from "react-router-dom";
+import { VirtualizedList, type VirtualizedListRef } from "@/components/virtualized-list";
 import {
   createSubscriptionIdentity,
   deleteSubscriptionIdentity,
   listSubscriptionIdentities,
+  updateSubscriptionIdentity,
   useSubscriptions,
   type Subscription,
   type SubscriptionFrequency,
@@ -59,12 +62,33 @@ const FREQUENCY_OPTIONS: { value: "ALL" | SubscriptionFrequency; label: string }
 type SortKey = "amount" | "nextDate";
 
 export default function SubscriptionsPage() {
-  const { loading, error, grouped, subscriptions, reload, removeSubscription } = useSubscriptions();
+  const { loading, error, grouped, subscriptions, reload, removeSubscription, includeDismissed, setIncludeDismissed } = useSubscriptions();
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [zahlungspartnerList, setZahlungspartnerList] = useState<ZahlungspartnerRecord[]>([]);
   const [frequencyFilter, setFrequencyFilter] = useState<"ALL" | SubscriptionFrequency>("ALL");
   const [sortKey, setSortKey] = useState<SortKey | null>("nextDate");
   const [sortAsc, setSortAsc] = useState(true);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const virtualListRef = useRef<VirtualizedListRef>(null);
+  const highlightRef = useRef(false);
+
+  useEffect(() => {
+    const name = searchParams.get("name");
+    const amount = searchParams.get("amount");
+    if (!name || !amount || loading || subscriptions.length === 0 || highlightRef.current) return;
+
+    const key = `${name}|${Number(amount)}`;
+    const found = subscriptions.find((sub) => getSubKey(sub) === key);
+    if (found) {
+      setFrequencyFilter("ALL");
+      setExpandedKey(key);
+      requestAnimationFrame(() => {
+        virtualListRef.current?.scrollToItem(`sub-${key}`, "center");
+      });
+    }
+    highlightRef.current = true;
+    setSearchParams({}, { replace: true });
+  }, [searchParams, loading, subscriptions, setSearchParams]);
 
   useEffect(() => {
     fetchZahlungspartnerReferenceData()
@@ -155,6 +179,19 @@ export default function SubscriptionsPage() {
     [reload],
   );
 
+  const handleRestoreSubscription = useCallback(
+    async (identityId: number) => {
+      try {
+        await updateSubscriptionIdentity(identityId, { dismissed: false });
+        await reload();
+        toast.success("Abonnement wiederhergestellt");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Abonnement konnte nicht wiederhergestellt werden");
+      }
+    },
+    [reload],
+  );
+
   const flatItems = useMemo<ListItem[]>(() => {
     const items: ListItem[] = [];
 
@@ -187,6 +224,11 @@ export default function SubscriptionsPage() {
     }
     return items;
   }, [grouped, frequencyFilter, sortKey, sortAsc]);
+
+  const subscriptionCount = useMemo(
+    () => flatItems.filter((item) => item.type === "subscription").length,
+    [flatItems],
+  );
 
   const getSubKey = (sub: Subscription) => `${sub._counterpartyName || sub.name}|${sub.amount}`;
 
@@ -272,13 +314,12 @@ export default function SubscriptionsPage() {
           icon={Wallet}
         />
       </div>
-      {!loading && subscriptions.length > 0 && (
-        <SubscriptionMonthlyChart subscriptions={subscriptions} />
-      )}
       <div className="h-[750px]">
         <VirtualizedList
+        ref={virtualListRef}
         className="!h-full"
         items={flatItems}
+        totalCount={subscriptionCount}
         loading={loading}
         getItemKey={(item) =>
           item.type === "section" ? `section-${item.frequency}` : `sub-${getSubKey(item.data)}`
@@ -305,6 +346,20 @@ export default function SubscriptionsPage() {
                 ))}
               </SelectContent>
             </Select>,
+            <Button
+              key="dismissed"
+              type="button"
+              variant="ghost"
+              aria-pressed={includeDismissed}
+              onClick={() => setIncludeDismissed(!includeDismissed)}
+              className={includeDismissed
+                ? "!bg-foreground !text-background hover:!bg-foreground/90 hover:!text-background"
+                : "!bg-muted !text-muted-foreground hover:!bg-muted/80 hover:!text-foreground"
+              }
+            >
+              <EyeOff className="size-4" />
+              Ausgeblendete anzeigen
+            </Button>,
           ] as React.ReactNode[]
         }
         filterItem={(item, query) => {
@@ -339,11 +394,15 @@ export default function SubscriptionsPage() {
               onCreateAndLinkIdentity={handleCreateAndLinkIdentity}
               onDismissIdentity={handleDismissIdentity}
               onRemoveIdentity={handleRemoveIdentity}
+              onRestoreSubscription={handleRestoreSubscription}
             />
           );
         }}
       />
       </div>
+      {!loading && subscriptions.length > 0 && (
+        <SubscriptionMonthlyChart subscriptions={subscriptions} />
+      )}
     </div>
   );
 }

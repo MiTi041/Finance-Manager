@@ -7,12 +7,14 @@ import { BankAccessTab } from "./tabs/bank/bank-access-tab";
 import { ZahlungspartnerTab } from "./tabs/zahlungspartner/zahlungspartner-tab";
 import { RecipientAccountsTab } from "./tabs/recipient-accounts/recipient-accounts-tab";
 import { CategoriesTab } from "./tabs/categories/categories-tab";
+import { SyncTab } from "./tabs/sync-tab";
 
 const SETTINGS_TAB_VALUES = [
   "banking",
   "zahlungspartner",
   "recipients",
   "categories",
+  "sync",
   "productId",
   "database",
 ] as const;
@@ -54,6 +56,7 @@ export default function SettingsPage() {
           <TabsTrigger value="zahlungspartner">Zahlungspartner</TabsTrigger>
           <TabsTrigger value="recipients">Empfängerkonten</TabsTrigger>
           <TabsTrigger value="categories">Kategorien</TabsTrigger>
+          <TabsTrigger value="sync">Sync</TabsTrigger>
           <TabsTrigger value="productId">Produkt-ID</TabsTrigger>
           <TabsTrigger value="database">Datenbank</TabsTrigger>
         </TabsList>
@@ -72,6 +75,10 @@ export default function SettingsPage() {
 
         <TabsContent value="categories" className="pt-4">
           <CategoriesTab />
+        </TabsContent>
+
+        <TabsContent value="sync" className="pt-4">
+          <SyncTab />
         </TabsContent>
 
         <TabsContent value="productId" className="pt-4">

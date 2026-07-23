@@ -27,6 +27,15 @@ import { type Transaction } from "@/types/transaction";
 import { getApiBaseUrl } from "@/lib/api";
 import { type Subscription } from "@/pages/subscriptions/hooks/use-subscriptions";
 
+type SubscriptionOverride = {
+  name: string;
+  logoUrl?: string;
+  datenbankName?: string;
+  logoWhiteBackground?: boolean;
+  logoPadding?: boolean;
+  isCompany?: boolean;
+};
+
 import { TransactionRow } from "./components/transaction-row";
 import { TransactionsFilterBar } from "./components/transactions-filter-bar";
 import { BatchActionsBar } from "./components/batch-actions-bar";
@@ -69,6 +78,8 @@ export default function TransactionsPage() {
   const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
   const [deletingTransaction, setDeletingTransaction] = useState(false);
   const [subscriptionTransactionIds, setSubscriptionTransactionIds] = useState<Set<number>>(new Set());
+  const [subscriptionOverrideMap, setSubscriptionOverrideMap] = useState<Map<number, SubscriptionOverride>>(new Map());
+  const [subscriptionLinkMap, setSubscriptionLinkMap] = useState<Map<number, { counterpartyName: string; amount: number }>>(new Map());
   const categoryTriggerRefs = useRef(new Map<number, HTMLButtonElement | null>());
   const virtualListRef = useRef<VirtualizedListRef>(null);
 
@@ -140,12 +151,31 @@ export default function TransactionsPage() {
       .then((data: { subscriptions: Subscription[] }) => {
         if (!active) return;
         const ids = new Set<number>();
+        const overrides = new Map<number, SubscriptionOverride>();
+        const links = new Map<number, { counterpartyName: string; amount: number }>();
         for (const sub of data.subscriptions ?? []) {
+          const counterpartyName = sub._counterpartyName || sub.name;
           for (const tid of sub.transactionIds) {
             ids.add(tid);
+            links.set(tid, { counterpartyName, amount: sub.amount });
+          }
+          const hasOverride = sub._counterpartyName !== undefined && sub._counterpartyName !== sub.name;
+          if (hasOverride && sub.transactionIds) {
+            for (const tid of sub.transactionIds) {
+              overrides.set(tid, {
+                name: sub.datenbankName || sub.name,
+                logoUrl: sub.recipientLogo,
+                datenbankName: sub.datenbankName,
+                logoWhiteBackground: sub.logoWhiteBackground,
+                logoPadding: sub.logoPadding,
+                isCompany: sub.isCompany,
+              });
+            }
           }
         }
         setSubscriptionTransactionIds(ids);
+        setSubscriptionOverrideMap(overrides);
+        setSubscriptionLinkMap(links);
       })
       .catch(() => {});
     return () => { active = false; };
@@ -187,14 +217,14 @@ export default function TransactionsPage() {
 
       {
         let passes = true;
-        if (!showDeletedBanks && isBankDeleted) passes = false;
+        if (showDeletedBanks && !isBankDeleted) passes = false;
         if (onlyUnknownIban && !isUnknownIban) passes = false;
         if (passes && isUnassigned) unassigned++;
       }
 
       {
         let passes = true;
-        if (!showDeletedBanks && isBankDeleted) passes = false;
+        if (showDeletedBanks && !isBankDeleted) passes = false;
         if (onlyUnassigned && !isUnassigned) passes = false;
         if (passes && isUnknownIban) unknownIban++;
       }
@@ -427,7 +457,7 @@ export default function TransactionsPage() {
       const partnerIban = normalizeIban(transaction.zahlungspartner.iban);
       const unknownIban = partnerIban.length > 0 && !ibanToZahlungspartner.has(partnerIban);
 
-      if (!showDeletedBanks && transaction.technisch.bankDeleted) return false;
+      if (showDeletedBanks && !transaction.technisch.bankDeleted) return false;
       if (onlyUnassigned && !isUnassigned) return false;
       if (onlyUnknownIban && !unknownIban) return false;
       if (amountFilter === "income" && !isIncome) return false;
@@ -595,6 +625,8 @@ export default function TransactionsPage() {
               transaction={transaction}
               isExpanded={expandedTransactionId === transaction.id}
               isSubscriptionTransaction={subscriptionTransactionIds.has(transaction.id)}
+              subscriptionOverride={subscriptionOverrideMap.get(transaction.id) ?? null}
+              subscriptionLink={subscriptionLinkMap.get(transaction.id) ?? null}
               isUnassigned={currentCategoryId == null}
               isSelected={selectedTransactionIds.has(transaction.id)}
               predictedCategoryId={predictedCategoryId}

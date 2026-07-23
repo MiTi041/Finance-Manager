@@ -105,21 +105,19 @@ function ChartTooltip({ active, payload }: any) {
   const isOther = name === "Weitere Kategorien" || name === "Weitere Zahlungspartner";
   return (
     <div
-      className="animate-in fade-in duration-150 rounded-xl px-3.5 py-2.5"
+      className="animate-in fade-in duration-150 rounded-xl px-3.5 py-2.5 border border-border"
       style={{
         background: "rgba(15, 15, 30, 0.95)",
-        border: "1px solid rgba(124, 108, 255, 0.25)",
-        boxShadow: "0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(124,108,255,0.1)",
+        boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
         backdropFilter: "blur(12px)",
       }}
     >
-      <p className="m-0 flex items-center gap-1.5 text-[11px]" style={{ color: "#7070a0" }}>
+      <p className="m-0 flex items-center gap-1.5 text-[11px] text-muted-foreground">
         {isOther ? <Ellipsis size={12} /> : entry.icon && <span>{entry.icon}</span>}
         {name}
       </p>
       <p
-        className="m-0 mt-1.5 text-[17px] font-semibold tabular-nums tracking-tight"
-        style={{ color: "#e8e8f5" }}
+        className="m-0 mt-1.5 text-[17px] font-semibold tabular-nums tracking-tight text-foreground"
       >
         {fmt(value)}
       </p>
@@ -131,18 +129,8 @@ function ChartTooltip({ active, payload }: any) {
 
 function Card({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      className="flex flex-col overflow-hidden"
-      style={{
-        background: "#0f0f1e",
-        border: "1px solid #1a1a2e",
-        borderRadius: 18,
-        position: "relative",
-      }}
-    >
-      <div className="flex flex-1 flex-col" style={{ padding: "20px 22px 18px" }}>
-        {children}
-      </div>
+    <div className="flex flex-col rounded-panel border border-border bg-card p-[22px_22px_14px] outline-none">
+      {children}
     </div>
   );
 }
@@ -171,15 +159,12 @@ function CardHeader({
         >
           {icon}
         </div>
-        <span
-          className="text-[12px] font-semibold tracking-wide uppercase"
-          style={{ color: "#a0a0c0" }}
-        >
+        <span className="text-xs font-medium tracking-[0.06em] uppercase text-muted-foreground">
           {title}
         </span>
       </div>
       {dateFooter && (
-        <span className="text-[10.5px] tracking-wide" style={{ color: "#3a3a5a" }}>
+        <span className="text-[10.5px] tracking-wide text-muted-foreground/40">
           {dateFooter}
         </span>
       )}
@@ -222,21 +207,21 @@ function LegendRow({
             src={logoUrl}
             alt={name}
             sizeClassName="size-8 shrink-0"
-            backgroundClassName={logoWhiteBackground ? "bg-white" : "bg-[#1a1a2e]"}
+            backgroundClassName={logoWhiteBackground ? "bg-white" : "bg-muted"}
             imgNoPadding={!logoPadding}
           />
         ) : (
           <div
-            className="flex size-8 shrink-0 items-center justify-center rounded-md"
-            style={{ background: isOther ? "#1a1a2e" : `${color}22` }}
+            className={`flex size-8 shrink-0 items-center justify-center rounded-md ${isOther ? "bg-muted" : ""}`}
+            style={!isOther ? { background: `${color}22` } : undefined}
           >
             {isOther ? (
-              <Ellipsis size={14} style={{ color: "#3a3a5a" }} />
+              <Ellipsis size={14} className="text-muted-foreground/50" />
             ) : isCompany !== undefined ? (
               isCompany ? (
-                <Building2 size={14} style={{ color: "#7070a0" }} />
+                <Building2 size={14} className="text-muted-foreground" />
               ) : (
-                <User size={14} style={{ color: "#7070a0" }} />
+                <User size={14} className="text-muted-foreground" />
               )
             ) : (
               <span style={{ fontSize: 12 }}>{icon}</span>
@@ -244,19 +229,16 @@ function LegendRow({
           </div>
         )}
 
-        <span className="min-w-0 flex-1 truncate text-[12px]" style={{ color: "#7070a0" }}>
+        <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">
           {name}
         </span>
-        <span
-          className="shrink-0 text-[12px] font-semibold tabular-nums tracking-tight"
-          style={{ color: "#d0d0e8" }}
-        >
+        <span className="shrink-0 text-[12px] font-semibold tabular-nums tracking-tight text-foreground">
           {fmt(value)}
         </span>
       </div>
 
       {/* percentage bar */}
-      <div className="h-[2px] overflow-hidden rounded-full" style={{ background: "#1a1a2e" }}>
+      <div className="h-[2px] overflow-hidden rounded-full bg-muted">
         <div
           className="h-full rounded-full"
           style={{ width: `${pct}%`, background: color, opacity: 0.7 }}
@@ -354,17 +336,11 @@ function ChartCard({
       )}
 
       {/* total strip */}
-      <div
-        className="flex items-baseline justify-between pt-3.5 mt-6"
-        style={{ borderTop: "1px solid #1a1a2e" }}
-      >
-        <span className="text-[10.5px] uppercase tracking-wide" style={{ color: "#3a3a5a" }}>
+      <div className="flex items-baseline justify-between pt-3.5 mt-6 border-t border-border">
+        <span className="text-[10.5px] uppercase tracking-wide text-muted-foreground/50">
           Gesamt
         </span>
-        <span
-          className="text-[20px] font-bold tabular-nums tracking-tight"
-          style={{ color: "#e8e8f5" }}
-        >
+        <span className="text-[20px] font-bold tabular-nums tracking-tight text-foreground">
           {fmt(total)}
         </span>
       </div>
@@ -379,20 +355,12 @@ function AnalyticsSkeleton() {
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         {[...Array(2)].map((_, i) => (
-          <Skeleton
-            key={i}
-            className="h-[340px] rounded-[18px]"
-            style={{ background: "#0f0f1e" }}
-          />
+          <Skeleton key={i} className="h-[340px] rounded-panel" />
         ))}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         {[...Array(2)].map((_, i) => (
-          <Skeleton
-            key={i}
-            className="h-[320px] rounded-[18px]"
-            style={{ background: "#0f0f1e" }}
-          />
+          <Skeleton key={i} className="h-[320px] rounded-panel" />
         ))}
       </div>
     </div>
@@ -510,7 +478,7 @@ export default function AnalyticsPage() {
       <div className="flex items-center justify-between gap-4">
         <DateFilter value={dateFilter} onChange={setDateFilter} />
         {refreshing && (
-          <div className="flex items-center gap-1.5 text-[11.5px]" style={{ color: "#5a5a7a" }}>
+          <div className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
             <Loader2 size={12} className="animate-spin" />
             Aktualisiere…
           </div>

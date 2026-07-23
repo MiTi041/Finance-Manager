@@ -60,13 +60,13 @@ export function mapTransaction(dto: TransactionDto): Transaction {
     },
 
     texte: {
-      buchungstext: dto.posting_text,
+      buchungstext: dto.posting_text ?? "",
 
       primaNota: dto.prima_nota,
 
-      verwendungszweck: dto.purpose,
+      verwendungszweck: dto.purpose ?? "",
 
-      zusatzVerwendungszweck: dto.additional_purpose,
+      zusatzVerwendungszweck: dto.additional_purpose ?? "",
 
       extraDetails: dto.extra_details,
 

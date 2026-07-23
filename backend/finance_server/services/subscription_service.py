@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import calendar
 import re
 from collections import defaultdict
 from datetime import date, datetime, timedelta
@@ -112,6 +113,7 @@ class SubscriptionService:
         iban: str | None = None,
         from_date: str | None = None,
         to_date: str | None = None,
+        include_dismissed: bool = False,
     ) -> list[dict[str, Any]]:
         transactions = fetch_transactions(
             days=days,
@@ -172,10 +174,12 @@ class SubscriptionService:
         # ── Preload subscription identity overrides ──
         identity_overrides: dict[tuple[str, float], dict[str, Any]] = {}
         dismissed_keys: set[tuple[str, float]] = set()
+        dismissed_ids: dict[tuple[str, float], int] = {}
+        dismissed_info: dict[tuple[str, float], dict[str, Any]] = {}
         with get_connection() as connection:
             override_rows = connection.execute(
                 """
-                SELECT counterparty_name, amount, display_name, f_zahlungspartner_id, dismissed
+                SELECT id, counterparty_name, amount, display_name, f_zahlungspartner_id, dismissed
                 FROM subscription_identities
                 """
             ).fetchall()
@@ -183,10 +187,13 @@ class SubscriptionService:
             key = (row["counterparty_name"], row["amount"])
             if row["dismissed"]:
                 dismissed_keys.add(key)
-            identity_overrides[key] = {
-                "display_name": row["display_name"],
-                "zahlungspartner_id": row["f_zahlungspartner_id"],
-            }
+                dismissed_ids[key] = row["id"]
+                dismissed_info[key] = dict(row)
+            else:
+                identity_overrides[key] = {
+                    "display_name": row["display_name"],
+                    "zahlungspartner_id": row["f_zahlungspartner_id"],
+                }
 
         # ── Step 1: Enrich every transaction with zahlungspartner + normalized name ──
         enriched_outgoing: list[dict[str, Any]] = []
@@ -259,7 +266,7 @@ class SubscriptionService:
                     [
                         d
                         for d in (
-                            _to_date(t.get("date") or t.get("entry_date"))
+                            _to_date(t.get("entry_date") or t.get("date"))
                             for t in txs_in_cluster
                         )
                         if d
@@ -290,7 +297,7 @@ class SubscriptionService:
                                 d
                                 for d in (
                                     _to_date(
-                                        t.get("date") or t.get("entry_date")
+                                        t.get("entry_date") or t.get("date")
                                     )
                                     for t in cleaned
                                 )
@@ -316,7 +323,29 @@ class SubscriptionService:
                     continue
 
                 last_date = max(dates_sorted)
-                next_date = last_date + timedelta(days=round(avg_days))
+
+                last_3 = dates_sorted[-3:]
+                day_counts: dict[int, int] = {}
+                for d in last_3:
+                    day_counts[d.day] = day_counts.get(d.day, 0) + 1
+                typical_day = max(day_counts, key=day_counts.get)
+
+                if frequency == FREQUENCY_MONTHLY:
+                    next_month = last_date.month % 12 + 1
+                    next_year = last_date.year + (last_date.month // 12)
+                    next_day = min(typical_day, calendar.monthrange(next_year, next_month)[1])
+                    next_date = date(next_year, next_month, next_day)
+                elif frequency == FREQUENCY_SEMI_ANNUAL:
+                    months = last_date.month - 1 + 6
+                    next_year = last_date.year + months // 12
+                    next_month = months % 12 + 1
+                    next_day = min(typical_day, calendar.monthrange(next_year, next_month)[1])
+                    next_date = date(next_year, next_month, next_day)
+                elif frequency == FREQUENCY_ANNUAL:
+                    next_day = min(typical_day, calendar.monthrange(last_date.year + 1, last_date.month)[1])
+                    next_date = date(last_date.year + 1, last_date.month, next_day)
+                else:
+                    next_date = last_date + timedelta(days=round(avg_days))
 
                 # Use zahlungspartner from first transaction (all should share it)
                 zahlungspartner = txs_in_cluster[0].get("_zahlungspartner")
@@ -466,12 +495,15 @@ class SubscriptionService:
         for r in results:
             refund_total = 0
             net_sum = 0.0
+            last_refund = 0
             for tx in r["transactions"]:
                 tx_refund = refund_map.get(tx["id"], 0)
                 refund_total += tx_refund
                 tx_net = max(0, abs(tx["amount"]) - tx_refund)
                 net_sum += tx_net
+                last_refund = tx_refund
             r["refundAmount"] = refund_total
+            r["lastRefundAmount"] = last_refund
             r["effectiveAmount"] = round(net_sum / r["transactionCount"], 2) if r["transactionCount"] > 0 else r["amount"]
 
         # ── Step 5: Filter out inactive subscriptions ──
@@ -492,12 +524,55 @@ class SubscriptionService:
                 return True
             return (today - last).days <= max_age
 
-        results = [
-            r
-            for r in results
-            if _is_active(r)
-            and (r.get("_counterpartyName"), r.get("amount")) not in dismissed_keys
-        ]
+        if include_dismissed:
+            matched_keys: set[tuple[str, float]] = set()
+            dismissed_results: list[dict[str, Any]] = []
+            for r in results:
+                key = (r.get("_counterpartyName"), r.get("amount"))
+                if key in dismissed_keys:
+                    r["dismissed"] = True
+                    r["subscriptionIdentityId"] = dismissed_ids[key]
+                    dismissed_results.append(r)
+                    matched_keys.add(key)
+                elif _is_active(r):
+                    dismissed_results.append(r)
+            # Build stubs for dismissed identities not detected by clustering
+            for key, info in dismissed_info.items():
+                if key not in matched_keys:
+                    cpn, amt = key
+                    dismissed_results.append({
+                        "name": info["display_name"] or cpn,
+                        "_counterpartyName": cpn,
+                        "recipientLogo": None,
+                        "recipientName": "",
+                        "recipientId": None,
+                        "datenbankName": "",
+                        "logoWhiteBackground": False,
+                        "logoPadding": True,
+                        "isCompany": True,
+                        "amount": amt,
+                        "frequency": "MONTHLY",
+                        "frequencyLabel": "Monatlich",
+                        "firstDate": date.today().isoformat(),
+                        "lastDate": date.today().isoformat(),
+                        "nextDate": date.today().isoformat(),
+                        "transactionCount": 0,
+                        "transactionIds": [],
+                        "sequenztyp": "",
+                        "transactions": [],
+                        "refundAmount": 0,
+                        "lastRefundAmount": 0,
+                        "effectiveAmount": amt,
+                        "dismissed": True,
+                        "subscriptionIdentityId": info["id"],
+                    })
+            results = dismissed_results
+        else:
+            results = [
+                r for r in results
+                if _is_active(r)
+                and (r.get("_counterpartyName"), r.get("amount")) not in dismissed_keys
+            ]
 
         results.sort(key=lambda r: r["nextDate"])
         return results

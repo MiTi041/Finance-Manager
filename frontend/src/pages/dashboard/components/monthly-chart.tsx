@@ -76,8 +76,8 @@ export function MonthlyChart({ transactions }: MonthlyChartProps) {
   const data = useMemo(() => buildMonthlyBreakdown(transactions), [transactions]);
 
   return (
-    <div className="min-w-0 flex-[0_0_320px] rounded-panel border border-border bg-card p-[22px_22px_14px] outline-none">
-      <SectionHeading>Einnahmen vs. Ausgaben</SectionHeading>
+    <div className="min-w-0 rounded-panel border border-border bg-card p-[22px_22px_14px] outline-none">
+      <SectionHeading>Einnahmen vs. Ausgaben (letzte 12 Monate)</SectionHeading>
       <div className="mb-4 flex gap-3">
         {[
           { label: "Einnahmen", color: GREEN },

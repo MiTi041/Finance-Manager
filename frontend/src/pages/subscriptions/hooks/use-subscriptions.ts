@@ -25,6 +25,7 @@ export interface Subscription {
   isCompany?: boolean;
   amount: number;
   refundAmount: number;
+  lastRefundAmount: number;
   effectiveAmount: number;
   frequency: SubscriptionFrequency;
   frequencyLabel: string;
@@ -35,6 +36,8 @@ export interface Subscription {
   transactionIds: number[];
   transactions: SubscriptionTransaction[];
   sequenztyp: string;
+  dismissed?: boolean;
+  subscriptionIdentityId?: number;
 }
 
 export interface SubscriptionIdentity {
@@ -68,6 +71,7 @@ export async function updateSubscriptionIdentity(
   payload: Partial<{
     displayName: string;
     zahlungspartnerId: number | null;
+    dismissed: boolean;
   }>,
 ): Promise<SubscriptionIdentity> {
   const response = await fetch(`${getApiBaseUrl()}/db/subscriptions/identities/${identityId}`, {
@@ -97,12 +101,16 @@ export function useSubscriptions() {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [includeDismissed, setIncludeDismissed] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${getApiBaseUrl()}/db/subscriptions`);
+      const url = includeDismissed
+        ? `${getApiBaseUrl()}/db/subscriptions?include_dismissed=true`
+        : `${getApiBaseUrl()}/db/subscriptions`;
+      const response = await fetch(url);
 
       const payload = await response.json();
       if (!response.ok) {
@@ -114,7 +122,7 @@ export function useSubscriptions() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [includeDismissed]);
 
   useEffect(() => {
     void load();
@@ -150,5 +158,7 @@ export function useSubscriptions() {
     grouped,
     reload: load,
     removeSubscription,
+    includeDismissed,
+    setIncludeDismissed,
   };
 }

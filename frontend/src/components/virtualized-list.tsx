@@ -191,6 +191,10 @@ export interface VirtualizedListProps<T> {
   /** Pass sort options to enable the sort dropdown in the toolbar */
   sortItems?: SortOption<T>[];
   onVisibleItemsChange?: (items: T[]) => void;
+  /** Override the visible item count shown in the footer */
+  displayCount?: number;
+  /** Override the total item count shown in the footer */
+  totalCount?: number;
 }
 
 function VirtualizedListInner<T>(
@@ -221,6 +225,8 @@ function VirtualizedListInner<T>(
     exportEntityName,
     sortItems,
     onVisibleItemsChange,
+    displayCount,
+    totalCount,
   }: VirtualizedListProps<T>,
   ref: React.Ref<VirtualizedListRef>,
 ) {
@@ -613,7 +619,9 @@ function VirtualizedListInner<T>(
               <span className="text-xs text-muted-foreground">Lädt…</span>
             ) : (
               <span className="text-xs text-muted-foreground whitespace-nowrap">
-                {visibleItems.length !== items.length ? (
+                {totalCount !== undefined ? (
+                  <><span className="font-medium text-foreground">{totalCount}</span> Zeilen</>
+                ) : visibleItems.length !== items.length ? (
                   <>
                     <span className="font-medium text-foreground">{visibleItems.length}</span>
                     {" von "}
@@ -621,10 +629,7 @@ function VirtualizedListInner<T>(
                     {" Zeilen"}
                   </>
                 ) : (
-                  <>
-                    <span className="font-medium text-foreground">{items.length}</span>
-                    {" Zeilen"}
-                  </>
+                  <><span className="font-medium text-foreground">{items.length}</span> Zeilen</>
                 )}
               </span>
             )}

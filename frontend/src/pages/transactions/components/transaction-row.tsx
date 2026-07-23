@@ -4,21 +4,26 @@ import {
   AlertCircle,
   Check,
   CircleAlert,
+  ExternalLink,
   Loader2,
   Pencil,
+  Plus,
   Repeat,
   Search,
   Sparkles,
   Trash2,
   TriangleAlert,
   Undo2,
+  X,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 
 import { BankLogo, BrandIcon } from "@/components/bank-logo";
+import { getServerBaseUrl } from "@/lib/bank/zahlungspartner-logo";
 import { Button } from "@/components/ui/button";
 import { CategoryCombobox } from "@/components/category-combobox";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { HelpButton } from "@/components/ui/help-button";
 import { SearchableSelect } from "@/components/searchable-select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -48,10 +53,21 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { extractHashtags, extractTagsFromPurpose, isTypingHashtag } from "../utils/tags";
 
+type SubscriptionOverride = {
+  name: string;
+  logoUrl?: string;
+  datenbankName?: string;
+  logoWhiteBackground?: boolean;
+  logoPadding?: boolean;
+  isCompany?: boolean;
+};
+
 type TransactionRowProps = {
   transaction: Transaction;
   isExpanded: boolean;
   isSubscriptionTransaction: boolean;
+  subscriptionOverride: SubscriptionOverride | null;
+  subscriptionLink: { counterpartyName: string; amount: number } | null;
   isUnassigned: boolean;
   isSelected: boolean;
   predictedCategoryId: number | null;
@@ -83,6 +99,8 @@ export function TransactionRow({
   transaction,
   isExpanded,
   isSubscriptionTransaction,
+  subscriptionOverride,
+  subscriptionLink,
   isUnassigned,
   isSelected,
   predictedCategoryId,
@@ -134,7 +152,25 @@ export function TransactionRow({
       .reduce((sum, t) => sum + Math.abs(t.betrag.wert), 0);
   }, [transaction, allTransactions]);
 
+  const linkedOriginalAmount = useMemo(() => {
+    if (!transaction.technisch.refundRefTransactionId) return 0;
+    const original = allTransactions.find(
+      (t) => t.id === transaction.technisch.refundRefTransactionId,
+    );
+    return original ? Math.abs(original.betrag.wert) : 0;
+  }, [transaction, allTransactions]);
+
+  const refundRemaining = useMemo(() => {
+    return Math.max(0, transaction.betrag.wert - linkedOriginalAmount);
+  }, [transaction.betrag.wert, linkedOriginalAmount]);
+
   const hasRefunds = linkedRefundTotal > 0;
+
+  const displayAmount = useMemo(() => {
+    if (isRefund) return refundRemaining;
+    if (hasRefunds) return Math.min(0, transaction.betrag.wert + linkedRefundTotal);
+    return transaction.betrag.wert;
+  }, [transaction, linkedOriginalAmount, linkedRefundTotal, isRefund, hasRefunds]);
   const showRefundSection =
     transaction.betrag.wert > 0 ||
     (transaction.betrag.wert < 0 &&
@@ -145,13 +181,23 @@ export function TransactionRow({
   const deviateApplicant = transaction.zahlungspartner.abweichenderAuftraggeberName || "";
 
   const partnerLogoSrc = transaction.zahlungspartner.logoUrl || undefined;
+  const overrideLogoSrc = subscriptionOverride?.logoUrl
+    ? subscriptionOverride.logoUrl.startsWith("/")
+      ? `${getServerBaseUrl()}${subscriptionOverride.logoUrl}`
+      : subscriptionOverride.logoUrl
+    : undefined;
   const isEntgeltabschluss =
+    transaction.texte.buchungstext &&
     (transaction.texte.buchungstext.toLowerCase() === "entgeltabschluss" ||
       transaction.texte.buchungstext.toLowerCase() === "abschluss") &&
     transaction.konto.blz === "48250110";
   const displayName = isEntgeltabschluss
     ? "Entgeltabschluss"
-    : transaction.zahlungspartner.datenbankName || transaction.zahlungspartner.name || "–";
+    : subscriptionOverride?.datenbankName || subscriptionOverride?.name || transaction.zahlungspartner.datenbankName || transaction.zahlungspartner.name || "–";
+  const overridePartnerName =
+    subscriptionOverride && transaction.zahlungspartner.name !== displayName
+      ? transaction.zahlungspartner.datenbankName || transaction.zahlungspartner.name
+      : null;
   const filteredCategoryOptions = categoryOptions;
 
   const isSaving = savingNote || savingSplits;
@@ -297,7 +343,7 @@ export function TransactionRow({
   const sign = transaction.betrag.wert < 0 ? -1 : 1;
   const absTotal = Math.abs(transaction.betrag.wert);
   const splitAbsSum = hasSplits ? splitDrafts.reduce((sum, s) => sum + Math.abs(s.betrag), 0) : 0;
-  const splitMatchesTotal = splitAbsSum === absTotal;
+  const splitMatchesTotal = Math.round(splitAbsSum * 100) === Math.round(absTotal * 100);
 
   const initFirstSplit = () => {
     const half = Math.round((absTotal / 2) * 100) / 100;
@@ -443,18 +489,22 @@ export function TransactionRow({
                 />
               ) : (
                 <BrandIcon
-                  src={partnerLogoSrc}
+                  src={overrideLogoSrc || partnerLogoSrc}
                   alt={
+                    subscriptionOverride?.datenbankName ||
+                    subscriptionOverride?.name ||
                     transaction.zahlungspartner.datenbankName ||
                     transaction.zahlungspartner.name ||
                     "Bank"
                   }
                   sizeClassName="size-12 shrink-0"
                   backgroundClassName={
-                    transaction.zahlungspartner.logoWhiteBackground ? "bg-white" : "bg-zinc-900"
+                    (subscriptionOverride?.logoWhiteBackground ?? transaction.zahlungspartner.logoWhiteBackground)
+                      ? "bg-white"
+                      : "bg-zinc-900"
                   }
-                  kind={transaction.zahlungspartner.isCompany ? "company" : "person"}
-                  imgNoPadding={!transaction.zahlungspartner.logoPadding}
+                  kind={(subscriptionOverride?.isCompany ?? transaction.zahlungspartner.isCompany) ? "company" : "person"}
+                  imgNoPadding={!(subscriptionOverride?.logoPadding ?? transaction.zahlungspartner.logoPadding)}
                 />
               )}
 
@@ -462,7 +512,11 @@ export function TransactionRow({
                 <div className="flex items-baseline gap-2">
                   <p className="truncate text-sm font-medium text-foreground flex gap-2 items-end">
                     {displayName}
-                    {displayName !== transaction.zahlungspartner.name ? (
+                    {overridePartnerName ? (
+                      <span className="text-xs text-muted-foreground">
+                        {overridePartnerName}
+                      </span>
+                    ) : displayName !== transaction.zahlungspartner.name ? (
                       <span className="text-xs text-muted-foreground">
                         {transaction.zahlungspartner.name}
                       </span>
@@ -522,43 +576,54 @@ export function TransactionRow({
               </span>
             ) : null}
             {isSubscriptionTransaction ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
-                <Repeat className="size-3" />
-                Abonnement
-              </span>
-            ) : null}
-            <span className="flex items-center gap-1.5">
-              {isRefund && (
+              subscriptionLink ? (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span className="flex items-center gap-0.5 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
-                      <Undo2 className="size-3" />
-                    </span>
+                    <Link
+                      to={`/subscriptions?name=${encodeURIComponent(subscriptionLink.counterpartyName)}&amount=${subscriptionLink.amount}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex items-center gap-1 rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-800/60 transition-colors"
+                    >
+                      <Repeat className="size-3" />
+                      Abonnement
+                      <ExternalLink className="size-2.5 opacity-60" />
+                    </Link>
                   </TooltipTrigger>
-                  <TooltipContent side="top">Rückerstattung</TooltipContent>
+                  <TooltipContent side="top">Abonnement-Details anzeigen</TooltipContent>
                 </Tooltip>
-              )}
-              {hasRefunds && (
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                  <Repeat className="size-3" />
+                  Abonnement
+                </span>
+              )
+            ) : null}
+            <span className="flex items-center gap-1.5">
+              {(isRefund || hasRefunds) && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400 tabular-nums">
+                      <Undo2 className="size-3" />
                       {formatAmount(
-                        transaction.betrag.wert + linkedRefundTotal,
+                        isRefund ? transaction.betrag.wert : linkedRefundTotal,
                         transaction.betrag.waehrung,
                       )}
                     </span>
                   </TooltipTrigger>
-                  <TooltipContent side="top">Nettopreis inkl. Rückerstattung</TooltipContent>
+                  <TooltipContent side="top">Rückerstattungsbetrag</TooltipContent>
                 </Tooltip>
               )}
               <span
                 className={
-                  transaction.betrag.wert < 0
+                  displayAmount < 0
                     ? "text-sm font-semibold tabular-nums text-destructive"
                     : "text-sm font-semibold tabular-nums text-green-600"
                 }
               >
-                {formatAmount(transaction.betrag.wert, transaction.betrag.waehrung)}
+                {formatAmount(
+                  displayAmount,
+                  transaction.betrag.waehrung,
+                )}
               </span>
             </span>
             <span
@@ -612,6 +677,29 @@ export function TransactionRow({
                       <span className="text-xs text-muted-foreground">{deviateApplicant}</span>
                     ) : null}
                   </p>
+                  {subscriptionOverride ? (
+                    <div className="mt-3 flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50/50 px-3 py-2 dark:border-blue-800 dark:bg-blue-950/30">
+                      <BrandIcon
+                        src={overrideLogoSrc}
+                        alt={subscriptionOverride.name}
+                        sizeClassName="size-8 shrink-0"
+                        backgroundClassName={subscriptionOverride.logoWhiteBackground ? "bg-white" : "bg-zinc-900"}
+                        kind={subscriptionOverride.isCompany ? "company" : "person"}
+                        imgNoPadding={!subscriptionOverride.logoPadding}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-medium text-foreground">
+                          {subscriptionOverride.name}
+                        </p>
+                        <div className="flex items-center gap-1">
+                          <p className="text-[10px] text-muted-foreground">via Abonnement</p>
+                          <HelpButton className="!size-3 !text-[8px]">
+                            <p>Diese Transaktion ist einem Abonnement zugeordnet. Der hier hinterlegte Name überschreibt den ursprünglichen Empfängernamen der Bank und wird stattdessen in der Übersicht angezeigt.</p>
+                          </HelpButton>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
 
                   {!transaction.zahlungspartner.iban &&
                     transaction.konto.blz == getINGBankBLZ() && (
@@ -699,8 +787,11 @@ export function TransactionRow({
                     ) : (
                       !isEntgeltabschluss && (
                         <>
-                          <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
+                          <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
                             Unbekannte IBAN
+                            <HelpButton className="!size-3 !text-[8px]">
+                              <p>Die IBAN dieses Zahlungspartners ist noch keinem Eintrag zugeordnet. Ordne sie einem bestehenden Zahlungspartner zu oder lege einen neuen an, damit die Transaktion korrekt in Analysen und Übersichten erscheint.</p>
+                            </HelpButton>
                           </p>
                           <div className="flex flex-col gap-4 ">
                             {/* Link to existing owner */}
@@ -832,11 +923,17 @@ export function TransactionRow({
                 </p>
 
                 {hasSplits ? (
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     {splitDrafts.map((split, index) => (
-                      <div key={index} className="flex items-center gap-2">
+                      <div
+                        key={index}
+                        className="flex items-center gap-2 rounded-lg bg-muted/30 p-2.5 transition-colors hover:bg-muted/50"
+                      >
+                        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted-foreground/10 text-[10px] font-medium text-muted-foreground/60 tabular-nums">
+                          {index + 1}
+                        </span>
                         <div className="relative w-24 shrink-0">
-                          <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground/40">
+                          <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground/40">
                             €
                           </span>
                           <input
@@ -846,7 +943,7 @@ export function TransactionRow({
                             value={Math.abs(split.betrag)}
                             onChange={(e) => handleSplitAmountChange(index, Number(e.target.value))}
                             onKeyDown={(e) => e.stopPropagation()}
-                            className="h-8 w-full rounded-md border border-input bg-background pl-6 pr-2 text-xs tabular-nums text-foreground shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                            className="h-10 w-full rounded-md border border-input bg-background pl-6 pr-2 text-xs tabular-nums text-foreground shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                           />
                         </div>
                         <CategoryCombobox
@@ -868,74 +965,86 @@ export function TransactionRow({
                           onKeyDown={(e) => e.stopPropagation()}
                           className={
                             split.kategorieId == null
-                              ? "h-8 flex-1 !border-orange-500/40 !bg-orange-500/10 hover:!bg-orange-700/10 text-xs text-orange-500 hover:!text-orange-500 shadow-none"
-                              : "h-8 flex-1 text-xs shadow-none"
+                              ? "h-10 flex-1 !border-orange-500/40 !bg-orange-500/10 hover:!bg-orange-700/10 text-xs text-orange-500 hover:!text-orange-500 shadow-none"
+                              : "h-10 flex-1 text-xs shadow-none"
                           }
                         />
                         <button
                           type="button"
                           onClick={() => handleRemoveSplit(index)}
-                          className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/40 hover:bg-destructive/10 hover:text-destructive"
+                          className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/30 transition-colors hover:bg-destructive/10 hover:text-destructive"
                         >
-                          <svg
-                            viewBox="0 0 24 24"
-                            className="size-3.5"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <path d="M18 6 6 18" />
-                            <path d="m6 6 12 12" />
-                          </svg>
+                          <X className="size-3.5" />
                         </button>
                       </div>
                     ))}
 
-                    <div className="flex items-center gap-2 pt-1">
-                      <div className="flex-1 h-px bg-border/40" />
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1">
+                        <div className={cn(
+                          "h-1.5 rounded-full transition-colors",
+                          splitAbsSum === 0 ? "bg-border/40" :
+                          splitMatchesTotal ? "bg-green-500/30" : "bg-destructive/30",
+                        )}>
+                          <div
+                            className={cn(
+                              "h-full rounded-full transition-all",
+                              splitAbsSum === 0 ? "w-0" :
+                              splitMatchesTotal ? "bg-green-500" : "bg-destructive",
+                            )}
+                            style={{ width: `${Math.min((splitAbsSum / absTotal) * 100, 100)}%` }}
+                          />
+                        </div>
+                      </div>
                       <span
-                        className={`text-xs tabular-nums ${
-                          splitMatchesTotal ? "text-green-600" : "text-destructive"
-                        }`}
+                        className={cn(
+                          "text-xs tabular-nums font-medium",
+                          splitMatchesTotal ? "text-green-600 dark:text-green-400" : "text-destructive",
+                        )}
                       >
-                        {formatAmount(splitAbsSum, transaction.betrag.waehrung)} /{" "}
+                        {formatAmount(splitAbsSum, transaction.betrag.waehrung)}
+                        <span className="text-muted-foreground/40 mx-0.5">/</span>
                         {formatAmount(absTotal, transaction.betrag.waehrung)}
-                        {splitMatchesTotal ? " ✓" : " ✗"}
+                        {splitMatchesTotal ? (
+                          <Check className="ml-1 inline size-3" />
+                        ) : (
+                          <span className="ml-1">✗</span>
+                        )}
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2 pt-1">
+                    <div className="flex items-center gap-2 pt-2">
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="h-7 text-xs"
+                        className="h-7 gap-1 text-xs"
                         onClick={handleAddSplit}
                       >
-                        + Split
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        onClick={handleRemoveAllSplits}
-                      >
-                        Splits entfernen
+                        <Plus className="size-3" />
+                        Split
                       </Button>
                       {splitsChanged && splitMatchesTotal && (
                         <Button
                           type="button"
                           size="sm"
-                          className="h-7 ml-auto text-xs"
+                          className="h-7 ml-auto gap-1 text-xs"
                           onClick={() => onSaveSplits(transaction.id, splitDrafts)}
                         >
-                          <Check className="mr-1 size-3" />
+                          <Check className="size-3" />
                           Speichern
                         </Button>
                       )}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 gap-1 text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                        onClick={handleRemoveAllSplits}
+                      >
+                        <Trash2 className="size-3" />
+                        Splits entfernen
+                      </Button>
                     </div>
                   </div>
                 ) : (
@@ -962,35 +1071,42 @@ export function TransactionRow({
                       }}
                       className={
                         currentCategoryId === null || currentCategoryId === undefined
-                          ? "h-8 w-full !border-orange-500/40 !bg-orange-500/10 hover:!bg-orange-700/10 text-xs text-orange-500 hover:!text-orange-500 shadow-none"
-                          : "h-8 w-full text-xs shadow-none"
+                          ? "h-10 w-full !border-orange-500/40 !bg-orange-500/10 hover:!bg-orange-700/10 text-xs text-orange-500 hover:!text-orange-500 shadow-none"
+                          : "h-10 w-full text-xs shadow-none"
                       }
                     />
 
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-7 w-full text-xs"
-                      onClick={initFirstSplit}
-                    >
-                      <svg
-                        viewBox="0 0 24 24"
-                        className="mr-1.5 size-3.5"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M22 12h-8" />
-                        <path d="M14 6v12" />
-                        <path d="M3 12h6" />
-                        <path d="M9 8v8" />
-                        <path d="M18 8.5V15" />
-                      </svg>
-                      Aufteilen
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-10 gap-1.5 border-dashed border-muted-foreground/30 text-xs text-muted-foreground hover:border-violet-400/50 hover:text-violet-600 dark:hover:border-violet-500/50 dark:hover:text-violet-400"
+                          onClick={initFirstSplit}
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            className="size-3.5"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M22 12h-8" />
+                            <path d="M14 6v12" />
+                            <path d="M3 12h6" />
+                            <path d="M9 8v8" />
+                            <path d="M18 8.5V15" />
+                          </svg>
+                          Aufteilen
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-[240px] text-xs">
+                        Teilt eine Buchung auf mehrere Kategorien auf – z. B. Lebensmittel und Drogerie bei einem Einkauf.
+                      </TooltipContent>
+                    </Tooltip>
 
                     <style>{`
                         .ai-icon-glow::after {
@@ -1253,34 +1369,49 @@ function RefundSectionIncoming({
         Diese Gutschrift ist eine Rückerstattung für
       </p>
       {linkedTransaction ? (
-        <div className="flex items-center justify-between gap-2 text-sm">
-          <span className="min-w-0 truncate text-muted-foreground">
-            <span className="font-medium text-foreground">
-              {linkedTransaction.zahlungspartner.datenbankName ||
-                linkedTransaction.zahlungspartner.name ||
-                "–"}
-            </span>
-            <span>
-              {" · "}
-              {formatDate(linkedTransaction.daten.buchungsdatum)}
-            </span>
-            <span className="tabular-nums text-red-500">
-              {" · "}
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-muted/30 px-3 py-2.5">
+          <div className="flex items-center gap-3 min-w-0">
+            <BrandIcon
+              src={linkedTransaction.zahlungspartner.logoUrl || undefined}
+              alt={linkedTransaction.zahlungspartner.datenbankName || linkedTransaction.zahlungspartner.name || "?"}
+              sizeClassName="size-8 shrink-0"
+              backgroundClassName={linkedTransaction.zahlungspartner.logoWhiteBackground ? "bg-white" : "bg-zinc-900"}
+              kind={linkedTransaction.zahlungspartner.isCompany ? "company" : "person"}
+              imgNoPadding={!linkedTransaction.zahlungspartner.logoPadding}
+            />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-foreground">
+                {linkedTransaction.zahlungspartner.datenbankName ||
+                  linkedTransaction.zahlungspartner.name ||
+                  "–"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {formatDate(linkedTransaction.daten.buchungsdatum)}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="rounded-md bg-red-500/10 px-2 py-1 text-xs font-medium tabular-nums text-red-500">
               {formatAmount(Math.abs(linkedTransaction.betrag.wert), linkedTransaction.betrag.waehrung)}
             </span>
-          </span>
-          <button
-            type="button"
-            disabled={linkingId !== null}
-            onClick={() => void handleUnlink()}
-            className="shrink-0 text-xs text-destructive underline-offset-2 hover:underline disabled:opacity-50"
-          >
-            {linkingId === transaction.id ? (
-              <Loader2 className="size-3 animate-spin" />
-            ) : (
-              "Entfernen"
-            )}
-          </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  disabled={linkingId !== null}
+                  onClick={() => void handleUnlink()}
+                  className="flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                >
+                  {linkingId === transaction.id ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="size-3.5" />
+                  )}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Verknüpfung entfernen</TooltipContent>
+            </Tooltip>
+          </div>
         </div>
       ) : (
         <Button
@@ -1288,7 +1419,7 @@ function RefundSectionIncoming({
           variant="outline"
           size="sm"
           onClick={() => setDialogOpen(true)}
-          className="flex w-full justify-start gap-2 shadow-none h-8 text-muted-foreground font-normal"
+          className="flex w-full justify-start gap-2 shadow-none h-9 text-muted-foreground font-normal hover:text-foreground"
         >
           <Search className="size-3.5 shrink-0 opacity-50" />
           <span>Ausgehende Zahlung auswählen …</span>
@@ -1311,9 +1442,10 @@ function RefundSectionIncoming({
                 {outgoingList.map((t) => (
                   <CommandItem
                     key={t.id}
-                    value={`${t.zahlungspartner.name || ""} ${formatAmount(Math.abs(t.betrag.wert), t.betrag.waehrung)} ${formatDate(t.daten.buchungsdatum)}`}
+                    value={`${t.id}-${t.zahlungspartner.name || ""} ${formatAmount(Math.abs(t.betrag.wert), t.betrag.waehrung)} ${formatDate(t.daten.buchungsdatum)}`}
                     onSelect={() => void handleLink(t.id)}
                     disabled={linkingId === t.id}
+                    className="cursor-pointer"
                   >
                     <BrandIcon
                       src={t.zahlungspartner.logoUrl || undefined}
@@ -1382,37 +1514,52 @@ function RefundSectionOutgoing({
       <p className="mb-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
         Rückerstattungen für diese Ausgabe
       </p>
-      <div className="space-y-1">
+      <div className="space-y-1.5">
         {refundTransactions.map((refund) => (
           <div
             key={refund.id}
-            className="flex items-center justify-between gap-2 text-sm"
+            className="flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-muted/30 px-3 py-2.5"
           >
-            <span className="min-w-0 truncate text-muted-foreground">
-              <span className="font-medium text-foreground">
-                {refund.zahlungspartner.datenbankName || refund.zahlungspartner.name || "–"}
-              </span>
-              <span>
-                {" · "}
-                {formatDate(refund.daten.buchungsdatum)}
-              </span>
-              <span className="tabular-nums text-green-500">
-                {" · "}
+            <div className="flex items-center gap-3 min-w-0">
+              <BrandIcon
+                src={refund.zahlungspartner.logoUrl || undefined}
+                alt={refund.zahlungspartner.datenbankName || refund.zahlungspartner.name || "?"}
+                sizeClassName="size-8 shrink-0"
+                backgroundClassName={refund.zahlungspartner.logoWhiteBackground ? "bg-white" : "bg-zinc-900"}
+                kind={refund.zahlungspartner.isCompany ? "company" : "person"}
+                imgNoPadding={!refund.zahlungspartner.logoPadding}
+              />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-foreground">
+                  {refund.zahlungspartner.datenbankName || refund.zahlungspartner.name || "–"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {formatDate(refund.daten.buchungsdatum)}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="rounded-md bg-green-500/10 px-2 py-1 text-xs font-medium tabular-nums text-green-500">
                 +{formatAmount(Math.abs(refund.betrag.wert), refund.betrag.waehrung)}
               </span>
-            </span>
-            <button
-              type="button"
-              disabled={unlinkingId !== null}
-              onClick={() => void handleUnlink(refund.id)}
-              className="shrink-0 text-xs text-destructive underline-offset-2 hover:underline disabled:opacity-50"
-            >
-              {unlinkingId === refund.id ? (
-                <Loader2 className="size-3 animate-spin" />
-              ) : (
-                "Entfernen"
-              )}
-            </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    disabled={unlinkingId !== null}
+                    onClick={() => void handleUnlink(refund.id)}
+                    className="flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                  >
+                    {unlinkingId === refund.id ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="size-3.5" />
+                    )}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Verknüpfung entfernen</TooltipContent>
+              </Tooltip>
+            </div>
           </div>
         ))}
       </div>

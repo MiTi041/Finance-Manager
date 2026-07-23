@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, Trash2 } from "lucide-react";
+import { HelpButton } from "@/components/ui/help-button";
 import { type ZahlungspartnerRecord } from "@/lib/zahlungspartner";
 
 type OwnerFormState = {
@@ -151,10 +152,13 @@ export function ZahlungspartnerForm({
 
                 <div className="flex flex-col gap-2">
                   <label
-                    className="text-sm font-medium"
+                    className="flex items-center gap-1.5 text-sm font-medium"
                     htmlFor={`owner-logo-background-${owner.id}`}
                   >
                     Logo-Hintergrund
+                    <HelpButton className="!size-3 !text-[8px]">
+                      <p>Legt fest, ob ein heller oder dunkler Hintergrund hinter transparenten Logos angezeigt wird. Wähle „Hell" für Logos mit dunklen Farben und „Dunkel" für helle Logos.</p>
+                    </HelpButton>
                   </label>
                   <Select
                     value={form.logo_white_background ? "white" : "dark"}
@@ -180,10 +184,13 @@ export function ZahlungspartnerForm({
 
                 <div className="flex flex-col gap-2">
                   <label
-                    className="text-sm font-medium"
+                    className="flex items-center gap-1.5 text-sm font-medium"
                     htmlFor={`owner-logo-padding-${owner.id}`}
                   >
                     Logo-Padding
+                    <HelpButton className="!size-3 !text-[8px]">
+                      <p>Fügt einen Innenabstand um das Logo hinzu. Aktivieren, wenn das Logo zu groß ist oder bis zum Rand des Logofelds reicht.</p>
+                    </HelpButton>
                   </label>
                   <Select
                     value={form.logo_padding ? "true" : "false"}

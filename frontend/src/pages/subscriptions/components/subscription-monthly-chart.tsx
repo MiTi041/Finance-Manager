@@ -26,21 +26,40 @@ type DataPoint = {
 };
 
 function buildMonthlySubscriptionSpending(subscriptions: Subscription[]): DataPoint[] {
+  const now = new Date();
+  const currentMonth = format(now, "yyyy-MM");
+
   const months: Record<string, number> = {};
+
   for (const sub of subscriptions) {
     for (const tx of sub.transactions) {
       const key = format(new Date(tx.date), "yyyy-MM");
       months[key] = (months[key] ?? 0) + Math.abs(tx.amount);
     }
+
+    const nextKey = format(new Date(sub.nextDate), "yyyy-MM");
+    if (nextKey === currentMonth) {
+      const paidThisMonth = sub.transactions.some(
+        (tx) => format(new Date(tx.date), "yyyy-MM") === nextKey,
+      );
+      if (!paidThisMonth) {
+        months[nextKey] = (months[nextKey] ?? 0) + sub.effectiveAmount;
+      }
+    }
   }
-  return Object.entries(months)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .slice(-24)
-    .map(([key, total]) => ({
-      month: format(new Date(key + "-01"), "MMM", { locale: de }),
-      fullLabel: format(new Date(key + "-01"), "MMM yyyy", { locale: de }),
-      ausgaben: Math.round(total),
-    }));
+
+  const start = new Date(now.getFullYear(), now.getMonth() - 23, 1);
+  const result: DataPoint[] = [];
+  for (let i = 0; i < 24; i++) {
+    const d = new Date(start.getFullYear(), start.getMonth() + i, 1);
+    const key = format(d, "yyyy-MM");
+    result.push({
+      month: format(d, "MMM", { locale: de }),
+      fullLabel: format(d, "MMM yyyy", { locale: de }),
+      ausgaben: months[key] ?? 0,
+    });
+  }
+  return result;
 }
 
 function ChartTooltip({ active, payload, label }: any) {
@@ -81,7 +100,8 @@ export function SubscriptionMonthlyChart({ subscriptions }: Props) {
           >
             <CartesianGrid stroke={SUBTLE} strokeDasharray="3 3" vertical={false} />
             <XAxis
-              dataKey="month"
+              dataKey="fullLabel"
+              tickFormatter={(val) => val.split(" ")[0].slice(0, 3)}
               tick={{ fill: MUTED, fontSize: 11 }}
               tickLine={false}
               axisLine={false}

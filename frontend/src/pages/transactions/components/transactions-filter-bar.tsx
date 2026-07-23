@@ -98,7 +98,7 @@ export function TransactionsFilterBar({
         </Button>
       }
 
-      {deletedBankCount > 0 && (
+      {(deletedBankCount > 0 || showDeletedBanks) && (
         <Button
           type="button"
           variant="ghost"
