@@ -75,9 +75,6 @@ export function SyncTab() {
   if (status?.configured) {
     return (
       <Card className="py-6">
-        <CardHeader>
-          <CardTitle>Status</CardTitle>
-        </CardHeader>
         <CardContent className="space-y-2">
           <p>Status: {status.running ? "Aktiv" : "Gestoppt"}</p>
           <p>
