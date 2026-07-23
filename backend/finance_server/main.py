@@ -19,6 +19,7 @@ from finance_server.api.subscriptions import router as subscriptions_router
 from finance_server.api.subscription_identities import router as subscription_identities_router
 from finance_server.api.receipts import router as receipts_router
 from finance_server.api.analytics import router as analytics_router
+from finance_server.api.sync import router as sync_router
 from finance_server.services.sync_service import SyncService
 
 # .env laden
@@ -78,6 +79,7 @@ app.include_router(subscriptions_router, prefix="/api")
 app.include_router(subscription_identities_router, prefix="/api")
 app.include_router(receipts_router, prefix="/api")
 app.include_router(analytics_router, prefix="/api")
+app.include_router(sync_router, prefix="/api")
 
 
 @app.get("/health")
