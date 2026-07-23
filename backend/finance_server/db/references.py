@@ -17,7 +17,7 @@ from .utils import normalize_text
 
 def _log(table_name: str, row_id: int | None, op_type: str, data: Any = None) -> None:
     from finance_server.services.sync_logger import log_crud_event
-    log_crud_event(table_name, row_id, op_type, data)
+    _log(table_name, row_id, op_type, data)
 
 
 def _coerce_bool(value: Any, default: bool = True) -> int:

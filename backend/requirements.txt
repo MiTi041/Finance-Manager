@@ -10,3 +10,4 @@ scikit-learn
 easyocr
 Pillow
 boto3
+pytest

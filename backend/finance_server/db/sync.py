@@ -69,6 +69,14 @@ def get_pending_ops(last_pushed_id: int = 0, limit: int = 100) -> list[dict[str,
 
 VALID_SYNC_TABLES = {"kategorien", "umsaetze", "zahlungspartner", "empfaengerkonten", "subscription_identities"}
 
+VALID_SYNC_COLUMNS: dict[str, set[str]] = {
+    "kategorien": {"id", "name", "typ", "parent_id", "personal_expense", "icon", "updated_at"},
+    "umsaetze": {"id", "kategorie", "note", "splits", "refund_ref_transaction_id", "updated_at"},
+    "zahlungspartner": {"id", "name", "website", "logo_url", "local_logo_path", "is_company", "logo_white_background", "logo_padding", "updated_at"},
+    "empfaengerkonten": {"id", "account_name", "iban", "bic", "recipient_name", "is_donation_account", "updated_at"},
+    "subscription_identities": {"id", "counterparty_name", "amount", "display_name", "f_zahlungspartner_id", "dismissed", "updated_at"},
+}
+
 
 def apply_sync_op(op: dict[str, Any]) -> bool:
     table = op["table_name"]
@@ -86,9 +94,14 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
         if not data:
             return False
 
-        columns = [k for k in data.keys() if k != "id"]
+        valid_cols = VALID_SYNC_COLUMNS.get(table, set())
+        filtered_data = {k: v for k, v in data.items() if k in valid_cols}
+        if not filtered_data or "id" not in filtered_data:
+            return False
+
+        columns = [k for k in filtered_data.keys() if k != "id"]
         placeholders = [f"{k} = ?" for k in columns]
-        values = [data[k] for k in columns]
+        values = [filtered_data[k] for k in columns]
 
         existing = connection.execute(
             f"SELECT updated_at FROM {table} WHERE id = ?", (row_id,)

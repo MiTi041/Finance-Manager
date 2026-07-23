@@ -7,7 +7,7 @@ from finance_server.core.database import get_connection
 
 def _log(table_name: str, row_id: int | None, op_type: str, data: Any = None) -> None:
     from finance_server.services.sync_logger import log_crud_event
-    _log(table_name, row_id, op_type, data)
+    log_crud_event(table_name, row_id, op_type, data)
 
 
 def _serialize_row(row: Any) -> dict[str, Any]:

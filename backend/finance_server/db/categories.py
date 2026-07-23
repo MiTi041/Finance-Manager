@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 from finance_server.core.database import get_connection
@@ -9,7 +10,7 @@ from .utils import normalize_text
 
 def _log(table_name: str, row_id: int | None, op_type: str, data: Any = None) -> None:
     from finance_server.services.sync_logger import log_crud_event
-    log_crud_event(table_name, row_id, op_type, data)
+    _log(table_name, row_id, op_type, data)
 
 
 def _serialize_category_row(row: Any) -> dict[str, Any]:
@@ -255,7 +256,7 @@ def update_transaction_category(transaction_id: int, category_id: int | None) ->
             (category_id, transaction_id),
         )
 
-    _log("umsaetze", transaction_id, "UPDATE", {"id": transaction_id, "kategorie": category_id})
+    _log("umsaetze", transaction_id, "UPDATE", {"id": transaction_id, "kategorie": category_id, "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat()})
 
 
 def update_transactions_category_batch(transaction_ids: list[int], category_id: int | None) -> int:

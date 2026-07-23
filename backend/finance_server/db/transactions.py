@@ -12,7 +12,7 @@ from .utils import build_transaction_hash, normalize_local_amount, normalize_tex
 
 def _log(table_name: str, row_id: int | None, op_type: str, data: Any = None) -> None:
     from finance_server.services.sync_logger import log_crud_event
-    _log(table_name, row_id, op_type, data)
+    log_crud_event(table_name, row_id, op_type, data)
 
 
 def to_row_payload(tx: dict[str, Any]) -> dict[str, Any]:
@@ -300,7 +300,7 @@ def update_transaction_note(transaction_id: int, note: str | None) -> bool:
             (stored_note, transaction_id),
         )
         result = cursor.rowcount > 0
-        _log("umsaetze", transaction_id, "UPDATE", {"id": transaction_id, "note": note})
+        _log("umsaetze", transaction_id, "UPDATE", {"id": transaction_id, "note": note, "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat()})
         return result
 
 
@@ -313,7 +313,7 @@ def update_transaction_splits(transaction_id: int, splits: list[dict[str, Any]] 
             (stored_splits, transaction_id),
         )
         result = cursor.rowcount > 0
-        _log("umsaetze", transaction_id, "UPDATE", {"id": transaction_id, "splits": splits})
+        _log("umsaetze", transaction_id, "UPDATE", {"id": transaction_id, "splits": splits, "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat()})
         return result
 
 
@@ -324,5 +324,5 @@ def update_transaction_refund_link(transaction_id: int, refund_ref_transaction_i
             (refund_ref_transaction_id, transaction_id),
         )
         result = cursor.rowcount > 0
-        _log("umsaetze", transaction_id, "UPDATE", {"id": transaction_id, "refund_ref_transaction_id": refund_ref_transaction_id})
+        _log("umsaetze", transaction_id, "UPDATE", {"id": transaction_id, "refund_ref_transaction_id": refund_ref_transaction_id, "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat()})
         return result
