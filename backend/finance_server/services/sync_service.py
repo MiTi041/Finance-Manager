@@ -1,15 +1,11 @@
 from __future__ import annotations
 
-import hashlib
-import json
 import logging
 import threading
-import time
 from typing import Any
 
 from cryptography.fernet import Fernet
 
-from finance_server.core.config import settings
 from finance_server.core.paths import get_credentials_key_path
 from finance_server.db.settings import get_setting, set_setting
 from finance_server.db.sync import (
@@ -36,7 +32,7 @@ def _get_sync_fernet() -> Fernet:
 
 def save_sync_key(password: str) -> str:
     key, key_id = derive_key(password)
-    encrypted = _get_sync_fernet().encrypt(key)
+    encrypted = _get_sync_fernet().encrypt(key).decode("utf-8")
     set_setting("sync_encrypted_key", encrypted)
     set_setting("sync_key_id", key_id)
     return key_id
