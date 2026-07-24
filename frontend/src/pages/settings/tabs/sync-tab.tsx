@@ -322,9 +322,6 @@ export function SyncTab() {
       refresh();
       setJustSynced(true);
       setTimeout(() => setJustSynced(false), 2500);
-      if (status && status.pending_push > 0) {
-        startPoll("Synchronisation", "Synchronisation gestartet …");
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sync fehlgeschlagen");
     } finally {
