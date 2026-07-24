@@ -13,6 +13,7 @@ from finance_server.db.sync import (
     get_sync_state,
     set_sync_state,
     count_pending_ops,
+    get_all_remote_seqs,
 )
 from finance_server.services.r2_client import R2Client
 from finance_server.services.sync_crypto import derive_key, encrypt_batch, decrypt_batch, encrypt_dict, decrypt_dict
@@ -128,6 +129,7 @@ class SyncService:
         )
         self._sync_key = key
         self._last_pushed_id = int(get_sync_state("last_pushed_id") or "0")
+        self._remote_seqs = get_all_remote_seqs()
         self._stop_event.clear()
 
         self._thread = threading.Thread(target=self._run_loop, daemon=True, name="sync-service")

@@ -147,11 +147,6 @@ def bootstrap_sync_ops() -> int:
                 row_dict = dict(row)
                 log_sync_op(table, row_dict[pk], "INSERT", row_dict)
                 ops_count += 1
-        last = connection.execute(
-            "SELECT COALESCE(MAX(id), 0) FROM sync_ops"
-        ).fetchone()[0]
-        if last:
-            set_sync_state("last_pushed_id", str(last))
     return ops_count
 
 
@@ -169,6 +164,21 @@ def get_sync_state(key: str) -> str | None:
             "SELECT value FROM sync_state WHERE key = ?", (key,)
         ).fetchone()
     return row["value"] if row else None
+
+
+def get_all_remote_seqs() -> dict[str, int]:
+    seqs: dict[str, int] = {}
+    with get_connection() as connection:
+        rows = connection.execute(
+            "SELECT key, value FROM sync_state WHERE key LIKE 'remote_%_seq'"
+        ).fetchall()
+    for row in rows:
+        remote_id = row["key"].replace("remote_", "").replace("_seq", "")
+        try:
+            seqs[remote_id] = int(row["value"])
+        except (ValueError, TypeError):
+            continue
+    return seqs
 
 
 def set_sync_state(key: str, value: str) -> None:

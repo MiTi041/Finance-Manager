@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import {
   Cloud,
   CloudOff,
@@ -40,6 +41,14 @@ function relativeTime(iso: string | null): string {
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `Vor ${hours} Std.`;
   return `Vor ${Math.floor(hours / 24)} Tagen`;
+}
+
+function formatEta(ms: number): string {
+  if (ms < 2000) return "Gleich fertig";
+  const s = Math.ceil(ms / 1000);
+  if (s < 60) return `Ca. ${s} Sekunden`;
+  const m = Math.ceil(s / 60);
+  return m === 1 ? "Ca. 1 Minute" : `Ca. ${m} Minuten`;
 }
 
 function absoluteTime(iso: string | null): string {
@@ -173,17 +182,63 @@ export function SyncTab() {
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pollMsg, setPollMsg] = useState<string | null>(null);
+  const [pollTitle, setPollTitle] = useState("Sync wird eingerichtet");
+  const [progress, setProgress] = useState<number | null>(null);
+  const [etaText, setEtaText] = useState<string | null>(null);
   const [confirmingClear, setConfirmingClear] = useState(false);
   const [justSynced, setJustSynced] = useState(false);
 
   const pollCleanup = useRef<(() => void) | null>(null);
+  const initialPendingRef = useRef<number | null>(null);
+  const startTimeRef = useRef<number>(0);
 
-  const startPoll = () => {
-    setPollMsg("Verbinde mit Cloudflare R2 …");
+  const startPoll = (
+    title = "Sync wird eingerichtet",
+    initialMsg = "Verbinde mit Cloudflare R2 …",
+  ) => {
+    pollCleanup.current?.();
+    setPollTitle(title);
+    setPollMsg(initialMsg);
+    setProgress(null);
+    setEtaText(null);
+    initialPendingRef.current = null;
+    startTimeRef.current = Date.now();
+
     pollCleanup.current = pollSyncStatus(
       2000,
       (s) => {
         setStatus(s);
+
+        if (initialPendingRef.current === null) {
+          if (s.pending_push > 0) {
+            initialPendingRef.current = s.pending_push;
+          } else {
+            setProgress(100);
+            setEtaText(null);
+          }
+        }
+
+        if (initialPendingRef.current !== null) {
+          const total = initialPendingRef.current;
+          const remaining = s.pending_push;
+          const done = Math.max(0, total - remaining);
+          const pct = Math.min((done / total) * 100, 100);
+          setProgress(pct);
+
+          if (remaining > 0 && done > 0) {
+            const elapsed = Date.now() - startTimeRef.current;
+            if (elapsed > 2000) {
+              const ratePerMs = done / elapsed;
+              const remainingMs = remaining / ratePerMs;
+              setEtaText(formatEta(remainingMs));
+            } else {
+              setEtaText(null);
+            }
+          } else {
+            setEtaText(null);
+          }
+        }
+
         setPollMsg(
           s.pending_push > 0
             ? `${s.pending_push} Änderung${s.pending_push === 1 ? "" : "en"} werden übertragen …`
@@ -267,6 +322,9 @@ export function SyncTab() {
       refresh();
       setJustSynced(true);
       setTimeout(() => setJustSynced(false), 2500);
+      if (status && status.pending_push > 0) {
+        startPoll("Synchronisation", "Synchronisation gestartet …");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sync fehlgeschlagen");
     } finally {
@@ -292,18 +350,34 @@ export function SyncTab() {
   // Connecting / initial sync in progress
   // ---------------------------------------------------------------------
   if (pollMsg) {
+    const isComplete = progress === 100;
     return (
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden py-6">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Cloud className="size-4 animate-pulse text-primary" />
-            Sync wird eingerichtet
+            {pollTitle}
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-3 rounded-lg border bg-muted/30 px-4 py-4">
-            <div className="size-5 shrink-0 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-            <span className="text-sm text-muted-foreground">{pollMsg}</span>
+          <div className="flex flex-col gap-4 rounded-lg border bg-muted/30 px-4 py-4">
+            <div className="flex items-center gap-3">
+              {isComplete ? (
+                <Check className="size-5 shrink-0 text-green-600" />
+              ) : (
+                <div className="size-5 shrink-0 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              )}
+              <span className="text-sm text-muted-foreground">{pollMsg}</span>
+            </div>
+            {progress !== null && (
+              <div className="space-y-1.5">
+                <Progress value={progress} />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>{Math.round(progress)}%</span>
+                  {etaText && <span>{etaText}</span>}
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

@@ -394,7 +394,7 @@ def initialize_database(connection: sqlite3.Connection) -> None:
         connection,
         "kategorien",
         {
-            "updated_at": "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP",
+            "updated_at": "TEXT",
         },
     )
 
@@ -402,7 +402,7 @@ def initialize_database(connection: sqlite3.Connection) -> None:
         connection,
         "zahlungspartner",
         {
-            "updated_at": "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP",
+            "updated_at": "TEXT",
         },
     )
 
@@ -410,6 +410,6 @@ def initialize_database(connection: sqlite3.Connection) -> None:
         connection,
         "umsaetze",
         {
-            "updated_at": "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP",
+            "updated_at": "TEXT",
         },
     )
