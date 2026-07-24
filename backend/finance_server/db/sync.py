@@ -67,7 +67,7 @@ def get_pending_ops(last_pushed_id: int = 0, limit: int = 100) -> list[dict[str,
     return [dict(row) for row in rows]
 
 
-VALID_SYNC_TABLES = {"kategorien", "umsaetze", "zahlungspartner", "empfaengerkonten", "subscription_identities"}
+VALID_SYNC_TABLES = {"kategorien", "umsaetze", "zahlungspartner", "empfaengerkonten", "subscription_identities", "ibans"}
 
 VALID_SYNC_COLUMNS: dict[str, set[str]] = {
     "kategorien": {"id", "name", "typ", "parent_id", "personal_expense", "icon", "updated_at"},
@@ -75,6 +75,7 @@ VALID_SYNC_COLUMNS: dict[str, set[str]] = {
     "zahlungspartner": {"id", "name", "website", "logo_url", "local_logo_path", "is_company", "logo_white_background", "logo_padding", "updated_at"},
     "empfaengerkonten": {"id", "account_name", "iban", "bic", "recipient_name", "is_donation_account", "updated_at"},
     "subscription_identities": {"id", "counterparty_name", "amount", "display_name", "f_zahlungspartner_id", "dismissed", "updated_at"},
+    "ibans": {"id", "iban", "f_zahlungspartner_id"},
 }
 
 
@@ -87,6 +88,7 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
         return False
 
     with get_connection() as connection:
+        connection.execute("PRAGMA foreign_keys = OFF")
         if op_type == "DELETE":
             cursor = connection.execute(f"DELETE FROM {table} WHERE id = ?", (row_id,))
             return cursor.rowcount > 0
@@ -122,6 +124,28 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
             sql = f"INSERT OR IGNORE INTO {table} ({', '.join(all_columns)}) VALUES ({', '.join(all_placeholders)})"
             cursor = connection.execute(sql, all_values)
         return cursor.rowcount > 0
+
+
+def bootstrap_sync_ops() -> int:
+    ops_count = 0
+    with get_connection() as connection:
+        for table in sorted(VALID_SYNC_TABLES):
+            cols = sorted(VALID_SYNC_COLUMNS.get(table, set()))
+            cols_with_id = ["id"] + [c for c in cols if c != "id"]
+            if not cols_with_id:
+                continue
+            col_list = ", ".join(cols_with_id)
+            rows = connection.execute(f"SELECT {col_list} FROM {table} ORDER BY id").fetchall()
+            for row in rows:
+                row_dict = dict(row)
+                log_sync_op(table, row_dict["id"], "INSERT", row_dict)
+                ops_count += 1
+        last = connection.execute(
+            "SELECT COALESCE(MAX(id), 0) FROM sync_ops"
+        ).fetchone()[0]
+        if last:
+            set_sync_state("last_pushed_id", str(last))
+    return ops_count
 
 
 def get_sync_state(key: str) -> str | None:

@@ -3,13 +3,16 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from starlette import status
 
-from finance_server.models.sync_models import SyncSetupRequest, SyncStatusResponse
+from finance_server.models.sync_models import SyncRecoverRequest, SyncSetupRequest, SyncStatusResponse
 from finance_server.services.sync_service import (
     SyncService,
     save_sync_key,
     save_r2_config,
     load_r2_config,
+    save_r2_recovery_bundle,
+    recover_r2_config,
 )
+from finance_server.db.sync import bootstrap_sync_ops
 
 router = APIRouter(tags=["sync"])
 
@@ -48,10 +51,31 @@ def sync_setup(
         bucket=request.r2_bucket,
     )
 
+    bootstrap_sync_ops()
+    save_r2_recovery_bundle(request.password)
+
     service.stop()
     service.start()
 
     return {"status": "ok", "key_id": key_id}
+
+
+@router.post("/sync/recover")
+def sync_recover(
+    request: SyncRecoverRequest,
+    service: SyncService = Depends(get_sync_service),
+) -> dict[str, str]:
+    if service.is_configured():
+        raise HTTPException(status_code=409, detail="Sync bereits konfiguriert")
+
+    config = recover_r2_config(request.password)
+    if not config:
+        raise HTTPException(status_code=400, detail="R2-Konfiguration konnte nicht wiederhergestellt werden. Sync bitte vollständig neu einrichten.")
+
+    service.stop()
+    service.start()
+
+    return {"status": "ok"}
 
 
 @router.post("/sync/trigger")

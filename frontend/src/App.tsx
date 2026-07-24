@@ -6,6 +6,7 @@ import NotFoundPage from "@/pages/not-found";
 import { AutoUpdateToast } from "@/components/auto-update-toast";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { ProductIdSetup, hasProductId } from "@/components/product-id-setup";
+import { SyncSetupWizard, hasSyncSkip } from "@/components/sync-setup-wizard";
 
 const DashboardPage = lazy(() => import("@/pages/dashboard/dashboard-page"));
 const TransactionsPage = lazy(() => import("@/pages/transactions/transactions-page"));
@@ -18,6 +19,7 @@ const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8112/api";
 
 export default function App() {
   const [setupDone, setSetupDone] = useState<boolean | null>(null);
+  const [syncDone, setSyncDone] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (hasProductId()) {
@@ -33,9 +35,12 @@ export default function App() {
   }, []);
 
   if (setupDone === null) return null;
-
   if (!setupDone) {
     return <ProductIdSetup onComplete={() => setSetupDone(true)} />;
+  }
+
+  if (syncDone === null && !hasSyncSkip()) {
+    return <SyncSetupWizard onComplete={() => setSyncDone(true)} />;
   }
 
   return (

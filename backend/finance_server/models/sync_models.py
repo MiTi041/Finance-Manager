@@ -11,6 +11,10 @@ class SyncSetupRequest(BaseModel):
     r2_bucket: str = "finance-sync"
 
 
+class SyncRecoverRequest(BaseModel):
+    password: str = Field(..., min_length=8, description="Sync-Passwort")
+
+
 class SyncStatusResponse(BaseModel):
     configured: bool
     running: bool

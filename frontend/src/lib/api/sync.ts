@@ -39,3 +39,12 @@ export async function clearSync(): Promise<void> {
   const response = await fetch(`${getApiBaseUrl()}/sync/config`, { method: "DELETE" });
   await parseJsonResponse(response);
 }
+
+export async function recoverSync(password: string): Promise<void> {
+  const response = await fetch(`${getApiBaseUrl()}/sync/recover`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
+  await parseJsonResponse(response);
+}

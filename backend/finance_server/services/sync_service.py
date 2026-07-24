@@ -4,9 +4,7 @@ import logging
 import threading
 from typing import Any
 
-from cryptography.fernet import Fernet
-
-from finance_server.core.paths import get_credentials_key_path
+from finance_server.db.credentials import get_credentials_fernet
 from finance_server.db.settings import get_setting, set_setting
 from finance_server.db.sync import (
     get_or_create_device_id,
@@ -16,23 +14,16 @@ from finance_server.db.sync import (
     set_sync_state,
 )
 from finance_server.services.r2_client import R2Client
-from finance_server.services.sync_crypto import derive_key, encrypt_batch, decrypt_batch
+from finance_server.services.sync_crypto import derive_key, encrypt_batch, decrypt_batch, encrypt_dict, decrypt_dict
 
 logger = logging.getLogger(__name__)
-
 SYNC_INTERVAL = 30
-
-
-def _get_sync_fernet() -> Fernet:
-    key_path = get_credentials_key_path()
-    if not key_path.exists():
-        raise RuntimeError("Credentials key not found — app not initialized")
-    return Fernet(key_path.read_bytes().strip())
 
 
 def save_sync_key(password: str) -> str:
     key, key_id = derive_key(password)
-    encrypted = _get_sync_fernet().encrypt(key).decode("utf-8")
+    fernet = get_credentials_fernet()
+    encrypted = fernet.encrypt(key).decode("utf-8")
     set_setting("sync_encrypted_key", encrypted)
     set_setting("sync_key_id", key_id)
     return key_id
@@ -43,14 +34,15 @@ def load_sync_key() -> bytes | None:
     if not encrypted:
         return None
     try:
-        return _get_sync_fernet().decrypt(encrypted.encode("utf-8"))
+        fernet = get_credentials_fernet()
+        return fernet.decrypt(encrypted.encode("utf-8"))
     except Exception:
         logger.exception("Failed to decrypt sync key")
         return None
 
 
 def save_r2_config(account_id: str, access_key_id: str, secret_access_key: str, bucket: str) -> None:
-    fernet = _get_sync_fernet()
+    fernet = get_credentials_fernet()
     set_setting("sync_r2_account_id", account_id)
     set_setting("sync_r2_access_key_id", fernet.encrypt(access_key_id.encode("utf-8")).decode("utf-8"))
     set_setting("sync_r2_secret_access_key", fernet.encrypt(secret_access_key.encode("utf-8")).decode("utf-8"))
@@ -64,13 +56,41 @@ def load_r2_config() -> dict[str, str] | None:
     bucket = get_setting("sync_r2_bucket")
     if not all([account_id, enc_access_key, enc_secret_key, bucket]):
         return None
-    fernet = _get_sync_fernet()
+    fernet = get_credentials_fernet()
     return {
         "account_id": account_id,
         "access_key_id": fernet.decrypt(enc_access_key.encode("utf-8")).decode("utf-8"),
         "secret_access_key": fernet.decrypt(enc_secret_key.encode("utf-8")).decode("utf-8"),
         "bucket": bucket,
     }
+
+
+def save_r2_recovery_bundle(password: str) -> None:
+    config = load_r2_config()
+    if not config:
+        return
+    key, _ = derive_key(password)
+    encrypted = encrypt_dict(key, config)
+    set_setting("sync_r2_recovery_bundle", encrypted.hex())
+
+
+def recover_r2_config(password: str) -> dict[str, str] | None:
+    encrypted_hex = get_setting("sync_r2_recovery_bundle")
+    if not encrypted_hex:
+        return None
+    key, _ = derive_key(password)
+    try:
+        config = decrypt_dict(bytes.fromhex(encrypted_hex), key)
+        save_r2_config(
+            account_id=config["account_id"],
+            access_key_id=config["access_key_id"],
+            secret_access_key=config["secret_access_key"],
+            bucket=config["bucket"],
+        )
+        return config
+    except Exception:
+        logger.exception("Failed to recover R2 config from bundle")
+        return None
 
 
 class SyncService:

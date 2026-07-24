@@ -38,3 +38,18 @@ def decrypt_batch(payload: bytes, key: bytes) -> list[dict]:
     aesgcm = AESGCM(key)
     plaintext = aesgcm.decrypt(nonce, ciphertext, None)
     return json.loads(plaintext.decode("utf-8"))
+
+
+def encrypt_dict(key: bytes, data: dict) -> bytes:
+    aesgcm = AESGCM(key)
+    nonce = os.urandom(12)
+    plaintext = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    ciphertext = aesgcm.encrypt(nonce, plaintext, None)
+    return nonce + ciphertext
+
+
+def decrypt_dict(payload: bytes, key: bytes) -> dict:
+    nonce, ciphertext = payload[:12], payload[12:]
+    aesgcm = AESGCM(key)
+    plaintext = aesgcm.decrypt(nonce, ciphertext, None)
+    return json.loads(plaintext.decode("utf-8"))
