@@ -389,3 +389,27 @@ def initialize_database(connection: sqlite3.Connection) -> None:
     migrate_subscription_identities(connection)
     create_app_settings_table(connection)
     create_sync_tables(connection)
+
+    _ensure_table_columns(
+        connection,
+        "kategorien",
+        {
+            "updated_at": "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        },
+    )
+
+    _ensure_table_columns(
+        connection,
+        "zahlungspartner",
+        {
+            "updated_at": "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        },
+    )
+
+    _ensure_table_columns(
+        connection,
+        "umsaetze",
+        {
+            "updated_at": "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        },
+    )

@@ -111,11 +111,14 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
         values = [filtered_data[k] for k in columns]
 
         existing = connection.execute(
-            f"SELECT updated_at FROM {table} WHERE {pk} = ?", (row_id,)
+            f"SELECT 1 FROM {table} WHERE {pk} = ?", (row_id,)
         ).fetchone()
 
-        if existing and data.get("updated_at"):
-            if existing["updated_at"] and existing["updated_at"] >= data["updated_at"]:
+        if existing and "updated_at" in valid_cols:
+            current_updated = connection.execute(
+                f"SELECT updated_at FROM {table} WHERE {pk} = ?", (row_id,)
+            ).fetchone()["updated_at"]
+            if data.get("updated_at") and current_updated and current_updated >= data["updated_at"]:
                 return False
 
         if existing:
