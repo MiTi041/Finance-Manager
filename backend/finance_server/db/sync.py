@@ -152,6 +152,14 @@ def bootstrap_sync_ops() -> int:
     return ops_count
 
 
+def count_pending_ops(last_pushed_id: int = 0) -> int:
+    with get_connection() as connection:
+        row = connection.execute(
+            "SELECT COUNT(*) AS cnt FROM sync_ops WHERE id > ?", (last_pushed_id,)
+        ).fetchone()
+    return row["cnt"] if row else 0
+
+
 def get_sync_state(key: str) -> str | None:
     with get_connection() as connection:
         row = connection.execute(

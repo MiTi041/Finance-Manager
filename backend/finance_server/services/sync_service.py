@@ -12,6 +12,7 @@ from finance_server.db.sync import (
     apply_sync_op,
     get_sync_state,
     set_sync_state,
+    count_pending_ops,
 )
 from finance_server.services.r2_client import R2Client
 from finance_server.services.sync_crypto import derive_key, encrypt_batch, decrypt_batch, encrypt_dict, decrypt_dict
@@ -141,12 +142,15 @@ class SyncService:
         logger.info("Sync service stopped")
 
     def status(self) -> dict[str, Any]:
+        last_pushed = int(get_sync_state("last_pushed_id") or "0")
         return {
             "running": self._thread is not None and self._thread.is_alive(),
             "configured": self.is_configured(),
             "key_configured": load_sync_key() is not None,
             "r2_configured": load_r2_config() is not None,
             "device_id": get_or_create_device_id(),
+            "last_sync_at": get_sync_state("last_sync_at"),
+            "pending_push": count_pending_ops(last_pushed),
         }
 
     def _run_loop(self) -> None:
@@ -157,6 +161,10 @@ class SyncService:
             except Exception:
                 logger.exception("Sync cycle failed")
             self._stop_event.wait(SYNC_INTERVAL)
+
+    def _mark_synced(self) -> None:
+        from datetime import datetime, timezone
+        set_sync_state("last_sync_at", datetime.now(timezone.utc).isoformat())
 
     def _push_cycle(self) -> None:
         ops = get_pending_ops(self._last_pushed_id)
@@ -170,6 +178,7 @@ class SyncService:
         self._r2_client.put_object(key, encrypted)
         self._last_pushed_id = ops[-1]["id"]
         set_sync_state("last_pushed_id", str(self._last_pushed_id))
+        self._mark_synced()
         logger.info("Pushed %d ops (seq %d-%d)", len(ops), ops[0]["seq"], ops[-1]["seq"])
 
     def _pull_cycle(self) -> None:
@@ -206,6 +215,7 @@ class SyncService:
                 for op in ops:
                     apply_sync_op(op)
                 self._remote_seqs[remote_id] = seq
+                self._mark_synced()
 
         # persist remote seqs
         for remote_id, seq in self._remote_seqs.items():

@@ -21,3 +21,5 @@ class SyncStatusResponse(BaseModel):
     device_id: str
     key_id: str | None = None
     r2_bucket: str | None = None
+    last_sync_at: str | None = None
+    pending_push: int = 0

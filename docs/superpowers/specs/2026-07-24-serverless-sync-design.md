@@ -28,9 +28,9 @@ Sichere, serverlose Synchronisation aller Finanzdaten zwischen mehreren Geräten
 ├──────────────┤     ├──────────────┤
 │ Python:      │     │ Dart:        │
 │ - FastAPI    │     │ - sqflite    │
-│ - FinTS Sync │     │ - Sync Svc  │
-│ - ML/Kategor.│     │ - AES-GCM   │
-│ - Sync Svc   │     │ - R2 SDK    │
+│ - FinTS Sync │     │ - Sync Svc   │
+│ - ML/Kategor.│     │ - AES-GCM    │
+│ - Sync Svc   │     │ - R2 SDK     │
 │ - AES-GCM    │     │              │
 │ - R2 SDK     │     │              │
 ├──────────────┤     ├──────────────┤
@@ -49,14 +49,14 @@ Sichere, serverlose Synchronisation aller Finanzdaten zwischen mehreren Geräten
 
 ### 2.3 Desktop vs Mobile
 
-| | Desktop (Electron) | Mobile (Flutter) |
-|---|---|---|
-| Banking-Import (FinTS) | ✅ | ❌ |
-| ML-Kategorisierung | ✅ | ❌ |
-| Kategorien bearbeiten | ✅ | ✅ |
-| Transaktionen annotieren | ✅ | ✅ |
-| Sync alle 30s | ✅ | ✅ |
-| Lokale SQLite | ✅ | ✅ |
+|                          | Desktop (Electron) | Mobile (Flutter) |
+| ------------------------ | ------------------ | ---------------- |
+| Banking-Import (FinTS)   | ✅                 | ❌               |
+| ML-Kategorisierung       | ✅                 | ❌               |
+| Kategorien bearbeiten    | ✅                 | ✅               |
+| Transaktionen annotieren | ✅                 | ✅               |
+| Sync alle 30s            | ✅                 | ✅               |
+| Lokale SQLite            | ✅                 | ✅               |
 
 ## 3. Datenmodell
 
@@ -94,14 +94,14 @@ CREATE TABLE sync_state (
 
 ### 3.3 `app_settings` — neue Einträge
 
-| Key | Value |
-|---|---|
-| `sync_enabled` | `true` / `false` |
-| `sync_r2_bucket` | `finance-sync` |
-| `sync_r2_account_id` | Cloudflare Account ID |
-| `sync_r2_access_key_id` | R2 API Access Key (verschlüsselt mit Fernet) |
+| Key                         | Value                                        |
+| --------------------------- | -------------------------------------------- |
+| `sync_enabled`              | `true` / `false`                             |
+| `sync_r2_bucket`            | `finance-sync`                               |
+| `sync_r2_account_id`        | Cloudflare Account ID                        |
+| `sync_r2_access_key_id`     | R2 API Access Key (verschlüsselt mit Fernet) |
 | `sync_r2_secret_access_key` | R2 API Secret Key (verschlüsselt mit Fernet) |
-| `sync_device_name` | Anzeigename (z.B. "MacBook") |
+| `sync_device_name`          | Anzeigename (z.B. "MacBook")                 |
 
 ## 4. Cloudflare R2 Setup (pro Benutzer)
 
@@ -110,11 +110,13 @@ CREATE TABLE sync_state (
 1. Cloudflare Dashboard → R2 Object Storage → Bucket `finance-sync` erstellen
 2. R2 → Settings → CORS Policy:
    ```json
-   [{
-     "AllowedOrigins": ["*"],
-     "AllowedMethods": ["GET", "PUT", "HEAD", "DELETE"],
-     "AllowedHeaders": ["*"]
-   }]
+   [
+     {
+       "AllowedOrigins": ["*"],
+       "AllowedMethods": ["GET", "PUT", "HEAD", "DELETE"],
+       "AllowedHeaders": ["*"]
+     }
+   ]
    ```
 3. R2 → Manage API Tokens → Create API Token:
    - Permission: **Object Read & Write**
@@ -171,12 +173,12 @@ def decrypt_batch(payload: bytes, key: bytes) -> list[dict]:
 
 ### 5.3 Key-Speicherung
 
-| Plattform | Mechanismus |
-|---|---|
-| macOS Desktop | Keychain (`security add-generic-password`) |
-| Windows Desktop | Credential Manager |
-| iOS (Flutter) | Keychain Services (`flutter_secure_storage`) |
-| Android (Flutter) | EncryptedSharedPreferences |
+| Plattform         | Mechanismus                                  |
+| ----------------- | -------------------------------------------- |
+| macOS Desktop     | Keychain (`security add-generic-password`)   |
+| Windows Desktop   | Credential Manager                           |
+| iOS (Flutter)     | Keychain Services (`flutter_secure_storage`) |
+| Android (Flutter) | EncryptedSharedPreferences                   |
 
 ## 6. Sync-Protokoll
 
@@ -230,20 +232,20 @@ def decrypt_batch(payload: bytes, key: bytes) -> list[dict]:
 
 ### 7.1 Neue Dateien
 
-| Datei | Inhalt |
-|---|---|
+| Datei                                             | Inhalt                  |
+| ------------------------------------------------- | ----------------------- |
 | `backend/finance_server/services/sync_service.py` | Push/Pull-Thread, Logik |
-| `backend/finance_server/services/sync_crypto.py` | AES-GCM + PBKDF2 |
-| `backend/finance_server/services/r2_client.py` | R2 (S3-API) Wrapper |
-| `backend/finance_server/models/sync_models.py` | Pydantic-Modelle |
+| `backend/finance_server/services/sync_crypto.py`  | AES-GCM + PBKDF2        |
+| `backend/finance_server/services/r2_client.py`    | R2 (S3-API) Wrapper     |
+| `backend/finance_server/models/sync_models.py`    | Pydantic-Modelle        |
 
 ### 7.2 Bestehende Änderungen
 
-| Datei | Änderung |
-|---|---|
+| Datei            | Änderung                               |
+| ---------------- | -------------------------------------- |
 | `core/schema.py` | `sync_ops` + `sync_state` Tabellen DDL |
-| `core/config.py` | R2-Config-Felder |
-| `main.py` | Sync-Service-Start beim App-Start |
+| `core/config.py` | R2-Config-Felder                       |
+| `main.py`        | Sync-Service-Start beim App-Start      |
 
 ### 7.3 CRUD-Integration
 
@@ -268,12 +270,12 @@ def _log_sync_op(self, table: str, row_id: int, op_type: str, data: dict):
 
 ### 8.2 Neue Dateien
 
-| Datei | Inhalt |
-|---|---|
-| `lib/services/sync_service.dart` | Push/Pull-Zyklus |
-| `lib/services/sync_crypto.dart` | AES-GCM + PBKDF2 |
-| `lib/services/r2_client.dart` | R2 Wrapper |
-| `lib/models/sync_op.dart` | Datenmodell |
+| Datei                            | Inhalt                          |
+| -------------------------------- | ------------------------------- |
+| `lib/services/sync_service.dart` | Push/Pull-Zyklus                |
+| `lib/services/sync_crypto.dart`  | AES-GCM + PBKDF2                |
+| `lib/services/r2_client.dart`    | R2 Wrapper                      |
+| `lib/models/sync_op.dart`        | Datenmodell                     |
 | `lib/pages/sync_setup_page.dart` | Passwort + R2-Credentials Setup |
 
 ## 9. Sync-Client Konfiguration (pro Gerät)
@@ -290,18 +292,18 @@ Die R2-Credentials werden **mit Fernet (dem bestehenden Backend-Mechanismus)** l
 
 ## 10. Sicherheit
 
-| Aspekt | Lösung |
-|---|---|
-| Daten bei Cloudflare R2 | AES-256-GCM — Provider sieht nur undurchschaubare Bytes |
-| Sync-Passwort | Nie gespeichert, nur PBKDF2-Key |
-| Key auf Disk | OS-Keychain / Keystore |
-| R2-Credentials in DB | Fernet-verschlüsselt (bestehender Mechanismus) |
-| Replay-Angriff | `(device_id, seq)` unique → doppelte werden ignoriert |
-| Man-in-the-Middle | R2 verwendet HTTPS + Payload ist bereits verschlüsselt |
-| Key-Bruteforce | PBKDF2 mit 600k Iterationen |
-| Falsches Passwort | Führt zu anderem Key → Entschlüsselung fehlschlägt → Daten bleiben sicher |
+| Aspekt                  | Lösung                                                                                     |
+| ----------------------- | ------------------------------------------------------------------------------------------ |
+| Daten bei Cloudflare R2 | AES-256-GCM — Provider sieht nur undurchschaubare Bytes                                    |
+| Sync-Passwort           | Nie gespeichert, nur PBKDF2-Key                                                            |
+| Key auf Disk            | OS-Keychain / Keystore                                                                     |
+| R2-Credentials in DB    | Fernet-verschlüsselt (bestehender Mechanismus)                                             |
+| Replay-Angriff          | `(device_id, seq)` unique → doppelte werden ignoriert                                      |
+| Man-in-the-Middle       | R2 verwendet HTTPS + Payload ist bereits verschlüsselt                                     |
+| Key-Bruteforce          | PBKDF2 mit 600k Iterationen                                                                |
+| Falsches Passwort       | Führt zu anderem Key → Entschlüsselung fehlschlägt → Daten bleiben sicher                  |
 | Geräte-Kompromittierung | Lokale DB + R2-Credentials + Sync-Key liegen auf dem Gerät — Gerätesicherheit ist kritisch |
-| Multi-Tenancy | Jeder Benutzer eigener R2-Bucket + API-Token |
+| Multi-Tenancy           | Jeder Benutzer eigener R2-Bucket + API-Token                                               |
 
 ## 11. Offene Punkte (nicht im ersten Release)
 

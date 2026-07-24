@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getSyncStatus, setupSync, recoverSync } from "@/lib/api/sync";
+import { getSyncStatus, setupSync, recoverSync, pollSyncStatus, type SyncStatus } from "@/lib/api/sync";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 
@@ -14,7 +14,7 @@ export function markSyncSkipped(): void {
   window.localStorage.setItem(SKIP_KEY, "true");
 }
 
-type SetupMode = "idle" | "loading" | "recover" | "full";
+type SetupMode = "idle" | "recover" | "full" | "syncing";
 
 export function SyncSetupWizard({ onComplete }: { onComplete: () => void }) {
   const [mode, setMode] = useState<SetupMode>("idle");
@@ -24,6 +24,27 @@ export function SyncSetupWizard({ onComplete }: { onComplete: () => void }) {
   const [r2SecretKey, setR2SecretKey] = useState("");
   const [bucket, setBucket] = useState("finance-sync");
   const [error, setError] = useState<string | null>(null);
+  const [syncProgress, setSyncProgress] = useState<string>("");
+
+  const startSyncPoll = () => {
+    setMode("syncing");
+    setSyncProgress("Verbinde zu R2...");
+    pollSyncStatus(
+      2000,
+      (status) => {
+        if (status.pending_push > 0) {
+          setSyncProgress(`${status.pending_push} Änderungen ausstehend...`);
+        } else {
+          setSyncProgress("Synchronisation abgeschlossen");
+        }
+      },
+      () => onComplete(),
+      (err) => {
+        setError(err.message);
+        setMode("recover");
+      },
+    );
+  };
 
   const handleRecover = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,7 +55,7 @@ export function SyncSetupWizard({ onComplete }: { onComplete: () => void }) {
     setError(null);
     try {
       await recoverSync(password);
-      onComplete();
+      startSyncPoll();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
       if (msg.includes("409")) {
@@ -51,7 +72,7 @@ export function SyncSetupWizard({ onComplete }: { onComplete: () => void }) {
     setError(null);
     try {
       await setupSync({ password, r2_account_id: r2AccountId, r2_access_key_id: r2AccessKey, r2_secret_access_key: r2SecretKey, r2_bucket: bucket });
-      onComplete();
+      startSyncPoll();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Setup fehlgeschlagen");
     }
@@ -73,6 +94,19 @@ export function SyncSetupWizard({ onComplete }: { onComplete: () => void }) {
     return null;
   }
 
+  if (mode === "syncing") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
+        <div className="flex w-full max-w-md flex-col items-center gap-4 text-center">
+          <div className="size-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          <h1 className="text-xl font-semibold">Sync wird eingerichtet...</h1>
+          <p className="text-muted-foreground text-sm">{syncProgress}</p>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+        </div>
+      </div>
+    );
+  }
+
   if (mode === "recover") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -80,7 +114,6 @@ export function SyncSetupWizard({ onComplete }: { onComplete: () => void }) {
           <h1 className="text-2xl font-bold">Sync einrichten</h1>
           <p className="text-muted-foreground text-sm leading-relaxed">
             Gib dein Sync-Passwort ein, um die bestehende Konfiguration wiederherzustellen.
-            <br />Falls du noch keinen Sync eingerichtet hast, trage unten alle Zugangsdaten ein.
           </p>
           <Input
             type="password"

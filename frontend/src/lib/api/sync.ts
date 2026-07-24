@@ -14,6 +14,8 @@ export interface SyncStatus {
   device_id: string;
   key_id: string | null;
   r2_bucket: string | null;
+  last_sync_at: string | null;
+  pending_push: number;
 }
 
 export async function getSyncStatus(): Promise<SyncStatus> {
@@ -47,4 +49,38 @@ export async function recoverSync(password: string): Promise<void> {
     body: JSON.stringify({ password }),
   });
   await parseJsonResponse(response);
+}
+
+export function pollSyncStatus(
+  intervalMs: number,
+  onTick: (status: SyncStatus) => void,
+  onDone: () => void,
+  onError: (err: Error) => void,
+): () => void {
+  let cancelled = false;
+  let timeoutId: ReturnType<typeof setTimeout>;
+
+  const poll = async () => {
+    if (cancelled) return;
+    try {
+      const status = await getSyncStatus();
+      if (cancelled) return;
+      onTick(status);
+      if (status.configured && status.pending_push === 0) {
+        onDone();
+        return;
+      }
+    } catch (err) {
+      if (!cancelled) onError(err instanceof Error ? err : new Error(String(err)));
+    }
+    if (!cancelled) {
+      timeoutId = setTimeout(poll, intervalMs);
+    }
+  };
+
+  poll();
+  return () => {
+    cancelled = true;
+    clearTimeout(timeoutId);
+  };
 }

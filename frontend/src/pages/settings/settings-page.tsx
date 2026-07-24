@@ -1,6 +1,22 @@
 import { useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Building2,
+  Contact,
+  Database,
+  Fingerprint,
+  RefreshCw,
+  Tags,
+  UserCheck,
+} from "lucide-react";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from "@/components/ui/sidebar";
 import { ProductIdTab } from "./tabs/product-id-tab";
 import { DbExportImportTab } from "./tabs/db-export-import-tab";
 import { BankAccessTab } from "./tabs/bank/bank-access-tab";
@@ -24,6 +40,26 @@ function isSettingsTabValue(value: string | null): value is SettingsTabValue {
   return Boolean(value && SETTINGS_TAB_VALUES.includes(value as SettingsTabValue));
 }
 
+const tabs = [
+  { value: "banking" as const, label: "Bankzugang", icon: Building2 },
+  { value: "zahlungspartner" as const, label: "Zahlungspartner", icon: Contact },
+  { value: "recipients" as const, label: "Empfängerkonten", icon: UserCheck },
+  { value: "categories" as const, label: "Kategorien", icon: Tags },
+  { value: "sync" as const, label: "Sync", icon: RefreshCw },
+  { value: "productId" as const, label: "Produkt-ID", icon: Fingerprint },
+  { value: "database" as const, label: "Datenbank", icon: Database },
+];
+
+const tabComponents: Record<SettingsTabValue, () => React.ReactNode> = {
+  banking: () => <BankAccessTab />,
+  zahlungspartner: () => <ZahlungspartnerTab />,
+  recipients: () => <RecipientAccountsTab />,
+  categories: () => <CategoriesTab />,
+  sync: () => <SyncTab />,
+  productId: () => <ProductIdTab />,
+  database: () => <DbExportImportTab />,
+};
+
 export default function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = useMemo<SettingsTabValue>(() => {
@@ -32,63 +68,34 @@ export default function SettingsPage() {
   }, [searchParams]);
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 py-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Einstellungen</h1>
-        </div>
-      </div>
+    <div className="flex w-full gap-6 py-6">
+      <Sidebar collapsible="none" className="relative border border-border/50 rounded-xl h-min">
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarMenu>
+              {tabs.map(({ value, label, icon: Icon }) => (
+                <SidebarMenuItem key={value}>
+                  <SidebarMenuButton
+                    isActive={activeTab === value}
+                    onClick={() => {
+                      setSearchParams((current) => {
+                        const next = new URLSearchParams(current);
+                        next.set("tab", value);
+                        return next;
+                      });
+                    }}
+                  >
+                    <Icon />
+                    <span>{label}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroup>
+        </SidebarContent>
+      </Sidebar>
 
-      <Tabs
-        value={activeTab}
-        onValueChange={(value) => {
-          if (!isSettingsTabValue(value)) return;
-          setSearchParams((current) => {
-            const next = new URLSearchParams(current);
-            next.set("tab", value);
-            return next;
-          });
-        }}
-        className="w-full"
-      >
-        <TabsList>
-          <TabsTrigger value="banking">Bankzugang</TabsTrigger>
-          <TabsTrigger value="zahlungspartner">Zahlungspartner</TabsTrigger>
-          <TabsTrigger value="recipients">Empfängerkonten</TabsTrigger>
-          <TabsTrigger value="categories">Kategorien</TabsTrigger>
-          <TabsTrigger value="sync">Sync</TabsTrigger>
-          <TabsTrigger value="productId">Produkt-ID</TabsTrigger>
-          <TabsTrigger value="database">Datenbank</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="banking" className="pt-4">
-          <BankAccessTab />
-        </TabsContent>
-
-        <TabsContent value="zahlungspartner" className="pt-4">
-          <ZahlungspartnerTab />
-        </TabsContent>
-
-        <TabsContent value="recipients" className="pt-4">
-          <RecipientAccountsTab />
-        </TabsContent>
-
-        <TabsContent value="categories" className="pt-4">
-          <CategoriesTab />
-        </TabsContent>
-
-        <TabsContent value="sync" className="pt-4">
-          <SyncTab />
-        </TabsContent>
-
-        <TabsContent value="productId" className="pt-4">
-          <ProductIdTab />
-        </TabsContent>
-
-        <TabsContent value="database" className="pt-4">
-          <DbExportImportTab />
-        </TabsContent>
-      </Tabs>
+      <div className="flex-1 overflow-hidden pr-6">{tabComponents[activeTab]()}</div>
     </div>
   );
 }

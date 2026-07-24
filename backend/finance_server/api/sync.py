@@ -32,6 +32,8 @@ def sync_status(service: SyncService = Depends(get_sync_service)) -> SyncStatusR
         device_id=status_data["device_id"],
         key_id=service.key_id(),
         r2_bucket=r2_config["bucket"] if r2_config else None,
+        last_sync_at=status_data.get("last_sync_at"),
+        pending_push=status_data.get("pending_push", 0),
     )
 
 
