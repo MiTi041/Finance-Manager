@@ -75,7 +75,7 @@ VALID_SYNC_COLUMNS: dict[str, set[str]] = {
     "zahlungspartner": {"id", "name", "website", "logo_url", "local_logo_path", "is_company", "logo_white_background", "logo_padding", "updated_at"},
     "empfaengerkonten": {"id", "account_name", "iban", "bic", "recipient_name", "is_donation_account", "updated_at"},
     "subscription_identities": {"id", "counterparty_name", "amount", "display_name", "f_zahlungspartner_id", "dismissed", "updated_at"},
-    "ibans": {"id", "iban", "f_zahlungspartner_id"},
+    "ibans": {"iban", "f_zahlungspartner_id"},
 }
 
 
@@ -89,8 +89,10 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
 
     with get_connection() as connection:
         connection.execute("PRAGMA foreign_keys = OFF")
+        pk = "iban" if table == "ibans" else "id"
+
         if op_type == "DELETE":
-            cursor = connection.execute(f"DELETE FROM {table} WHERE id = ?", (row_id,))
+            cursor = connection.execute(f"DELETE FROM {table} WHERE {pk} = ?", (row_id,))
             return cursor.rowcount > 0
 
         if not data:
@@ -98,15 +100,18 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
 
         valid_cols = VALID_SYNC_COLUMNS.get(table, set())
         filtered_data = {k: v for k, v in data.items() if k in valid_cols}
-        if not filtered_data or "id" not in filtered_data:
+        if not filtered_data:
             return False
 
-        columns = [k for k in filtered_data.keys() if k != "id"]
+        if pk == "id" and pk not in filtered_data:
+                return False
+
+        columns = [k for k in filtered_data.keys() if k != pk]
         placeholders = [f"{k} = ?" for k in columns]
         values = [filtered_data[k] for k in columns]
 
         existing = connection.execute(
-            f"SELECT updated_at FROM {table} WHERE id = ?", (row_id,)
+            f"SELECT updated_at FROM {table} WHERE {pk} = ?", (row_id,)
         ).fetchone()
 
         if existing and data.get("updated_at"):
@@ -114,11 +119,11 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
                 return False
 
         if existing:
-            sql = f"UPDATE {table} SET {', '.join(placeholders)} WHERE id = ?"
+            sql = f"UPDATE {table} SET {', '.join(placeholders)} WHERE {pk} = ?"
             values.append(row_id)
             cursor = connection.execute(sql, values)
         else:
-            all_columns = ["id"] + columns
+            all_columns = [pk] + columns
             all_placeholders = ["?"] * len(all_columns)
             all_values = [row_id] + values
             sql = f"INSERT OR IGNORE INTO {table} ({', '.join(all_columns)}) VALUES ({', '.join(all_placeholders)})"
@@ -130,15 +135,14 @@ def bootstrap_sync_ops() -> int:
     ops_count = 0
     with get_connection() as connection:
         for table in sorted(VALID_SYNC_TABLES):
-            cols = sorted(VALID_SYNC_COLUMNS.get(table, set()))
-            cols_with_id = ["id"] + [c for c in cols if c != "id"]
-            if not cols_with_id:
-                continue
-            col_list = ", ".join(cols_with_id)
-            rows = connection.execute(f"SELECT {col_list} FROM {table} ORDER BY id").fetchall()
+            pk = "iban" if table == "ibans" else "id"
+            cols = [c for c in sorted(VALID_SYNC_COLUMNS.get(table, set())) if c != pk]
+            all_cols = [pk] + cols
+            col_list = ", ".join(all_cols)
+            rows = connection.execute(f"SELECT {col_list} FROM {table} ORDER BY {pk}").fetchall()
             for row in rows:
                 row_dict = dict(row)
-                log_sync_op(table, row_dict["id"], "INSERT", row_dict)
+                log_sync_op(table, row_dict[pk], "INSERT", row_dict)
                 ops_count += 1
         last = connection.execute(
             "SELECT COALESCE(MAX(id), 0) FROM sync_ops"
