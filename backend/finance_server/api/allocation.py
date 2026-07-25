@@ -63,6 +63,13 @@ def update_bafoeg_config(
     return service.update_bafoeg_config(payload.model_dump(exclude_none=True))
 
 
+@router.get("/allocation/settings")
+def get_allocation_settings(
+    service: AllocationService = Depends(get_allocation_service),
+) -> dict[str, Any]:
+    return service.get_settings()
+
+
 @router.patch("/allocation/settings")
 def update_allocation_settings(
     payload: AllocationSettingsUpdate = Body(...),
