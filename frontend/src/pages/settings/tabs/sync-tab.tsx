@@ -267,8 +267,10 @@ export function SyncTab() {
           setPollMsg(`${s.pull_progress} von ${s.pull_total} Datenpaketen empfangen …`);
         } else if (hasSeenPushRef.current || hasSeenPullRef.current) {
           setPollMsg("Synchronisation wird abgeschlossen …");
+        } else if (elapsed > 10000) {
+          setPollMsg("Synchronisation läuft im Hintergrund …");
         } else {
-          setPollMsg("Warte auf Daten von anderen Geräten …");
+          setPollMsg("Warte auf Synchronisation …");
         }
 
         // Completion
@@ -281,7 +283,7 @@ export function SyncTab() {
               complete();
               return;
             }
-            if (elapsed > 35000) {
+            if (elapsed > 10000) {
               complete();
               return;
             }
@@ -365,6 +367,7 @@ export function SyncTab() {
       refresh();
       setJustSynced(true);
       setTimeout(() => setJustSynced(false), 2500);
+      startPoll("Synchronisation", "Synchronisation gestartet …");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sync fehlgeschlagen");
     } finally {

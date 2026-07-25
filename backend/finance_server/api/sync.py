@@ -76,6 +76,7 @@ def sync_recover(
     if not config:
         raise HTTPException(status_code=400, detail="R2-Konfiguration konnte nicht wiederhergestellt werden. Sync bitte vollständig neu einrichten.")
 
+    save_sync_key(request.password)
     service.stop()
     service.start()
 

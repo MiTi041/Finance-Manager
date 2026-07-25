@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { CheckCircle2, Loader2, ShieldCheck, Smartphone, X } from "lucide-react";
+import { CheckCircle2, Loader2, ShieldCheck, Smartphone, Timer, X } from "lucide-react";
 import {
   deleteBankCredentials,
   fetchAvailableBanks,
@@ -24,6 +24,7 @@ import {
 } from "@/lib/bank/credentials";
 import { hasFreshCache } from "@/lib/fetch-cache";
 import { FINTS_SYNC_REQUEST_EVENT } from "@/lib/sync-events";
+import { RateLimitError } from "@/lib/upload-helper";
 
 type SettingsFormState = {
   bank_key: string;
@@ -51,6 +52,15 @@ export function BankAccessTab() {
     challenge: string | null;
   } | null>(null);
   const [checkIsWarning, setCheckIsWarning] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  const cooldownRef = useRef(cooldown);
+  cooldownRef.current = cooldown;
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const id = setInterval(() => setCooldown((c) => Math.max(0, c - 1)), 1000);
+    return () => clearInterval(id);
+  }, [cooldown]);
 
   const loadData = async (options?: { forceRefresh?: boolean }) => {
     const shouldShowLoading =
@@ -167,6 +177,12 @@ export function BankAccessTab() {
         setCheckMessage("");
         return;
       }
+      if (error instanceof RateLimitError) {
+        setCooldown(error.retryAfter);
+        setCheckDialogOpen(false);
+        setCheckMessage("");
+        return;
+      }
       const message =
         error instanceof Error ? error.message : "Bankzugang konnte nicht geprüft werden.";
       setCheckError(message);
@@ -242,13 +258,15 @@ export function BankAccessTab() {
             </div>
 
             <div className="flex flex-wrap gap-3 pt-2">
-              <Button type="submit" disabled={isChecking || !canCheck}>
+              <Button type="submit" disabled={isChecking || !canCheck || cooldown > 0}>
                 {isChecking ? (
                   <Loader2 className="size-4 animate-spin" />
+                ) : cooldown > 0 ? (
+                  <Timer className="size-4" />
                 ) : (
                   <ShieldCheck className="size-4" />
                 )}
-                <span>{isChecking ? "Prüfe ..." : "Prüfen"}</span>
+                <span>{isChecking ? "Prüfe ..." : cooldown > 0 ? `${cooldown}s` : "Prüfen"}</span>
               </Button>
             </div>
           </form>

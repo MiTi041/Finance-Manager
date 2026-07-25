@@ -1,5 +1,6 @@
 import { clearCachedJson } from "../fetch-cache";
 import { fetchCachedResource, getApiBaseUrl, parseJsonResponse } from "../api";
+import { RateLimitError } from "../upload-helper";
 
 export type StoredBankCredentials = {
   scope: string;
@@ -114,6 +115,10 @@ export async function fetchBankAccounts(
       payload.detail.challenge,
       payload.detail.decoupled ?? false,
     );
+  }
+
+  if (response.status === 429 && payload?.code === "RATE_LIMITED") {
+    throw new RateLimitError(payload.retry_after, payload.code);
   }
 
   if (!response.ok) {
