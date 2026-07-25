@@ -40,7 +40,7 @@ export function BucketCard({ bucket, config, onTransfer, transferring }: Props) 
   const isPaid = topUp <= 0;
 
   return (
-    <Card className="flex h-full flex-col">
+    <Card className="flex h-full flex-col py-6">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           {bucketIcons[bucket.bucket_type] ?? <Wallet className="size-4" />}
