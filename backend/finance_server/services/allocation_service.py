@@ -9,6 +9,14 @@ from finance_server.db import allocation as db
 from finance_server.db.settings import get_setting, set_setting
 
 
+BUCKET_TAGS: dict[str, str] = {
+    "bafoeg": "tag.bafoegrueckzahlung",
+    "emergency": "tag.notfallfonds",
+    "invest": "tag.investieren",
+    "donation": "tag.spenden",
+}
+
+
 class AllocationService:
     def get_buckets(self) -> list[dict[str, Any]]:
         return db.list_buckets()
@@ -66,6 +74,17 @@ class AllocationService:
     def _build_run_response(self, run: dict[str, Any]) -> dict[str, Any]:
         buckets = db.get_run_buckets(run["id"])
         config_buckets = db.list_buckets()
+        start = f"{run['month']}-01"
+        end = f"{run['month']}-31"
+        for bucket in buckets:
+            tag = BUCKET_TAGS.get(bucket["bucket_type"])
+            if tag:
+                with get_connection() as conn:
+                    row = conn.execute(
+                        "SELECT COALESCE(SUM(ABS(amount)), 0) FROM umsaetze WHERE purpose LIKE ? AND date >= ? AND date <= ?",
+                        (f"%{tag}%", start, end),
+                    ).fetchone()
+                bucket["transferred"] = round(bucket["transferred"] + row[0], 2)
         return {
             "month": run["month"],
             "net_income": run["net_income"],
@@ -135,7 +154,7 @@ class AllocationService:
             "recipient_name": recipient["recipient_name"],
             "recipient_bic": recipient.get("bic"),
             "sender_iban": rb.get("sender_iban"),
-            "purpose": f"Allokation {rb['bucket_type']}",
+            "purpose": f"Allokation {rb['bucket_type']} {BUCKET_TAGS.get(rb['bucket_type'], '')}".strip(),
         }
 
     def mark_transferred(self, run_bucket_id: int, amount: float) -> None:

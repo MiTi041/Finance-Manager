@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from finance_server.services.allocation_service import AllocationService
 
@@ -24,6 +24,13 @@ class TestDetectIncome:
 
 
 class TestBuildRunResponse:
+    def _make_conn_mock(self):
+        cursor = Mock()
+        cursor.fetchone.return_value = [0.0]
+        conn = Mock()
+        conn.execute.return_value = cursor
+        return conn
+
     def test_includes_spending_as_remainder(self):
         service = AllocationService()
         buckets = [
@@ -45,7 +52,9 @@ class TestBuildRunResponse:
             patch("finance_server.services.allocation_service.db.get_run_buckets") as mock_run_buckets,
             patch("finance_server.services.allocation_service.db.get_active_buckets_sum_percentage", return_value=40.0),
             patch("finance_server.services.allocation_service.AllocationService._detect_income", return_value=3000.0),
+            patch("finance_server.services.allocation_service.get_connection") as mock_conn,
         ):
+            mock_conn.return_value.__enter__.return_value = self._make_conn_mock()
             mock_list.return_value = buckets
             mock_run.side_effect = [None, run_data]
             mock_create_run.return_value = 1
@@ -78,7 +87,9 @@ class TestBuildRunResponse:
             patch("finance_server.services.allocation_service.db.get_run_buckets") as mock_run_buckets,
             patch("finance_server.services.allocation_service.db.get_active_buckets_sum_percentage", return_value=70.0),
             patch("finance_server.services.allocation_service.AllocationService._detect_income", return_value=2000.0),
+            patch("finance_server.services.allocation_service.get_connection") as mock_conn,
         ):
+            mock_conn.return_value.__enter__.return_value = self._make_conn_mock()
             mock_list.return_value = buckets
             mock_run.side_effect = [None, run_data]
             mock_create_run.return_value = 1
