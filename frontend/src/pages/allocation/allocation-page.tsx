@@ -9,6 +9,15 @@ import { updateAllocationBucket, type AllocationBucket } from "@/lib/allocation"
 import { formatAmount } from "@/lib/utils/format";
 import { EmptyState } from "@/components/empty-state";
 
+const DONATION_ACCOUNTS = [
+  { recipientName: "Open Doors Deutschland e.V.", recipientIban: "DE28513900000000717177" },
+  { recipientName: "Samaritan's Purse e.V.", recipientIban: "DE12370601935544332211" },
+];
+
+function getRandomDonationAccount() {
+  return DONATION_ACCOUNTS[Math.floor(Math.random() * DONATION_ACCOUNTS.length)];
+}
+
 function extractBankAccounts(banks: StoredBankCredentials[]): { iban: string; name: string }[] {
   const accounts: { iban: string; name: string }[] = [];
   for (const bank of banks) {
@@ -47,10 +56,22 @@ export default function AllocationPage() {
     const bucket = status?.buckets.find((b) => b.id === runBucketId);
     if (!bucket) return;
     const cfg = status?.config.find((c) => c.id === bucket.bucket_id);
-    if (!cfg || !cfg.recipient_account_id) return;
+    if (!cfg) return;
 
-    const recipient = recipientAccounts.find((r) => r.id === cfg.recipient_account_id);
-    if (!recipient) return;
+    let recipientName: string;
+    let recipientIban: string;
+
+    if (bucket.bucket_type === "donation") {
+      const acc = getRandomDonationAccount();
+      recipientName = acc.recipientName;
+      recipientIban = acc.recipientIban;
+    } else {
+      if (!cfg.recipient_account_id) return;
+      const recipient = recipientAccounts.find((r) => r.id === cfg.recipient_account_id);
+      if (!recipient) return;
+      recipientName = recipient.recipient_name;
+      recipientIban = recipient.iban;
+    }
 
     runBucketIdRef.current = runBucketId;
 
@@ -58,8 +79,8 @@ export default function AllocationPage() {
       open: true,
       runBucketId,
       amount: bucket.target_amount - bucket.transferred,
-      recipientName: recipient.recipient_name,
-      recipientIban: recipient.iban,
+      recipientName,
+      recipientIban,
     });
   }, [status, recipientAccounts]);
 
@@ -117,15 +138,13 @@ export default function AllocationPage() {
           const config = status.config.find((c) => c.id === bucket.bucket_id);
           if (!config) return null;
           if (bucket.bucket_type === "bafoeg" && !config.is_active) return null;
-          const recipient = config.recipient_account_id
-            ? recipientAccounts.find((r) => r.id === config.recipient_account_id)
-            : undefined;
+          const hasRecipient = bucket.bucket_type === "donation" || (!!config.recipient_account_id && recipientAccounts.some((r) => r.id === config.recipient_account_id));
           return (
             <BucketCard
               key={bucket.id}
               bucket={bucket}
               config={config}
-              hasRecipient={!!recipient}
+              hasRecipient={hasRecipient}
               recipientAccounts={recipientAccounts.map((r) => ({ id: r.id, account_name: r.account_name, iban: r.iban }))}
               bankAccounts={bankAccounts}
               onTransfer={handleTransfer}
