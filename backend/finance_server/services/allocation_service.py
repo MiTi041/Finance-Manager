@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+from datetime import datetime
 from typing import Any
 
 from fastapi import HTTPException
@@ -96,28 +98,68 @@ class AllocationService:
         }
 
     def _detect_income(self, month: str) -> float:
-        start = f"{month}-01"
-        end = f"{month}-31"
+        """Recurring income detection like finance_local (4-month lookback, group by counterparty+purpose, 3+ occurrences, ~30d cadence)."""
+        start_parts = month.split("-")
+        m = int(start_parts[1]) - 4
+        y = int(start_parts[0])
+        if m <= 0:
+            m += 12
+            y -= 1
+        lookback_start = f"{y}-{m:02d}-01"
+        month_end = f"{month}-31"
+
+        with get_connection() as conn:
+            rows = conn.execute(
+                """SELECT applicant_name, purpose, amount, date
+                   FROM umsaetze
+                   WHERE amount > 0
+                     AND date >= ? AND date <= ?
+                     AND (purpose IS NULL OR purpose NOT LIKE '%tag.%')
+                   ORDER BY applicant_name, purpose, date""",
+                (lookback_start, month_end),
+            ).fetchall()
+
+        groups: dict[str, list[tuple[float, str]]] = {}
+        for row in rows:
+            name = (row["applicant_name"] or "").strip().lower()
+            purpose = (row["purpose"] or "").strip().lower()
+            purpose_clean = re.sub(r"[^a-zäöüß]", "", purpose)
+            if not name or not purpose_clean:
+                continue
+            groups.setdefault(f"{name} | {purpose_clean}", []).append((row["amount"], row["date"]))
+
+        total = 0.0
+        for txs in groups.values():
+            if len(txs) < 3:
+                continue
+            txs.sort(key=lambda t: t[1])
+            recurring = True
+            for i in range(1, len(txs)):
+                d1 = datetime.strptime(txs[i - 1][1], "%Y-%m-%d").date()
+                d2 = datetime.strptime(txs[i][1], "%Y-%m-%d").date()
+                if abs((d2 - d1).days - 30) > 5:
+                    recurring = False
+                    break
+            if recurring:
+                total += txs[-1][0]
+
+        if total > 0:
+            return round(total, 2)
+
+        # Fallback: single-month category/keyword match
         income_category_id = get_setting("income_category_id")
-        with get_connection() as connection:
+        with get_connection() as conn:
             if income_category_id:
-                row = connection.execute(
-                    """SELECT COALESCE(SUM(amount), 0)
-                       FROM umsaetze
-                       WHERE amount > 0 AND kategorie = ?
-                         AND date >= ? AND date <= ?""",
-                    (int(income_category_id), start, end),
+                row = conn.execute(
+                    "SELECT COALESCE(SUM(amount), 0) FROM umsaetze WHERE amount > 0 AND kategorie = ? AND date >= ? AND date <= ?",
+                    (int(income_category_id), f"{month}-01", month_end),
                 ).fetchone()
             else:
-                row = connection.execute(
-                    """SELECT COALESCE(SUM(amount), 0)
-                       FROM umsaetze
-                       WHERE amount > 0
-                         AND date >= ? AND date <= ?
-                         AND (purpose LIKE '%Gehalt%' OR purpose LIKE '%Lohn%' OR purpose LIKE '%Auszahlung%')""",
-                    (start, end),
+                row = conn.execute(
+                    "SELECT COALESCE(SUM(amount), 0) FROM umsaetze WHERE amount > 0 AND date >= ? AND date <= ? AND (purpose LIKE '%Gehalt%' OR purpose LIKE '%Lohn%' OR purpose LIKE '%Auszahlung%')",
+                    (f"{month}-01", month_end),
                 ).fetchone()
-        return round(row[0], 2) if row else 0.0
+            return round(row[0], 2) if row else 0.0
 
     def transfer_run_bucket(self, run_bucket_id: int) -> dict[str, Any]:
         with get_connection() as connection:

@@ -1,26 +1,54 @@
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import Mock, patch
 
 from finance_server.services.allocation_service import AllocationService
 
 
+def _row(applicant_name: str, purpose: str, amount: float, date: str) -> dict[str, Any]:
+    return {"applicant_name": applicant_name, "purpose": purpose, "amount": amount, "date": date}
+
 class TestDetectIncome:
     def test_returns_zero_when_no_transactions(self):
         service = AllocationService()
         with patch("finance_server.services.allocation_service.get_connection") as mock_conn:
-            mock_cursor = mock_conn.return_value.__enter__.return_value.execute.return_value
-            mock_cursor.fetchone.return_value = [0.0]
+            cursor = Mock()
+            cursor.fetchall.return_value = []
+            cursor.fetchone.return_value = [0.0]
+            mock_conn.return_value.__enter__.return_value.execute.return_value = cursor
             result = service._detect_income("2026-07")
         assert result == 0.0
 
-    def test_returns_sum_of_positive_amounts(self):
+    def test_detects_recurring_income(self):
         service = AllocationService()
+        rows = [
+            _row("Employer GmbH", "Gehalt Januar", 3400.0, "2026-04-01"),
+            _row("Employer GmbH", "Gehalt Januar", 3400.0, "2026-05-01"),
+            _row("Employer GmbH", "Gehalt Januar", 3500.0, "2026-06-01"),
+        ]
         with patch("finance_server.services.allocation_service.get_connection") as mock_conn:
-            mock_cursor = mock_conn.return_value.__enter__.return_value.execute.return_value
-            mock_cursor.fetchone.return_value = [3500.00]
+            cursor = Mock()
+            cursor.fetchall.return_value = rows
+            mock_conn.return_value.__enter__.return_value.execute.return_value = cursor
             result = service._detect_income("2026-07")
-        assert result == 3500.00
+        assert result == 3500.0
+
+    def test_falls_back_when_no_recurring_pattern(self):
+        service = AllocationService()
+        with (
+            patch("finance_server.services.allocation_service.get_connection") as mock_conn,
+            patch("finance_server.services.allocation_service.get_setting") as mock_setting,
+        ):
+            # First call fetchall → no recurring rows
+            # Second call fetchone → fallback returns 2100.0
+            cursor = Mock()
+            cursor.fetchall.return_value = []
+            cursor.fetchone.return_value = [2100.0]
+            mock_conn.return_value.__enter__.return_value.execute.return_value = cursor
+            mock_setting.return_value = None
+            result = service._detect_income("2026-07")
+        assert result == 2100.0
 
 
 class TestBuildRunResponse:
