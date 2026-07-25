@@ -21,6 +21,13 @@ const bucketIcons: Record<string, React.ReactNode> = {
   spending: <Wallet className="size-4" />,
 };
 
+const bucketTags: Record<string, string> = {
+  bafoeg: "tag.bafoegrueckzahlung",
+  emergency: "tag.notfallfonds",
+  invest: "tag.investieren",
+  donation: "tag.spenden",
+};
+
 const bucketDescriptions: Record<string, string> = {
   spending: "Budget nach Bafög, Notgroschen, Investieren und Spenden.",
 };
@@ -118,7 +125,7 @@ export function BucketCard({
       </CardHeader>
       <CardContent className="flex flex-1 flex-col space-y-2 text-sm">
         <div className="flex items-center justify-between">
-          <span className="text-muted-foreground">Monatsziel</span>
+          <span className="text-muted-foreground">{isInfoOnly ? "Verfügbar" : "Monatsziel"}</span>
           <span className="font-semibold">{formatAmount(bucket.target_amount)}</span>
         </div>
         {!isInfoOnly && (
@@ -127,13 +134,17 @@ export function BucketCard({
             <span className="font-semibold">{formatAmount(bucket.transferred)}</span>
           </div>
         )}
-        <div className="bg-muted h-2 w-full overflow-hidden rounded">
-          <div
-            className="h-full rounded bg-primary transition-all"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-        <p className="text-muted-foreground text-xs">Tag: {bucket.bucket_type}</p>
+        {!isInfoOnly && (
+          <div className="bg-muted h-2 w-full overflow-hidden rounded">
+            <div
+              className="h-full rounded bg-primary transition-all"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        )}
+        {bucketTags[bucket.bucket_type] && (
+          <p className="text-muted-foreground text-xs">Tag: {bucketTags[bucket.bucket_type]}</p>
+        )}
         <div className="mt-auto flex flex-col gap-2">
           {isInfoOnly ? (
             <div className="flex w-full items-center justify-center gap-2 rounded-md border border-muted bg-muted/30 px-3 py-2 text-muted-foreground">
