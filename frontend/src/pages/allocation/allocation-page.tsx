@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { CheckCircle2, Loader2, TriangleAlert } from "lucide-react";
 import { useAllocation } from "./hooks/use-allocation";
 import { BucketCard } from "./components/bucket-card";
@@ -8,15 +8,6 @@ import { fetchBankCredentials, type StoredBankCredentials } from "@/lib/bank/cre
 import { updateAllocationBucket, type AllocationBucket } from "@/lib/allocation";
 import { formatAmount } from "@/lib/utils/format";
 import { EmptyState } from "@/components/empty-state";
-
-const DONATION_ACCOUNTS = [
-  { recipientName: "Open Doors Deutschland e.V.", recipientIban: "DE28513900000000717177" },
-  { recipientName: "Samaritan's Purse e.V.", recipientIban: "DE12370601935544332211" },
-];
-
-function getRandomDonationAccount() {
-  return DONATION_ACCOUNTS[Math.floor(Math.random() * DONATION_ACCOUNTS.length)];
-}
 
 function extractBankAccounts(banks: StoredBankCredentials[]): { iban: string; name: string }[] {
   const accounts: { iban: string; name: string }[] = [];
@@ -52,6 +43,11 @@ export default function AllocationPage() {
 
   useEffect(() => { void loadReferenceData(); }, [loadReferenceData]);
 
+  const donationAccounts = useMemo(
+    () => recipientAccounts.filter((r) => r.is_donation_account),
+    [recipientAccounts],
+  );
+
   const handleTransfer = useCallback(async (runBucketId: number) => {
     const bucket = status?.buckets.find((b) => b.id === runBucketId);
     if (!bucket) return;
@@ -62,9 +58,10 @@ export default function AllocationPage() {
     let recipientIban: string;
 
     if (bucket.bucket_type === "donation") {
-      const acc = getRandomDonationAccount();
-      recipientName = acc.recipientName;
-      recipientIban = acc.recipientIban;
+      const acc = donationAccounts[Math.floor(Math.random() * donationAccounts.length)];
+      if (!acc) return;
+      recipientName = acc.recipient_name;
+      recipientIban = acc.iban;
     } else {
       if (!cfg.recipient_account_id) return;
       const recipient = recipientAccounts.find((r) => r.id === cfg.recipient_account_id);
@@ -82,7 +79,7 @@ export default function AllocationPage() {
       recipientName,
       recipientIban,
     });
-  }, [status, recipientAccounts]);
+  }, [status, recipientAccounts, donationAccounts]);
 
   const confirmTransfer = useCallback(async (tan?: string) => {
     await transfer(runBucketIdRef.current, tan);
@@ -138,7 +135,8 @@ export default function AllocationPage() {
           const config = status.config.find((c) => c.id === bucket.bucket_id);
           if (!config) return null;
           if (bucket.bucket_type === "bafoeg" && !config.is_active) return null;
-          const hasRecipient = bucket.bucket_type === "donation" || (!!config.recipient_account_id && recipientAccounts.some((r) => r.id === config.recipient_account_id));
+          const donationAvailable = donationAccounts.length > 0;
+          const hasRecipient = (bucket.bucket_type === "donation" && donationAvailable) || (!!config.recipient_account_id && recipientAccounts.some((r) => r.id === config.recipient_account_id));
           return (
             <BucketCard
               key={bucket.id}
