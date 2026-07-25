@@ -10,6 +10,16 @@ from .category import (
     ApplyPredictionRequest,
 )
 from .fints import AccountsRequest, TransactionsRequest, TransferRequest, ProductIdRequest
+from .allocation import (
+    AllocationBucket,
+    AllocationBucketUpdate,
+    BafoegConfig,
+    AllocationSettingsUpdate,
+    AllocationRun,
+    AllocationRunBucket,
+    AllocationStatus,
+    AllocationHistoryEntry,
+)
 
 __all__ = [
     "BankCredentials",
@@ -25,4 +35,12 @@ __all__ = [
     "TransactionsRequest",
     "TransferRequest",
     "ProductIdRequest",
+    "AllocationBucket",
+    "AllocationBucketUpdate",
+    "BafoegConfig",
+    "AllocationSettingsUpdate",
+    "AllocationRun",
+    "AllocationRunBucket",
+    "AllocationStatus",
+    "AllocationHistoryEntry",
 ]
