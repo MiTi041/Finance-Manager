@@ -146,19 +146,12 @@ class AllocationService:
         if total > 0:
             return round(total, 2)
 
-        # Fallback: single-month category/keyword match
-        income_category_id = get_setting("income_category_id")
+        # Fallback: sum all positive transactions this month
         with get_connection() as conn:
-            if income_category_id:
-                row = conn.execute(
-                    "SELECT COALESCE(SUM(amount), 0) FROM umsaetze WHERE amount > 0 AND kategorie = ? AND date >= ? AND date <= ?",
-                    (int(income_category_id), f"{month}-01", month_end),
-                ).fetchone()
-            else:
-                row = conn.execute(
-                    "SELECT COALESCE(SUM(amount), 0) FROM umsaetze WHERE amount > 0 AND date >= ? AND date <= ? AND (purpose LIKE '%Gehalt%' OR purpose LIKE '%Lohn%' OR purpose LIKE '%Auszahlung%')",
-                    (f"{month}-01", month_end),
-                ).fetchone()
+            row = conn.execute(
+                "SELECT COALESCE(SUM(amount), 0) FROM umsaetze WHERE amount > 0 AND date >= ? AND date <= ?",
+                (f"{month}-01", month_end),
+            ).fetchone()
             return round(row[0], 2) if row else 0.0
 
     def transfer_run_bucket(self, run_bucket_id: int) -> dict[str, Any]:

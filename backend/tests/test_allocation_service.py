@@ -36,17 +36,11 @@ class TestDetectIncome:
 
     def test_falls_back_when_no_recurring_pattern(self):
         service = AllocationService()
-        with (
-            patch("finance_server.services.allocation_service.get_connection") as mock_conn,
-            patch("finance_server.services.allocation_service.get_setting") as mock_setting,
-        ):
-            # First call fetchall → no recurring rows
-            # Second call fetchone → fallback returns 2100.0
+        with patch("finance_server.services.allocation_service.get_connection") as mock_conn:
             cursor = Mock()
             cursor.fetchall.return_value = []
             cursor.fetchone.return_value = [2100.0]
             mock_conn.return_value.__enter__.return_value.execute.return_value = cursor
-            mock_setting.return_value = None
             result = service._detect_income("2026-07")
         assert result == 2100.0
 
