@@ -9,6 +9,11 @@ from finance_server.services.credentials_service import CredentialsService
 from finance_server.services.subscription_identity_service import SubscriptionIdentityService
 from finance_server.services.export_import_service import ExportImportService
 from finance_server.services.receipt_service import ReceiptService
+from finance_server.services.allocation_service import AllocationService
+
+
+def get_allocation_service() -> AllocationService:
+    return AllocationService()
 
 
 def get_transaction_service() -> TransactionService:
