@@ -4,12 +4,25 @@ import { useAllocation } from "./hooks/use-allocation";
 import { BucketCard } from "./components/bucket-card";
 import { TransferDialog } from "./components/transfer-dialog";
 import { fetchRecipientAccountsReferenceData, type RecipientAccountRecord } from "@/lib/recipient-accounts";
+import { fetchBankCredentials, type StoredBankCredentials } from "@/lib/bank/credentials";
+import { updateAllocationBucket, type AllocationBucket } from "@/lib/allocation";
 import { formatAmount } from "@/lib/utils/format";
 import { EmptyState } from "@/components/empty-state";
 
+function extractBankAccounts(banks: StoredBankCredentials[]): { iban: string; name: string }[] {
+  const accounts: { iban: string; name: string }[] = [];
+  for (const bank of banks) {
+    for (const acc of bank.accounts ?? []) {
+      if (acc.iban) accounts.push({ iban: acc.iban as string, name: (acc.account_name as string) ?? acc.iban as string });
+    }
+  }
+  return accounts;
+}
+
 export default function AllocationPage() {
-  const { status, loading, error, transfer, transferring } = useAllocation();
+  const { status, loading, error, load, transfer, transferring } = useAllocation();
   const [recipientAccounts, setRecipientAccounts] = useState<RecipientAccountRecord[]>([]);
+  const [bankAccounts, setBankAccounts] = useState<{ iban: string; name: string }[]>([]);
   const runBucketIdRef = useRef<number>(0);
   const [transferState, setTransferState] = useState<{
     open: boolean;
@@ -19,11 +32,16 @@ export default function AllocationPage() {
     recipientIban: string;
   }>({ open: false, runBucketId: 0, amount: 0, recipientName: "", recipientIban: "" });
 
-  useEffect(() => {
-    void fetchRecipientAccountsReferenceData().then((data) => {
-      setRecipientAccounts(data.recipient_accounts ?? []);
-    });
+  const loadReferenceData = useCallback(async () => {
+    const [recipientsData, banks] = await Promise.all([
+      fetchRecipientAccountsReferenceData(),
+      fetchBankCredentials(),
+    ]);
+    setRecipientAccounts(recipientsData.recipient_accounts ?? []);
+    setBankAccounts(extractBankAccounts(banks));
   }, []);
+
+  useEffect(() => { void loadReferenceData(); }, [loadReferenceData]);
 
   const handleTransfer = useCallback(async (runBucketId: number) => {
     const bucket = status?.buckets.find((b) => b.id === runBucketId);
@@ -48,6 +66,11 @@ export default function AllocationPage() {
   const confirmTransfer = useCallback(async (tan?: string) => {
     await transfer(runBucketIdRef.current, tan);
   }, [transfer]);
+
+  const handleUpdateConfig = useCallback(async (bucketId: number, updates: Partial<AllocationBucket>) => {
+    await updateAllocationBucket(bucketId, updates);
+    await load();
+  }, [load]);
 
   if (loading) {
     return (
@@ -103,7 +126,10 @@ export default function AllocationPage() {
               bucket={bucket}
               config={config}
               hasRecipient={!!recipient}
+              recipientAccounts={recipientAccounts.map((r) => ({ id: r.id, account_name: r.account_name, iban: r.iban }))}
+              bankAccounts={bankAccounts}
               onTransfer={handleTransfer}
+              onUpdateConfig={handleUpdateConfig}
               transferring={transferring === bucket.id}
             />
           );

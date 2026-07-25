@@ -50,5 +50,5 @@ export function useAllocation(month?: string) {
     }
   }, [load]);
 
-  return { status, loading, error, recalculate, transfer, transferring };
+  return { status, loading, error, load, recalculate, transfer, transferring };
 }

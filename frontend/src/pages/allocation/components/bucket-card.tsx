@@ -1,6 +1,7 @@
-import { PiggyBank, ShieldCheck, TrendingUp, Heart, Wallet } from "lucide-react";
+import { PiggyBank, ShieldCheck, Settings2, TrendingUp, Heart, Wallet } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatAmount } from "@/lib/utils/format";
 import type { AllocationBucket, AllocationRunBucket } from "@/lib/allocation";
 
@@ -28,11 +29,17 @@ type Props = {
   bucket: AllocationRunBucket;
   config: AllocationBucket;
   hasRecipient: boolean;
+  recipientAccounts: { id: number; account_name: string; iban: string }[];
+  bankAccounts: { iban: string; name: string }[];
   onTransfer: (runBucketId: number) => void;
+  onUpdateConfig: (bucketId: number, updates: Partial<AllocationBucket>) => Promise<void>;
   transferring: boolean;
 };
 
-export function BucketCard({ bucket, config, hasRecipient, onTransfer, transferring }: Props) {
+export function BucketCard({
+  bucket, config, hasRecipient, recipientAccounts, bankAccounts,
+  onTransfer, onUpdateConfig, transferring,
+}: Props) {
   const progress = bucket.target_amount > 0
     ? Math.min(100, Math.round((bucket.transferred / bucket.target_amount) * 100))
     : 0;
@@ -42,11 +49,69 @@ export function BucketCard({ bucket, config, hasRecipient, onTransfer, transferr
 
   return (
     <Card className="flex h-full flex-col py-6">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          {bucketIcons[bucket.bucket_type] ?? <Wallet className="size-4" />}
-          {bucketLabels[bucket.bucket_type] ?? bucket.bucket_type}
-        </CardTitle>
+      <CardHeader className="relative">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-2">
+            {bucketIcons[bucket.bucket_type] ?? <Wallet className="size-4" />}
+            <CardTitle>{bucketLabels[bucket.bucket_type] ?? bucket.bucket_type}</CardTitle>
+          </div>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="icon" className="size-7 -mr-2 -mt-1">
+                <Settings2 className="size-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-72 space-y-3">
+              <div>
+                <label className="text-sm text-muted-foreground">Prozentsatz (%)</label>
+                <input
+                  type="number" min={0} max={100} step={0.5}
+                  value={config.percentage}
+                  onChange={(e) => onUpdateConfig(bucket.bucket_id, { percentage: Number(e.target.value) })}
+                  disabled={isInfoOnly}
+                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                />
+              </div>
+              {bucket.bucket_type === "bafoeg" && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox" id={`active-${bucket.id}`}
+                    checked={config.is_active}
+                    onChange={(e) => onUpdateConfig(bucket.bucket_id, { is_active: e.target.checked })}
+                    className="size-4"
+                  />
+                  <label htmlFor={`active-${bucket.id}`} className="text-sm">Aktiv</label>
+                </div>
+              )}
+              <div>
+                <label className="text-sm text-muted-foreground">Empfängerkonto</label>
+                <select
+                  value={config.recipient_account_id ?? ""}
+                  onChange={(e) => onUpdateConfig(bucket.bucket_id, { recipient_account_id: e.target.value ? Number(e.target.value) : null })}
+                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">— Kein Konto —</option>
+                  {recipientAccounts.map((r) => (
+                    <option key={r.id} value={r.id}>{r.account_name} ({r.iban})</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-sm text-muted-foreground">Absenderkonto (IBAN)</label>
+                <select
+                  value={config.sender_iban ?? ""}
+                  onChange={(e) => onUpdateConfig(bucket.bucket_id, { sender_iban: e.target.value || null })}
+                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">— Standard —</option>
+                  {bankAccounts.map((a) => (
+                    <option key={a.iban} value={a.iban}>{a.name} ({a.iban})</option>
+                  ))}
+                </select>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
         <CardDescription>
           {bucketDescriptions[bucket.bucket_type] ?? `${config.percentage}% vom Netto-Einkommen`}
         </CardDescription>
