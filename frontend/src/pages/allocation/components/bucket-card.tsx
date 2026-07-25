@@ -1,22 +1,27 @@
 import { PiggyBank, ShieldCheck, TrendingUp, Heart, Wallet } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { formatAmount } from "@/lib/utils/format";
 import type { AllocationBucket, AllocationRunBucket } from "@/lib/allocation";
-import { Button } from "@/components/ui/button";
 
-const bucketIcons: Record<string, React.ReactNode> = {
-  bafoeg: <PiggyBank className="size-5" />,
-  emergency: <ShieldCheck className="size-5" />,
-  invest: <TrendingUp className="size-5" />,
-  donation: <Heart className="size-5" />,
-  spending: <Wallet className="size-5" />,
-};
-
-const bucketLabels: Record<string, string> = {
+export const bucketLabels: Record<string, string> = {
   bafoeg: "Bafög-Rücklage",
   emergency: "Notgroschen",
   invest: "Investieren",
   donation: "Spenden",
   spending: "Restliche Ausgaben",
+};
+
+const bucketIcons: Record<string, React.ReactNode> = {
+  bafoeg: <PiggyBank className="size-4" />,
+  emergency: <ShieldCheck className="size-4" />,
+  invest: <TrendingUp className="size-4" />,
+  donation: <Heart className="size-4" />,
+  spending: <Wallet className="size-4" />,
+};
+
+const bucketDescriptions: Record<string, string> = {
+  spending: "Budget nach Bafög, Notgroschen, Investieren und Spenden.",
 };
 
 type Props = {
@@ -30,44 +35,61 @@ export function BucketCard({ bucket, config, onTransfer, transferring }: Props) 
   const progress = bucket.target_amount > 0
     ? Math.min(100, Math.round((bucket.transferred / bucket.target_amount) * 100))
     : 0;
-
+  const topUp = Math.max(0, bucket.target_amount - bucket.transferred);
   const isInfoOnly = bucket.bucket_type === "spending";
+  const isPaid = topUp <= 0;
 
   return (
-    <div className="rounded-xl border border-border/50 bg-card p-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex size-10 items-center justify-center rounded-lg bg-muted">
-            {bucketIcons[bucket.bucket_type] ?? <Wallet className="size-5" />}
-          </div>
-          <div>
-            <p className="font-medium">{bucketLabels[bucket.bucket_type] ?? bucket.bucket_type}</p>
-            <p className="text-sm text-muted-foreground">
-              {formatAmount(bucket.target_amount)} Ziel · {config.percentage}%
-            </p>
-          </div>
+    <Card className="flex h-full flex-col">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          {bucketIcons[bucket.bucket_type] ?? <Wallet className="size-4" />}
+          {bucketLabels[bucket.bucket_type] ?? bucket.bucket_type}
+        </CardTitle>
+        <CardDescription>
+          {bucketDescriptions[bucket.bucket_type] ?? `${config.percentage}% vom Netto-Einkommen`}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-1 flex-col space-y-2 text-sm">
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">Monatsziel</span>
+          <span className="font-semibold">{formatAmount(bucket.target_amount)}</span>
         </div>
-        <div className="text-right">
-          <p className="font-semibold">{formatAmount(bucket.transferred)}</p>
-          {!isInfoOnly && (
+        {!isInfoOnly && (
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Diesen Monat überwiesen</span>
+            <span className="font-semibold">{formatAmount(bucket.transferred)}</span>
+          </div>
+        )}
+        <div className="bg-muted h-2 w-full overflow-hidden rounded">
+          <div
+            className="h-full rounded bg-primary transition-all"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+        <p className="text-muted-foreground text-xs">Tag: {bucket.bucket_type}</p>
+        <div className="mt-auto flex flex-col gap-2">
+          {isInfoOnly ? (
+            <div className="flex w-full items-center justify-center gap-2 rounded-md border border-muted bg-muted/30 px-3 py-2 text-muted-foreground">
+              <Wallet className="size-4" />
+              <span className="text-sm">Restbudget: {formatAmount(bucket.target_amount)}</span>
+            </div>
+          ) : isPaid ? (
+            <div className="flex w-full items-center justify-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-emerald-700">
+              <span className="text-sm font-medium">Monatsziel erreicht</span>
+            </div>
+          ) : (
             <Button
               size="sm"
-              variant={bucket.is_completed ? "outline" : "default"}
-              disabled={bucket.is_completed || transferring}
+              disabled={transferring}
               onClick={() => onTransfer(bucket.id)}
-              className="mt-1"
+              className="w-full"
             >
-              {bucket.is_completed ? "Erledigt" : transferring ? "Wird gesendet..." : "Jetzt zahlen"}
+              {transferring ? "Wird gesendet..." : `Jetzt ${formatAmount(topUp)} zahlen`}
             </Button>
           )}
         </div>
-      </div>
-      <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-muted">
-        <div
-          className="h-full rounded-full bg-primary transition-all"
-          style={{ width: `${progress}%` }}
-        />
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }

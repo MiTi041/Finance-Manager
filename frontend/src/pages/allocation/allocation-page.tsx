@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Loader2, RefreshCw } from "lucide-react";
+import { CheckCircle2, Loader2, RefreshCw, TriangleAlert } from "lucide-react";
 import { useAllocation } from "./hooks/use-allocation";
-import { AllocationSummary } from "./components/allocation-summary";
 import { BucketCard } from "./components/bucket-card";
 import { TransferDialog } from "./components/transfer-dialog";
 import { fetchRecipientAccountsReferenceData, type RecipientAccountRecord } from "@/lib/recipient-accounts";
+import { formatAmount } from "@/lib/utils/format";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
 
@@ -71,22 +71,32 @@ export default function AllocationPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 py-6">
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-sm">
+          {status.net_income > 0 && status.total_allocated > 0 &&
+            Math.abs(status.net_income - status.total_allocated - status.remaining) < 0.01 ? (
+            <>
+              <CheckCircle2 className="size-4 text-green-500" />
+              <span className="text-green-600">
+                100%-Check: Allokation ausgeglichen ({formatAmount(status.net_income)} Netto)
+              </span>
+            </>
+          ) : (
+            <>
+              <TriangleAlert className="size-4 text-amber-500" />
+              <span className="text-amber-600">
+                Differenz: {formatAmount(status.net_income - status.total_allocated - status.remaining)}
+              </span>
+            </>
+          )}
+        </div>
         <Button variant="outline" size="sm" onClick={recalculate}>
           <RefreshCw className="size-4" />
           Neu berechnen
         </Button>
       </div>
 
-      <AllocationSummary
-        month={status.month}
-        netIncome={status.net_income}
-        remaining={status.remaining}
-        status={status.status}
-      />
-
-      <div className="space-y-3">
-        <h2 className="text-lg font-medium">Allokation</h2>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {status.buckets.map((bucket) => {
           const config = status.config.find((c) => c.id === bucket.bucket_id);
           if (!config) return null;
