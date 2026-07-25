@@ -57,17 +57,15 @@ export function TransferDialog({ open, onOpenChange, amount, recipientName, reci
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 
-          {tan !== undefined && (
-            <div>
-              <Label htmlFor="tan">TAN</Label>
-              <Input
-                id="tan"
-                value={tan}
-                onChange={(e) => setTan(e.target.value)}
-                placeholder="TAN eingeben"
-              />
-            </div>
-          )}
+          <div>
+            <Label htmlFor="tan">TAN (falls erforderlich)</Label>
+            <Input
+              id="tan"
+              value={tan}
+              onChange={(e) => setTan(e.target.value)}
+              placeholder="TAN eingeben"
+            />
+          </div>
 
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={sending}>

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from fastapi import HTTPException
+
 from finance_server.core.database import get_connection
 from finance_server.db import allocation as db
 from finance_server.db.settings import get_setting, set_setting
@@ -12,6 +14,14 @@ class AllocationService:
         return db.list_buckets()
 
     def update_bucket(self, bucket_id: int, payload: dict[str, Any]) -> dict[str, Any] | None:
+        if "percentage" in payload:
+            buckets = db.list_buckets()
+            other_sum = sum(
+                b["percentage"] for b in buckets
+                if b["id"] != bucket_id and b["is_active"] and b["bucket_type"] != "spending"
+            )
+            if other_sum + payload["percentage"] > 100:
+                raise HTTPException(status_code=400, detail="Prozentsätze dürfen 100% nicht überschreiten")
         return db.update_bucket(bucket_id, payload)
 
     def get_bafoeg_config(self) -> dict[str, Any] | None:
@@ -39,24 +49,16 @@ class AllocationService:
         buckets = [b for b in db.list_buckets() if b["is_active"]]
         active_percentage_sum = db.get_active_buckets_sum_percentage()
 
-        spending_amount = 0.0
-        total_allocated = net_income
-
-        run_id = db.create_run(month, net_income, total_allocated)
+        run_id = db.create_run(month, net_income, net_income)
 
         for bucket in buckets:
             btype = bucket["bucket_type"]
             if btype == "spending":
-                pct = 100 - active_percentage_sum
-                if pct < 0:
-                    pct = 0
+                pct = max(0, 100 - active_percentage_sum)
             else:
                 pct = bucket["percentage"]
             target = round(net_income * pct / 100, 2)
             db.create_run_bucket(run_id, bucket["id"], target)
-
-            if btype == "spending":
-                spending_amount = target
 
         run = db.get_run_for_month(month)
         return self._build_run_response(run)
@@ -77,14 +79,25 @@ class AllocationService:
     def _detect_income(self, month: str) -> float:
         start = f"{month}-01"
         end = f"{month}-31"
+        income_category_id = get_setting("income_category_id")
         with get_connection() as connection:
-            row = connection.execute(
-                """SELECT COALESCE(SUM(amount), 0)
-                   FROM umsaetze
-                   WHERE amount > 0
-                     AND date >= ? AND date <= ?""",
-                (start, end),
-            ).fetchone()
+            if income_category_id:
+                row = connection.execute(
+                    """SELECT COALESCE(SUM(amount), 0)
+                       FROM umsaetze
+                       WHERE amount > 0 AND kategorie = ?
+                         AND date >= ? AND date <= ?""",
+                    (int(income_category_id), start, end),
+                ).fetchone()
+            else:
+                row = connection.execute(
+                    """SELECT COALESCE(SUM(amount), 0)
+                       FROM umsaetze
+                       WHERE amount > 0
+                         AND date >= ? AND date <= ?
+                         AND (purpose LIKE '%Gehalt%' OR purpose LIKE '%Lohn%' OR purpose LIKE '%Auszahlung%')""",
+                    (start, end),
+                ).fetchone()
         return round(row[0], 2) if row else 0.0
 
     def transfer_run_bucket(self, run_bucket_id: int) -> dict[str, Any]:
@@ -97,7 +110,6 @@ class AllocationService:
                 (run_bucket_id,),
             ).fetchone()
         if not row:
-            from fastapi import HTTPException
             raise HTTPException(status_code=404, detail="Run-Bucket nicht gefunden")
 
         rb = dict(row)

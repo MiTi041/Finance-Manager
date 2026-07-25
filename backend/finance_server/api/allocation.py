@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path as ApiPath
 
+from finance_server.fints.common import TanRequired, TanTimeout
+from finance_server.fints.transfer import send_transfer
 from finance_server.models.allocation import (
     AllocationBucketUpdate,
     BafoegConfig,
     AllocationSettingsUpdate,
 )
+from finance_server.models.fints import TransferRequest
 from finance_server.services.allocation_service import AllocationService
 from finance_server.api.deps import get_allocation_service
 
@@ -20,7 +24,6 @@ def get_allocation_status(
     month: str | None = None,
     service: AllocationService = Depends(get_allocation_service),
 ) -> dict[str, Any]:
-    from datetime import datetime
     target_month = month or datetime.now().strftime("%Y-%m")
     return service.get_or_create_run(target_month)
 
@@ -96,8 +99,6 @@ def execute_transfer(
 ) -> dict[str, Any]:
     tan = (body or {}).get("tan")
     transfer_data = service.transfer_run_bucket(run_bucket_id)
-    from finance_server.fints.transfer import send_transfer
-    from finance_server.models.fints import TransferRequest
 
     req = TransferRequest(
         recipient_iban=transfer_data["recipient_iban"],
@@ -112,7 +113,6 @@ def execute_transfer(
     try:
         result = send_transfer(req)
     except Exception as e:
-        from finance_server.fints.common import TanRequired, TanTimeout
         if isinstance(e, TanRequired):
             raise HTTPException(
                 status_code=409,
