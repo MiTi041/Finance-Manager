@@ -134,24 +134,17 @@ export function BucketCard({
             <span className="font-semibold">{formatAmount(bucket.transferred)}</span>
           </div>
         )}
-        {!isInfoOnly && (
-          <div className="bg-muted h-2 w-full overflow-hidden rounded">
-            <div
-              className="h-full rounded bg-primary transition-all"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-        )}
+        <div className="bg-muted h-2 w-full overflow-hidden rounded">
+          <div
+            className="h-full rounded bg-primary transition-all"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
         {bucketTags[bucket.bucket_type] && (
           <p className="text-muted-foreground text-xs">Tag: {bucketTags[bucket.bucket_type]}</p>
         )}
         <div className="mt-auto flex flex-col gap-2">
-          {isInfoOnly ? (
-            <div className="flex w-full items-center justify-center gap-2 rounded-md border border-muted bg-muted/30 px-3 py-2 text-muted-foreground">
-              <Wallet className="size-4" />
-              <span className="text-sm">Restbudget: {formatAmount(bucket.target_amount)}</span>
-            </div>
-          ) : isPaid ? (
+          {isInfoOnly ? null : isPaid ? (
             <div className="flex w-full items-center justify-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-emerald-700">
               <span className="text-sm font-medium">Monatsziel erreicht</span>
             </div>
