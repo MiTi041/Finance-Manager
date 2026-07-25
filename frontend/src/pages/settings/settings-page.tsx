@@ -5,6 +5,7 @@ import {
   Contact,
   Database,
   Fingerprint,
+  PiggyBank,
   RefreshCw,
   Tags,
   UserCheck,
@@ -24,12 +25,14 @@ import { ZahlungspartnerTab } from "./tabs/zahlungspartner/zahlungspartner-tab";
 import { RecipientAccountsTab } from "./tabs/recipient-accounts/recipient-accounts-tab";
 import { CategoriesTab } from "./tabs/categories/categories-tab";
 import { SyncTab } from "./tabs/sync-tab";
+import { AllocationSettingsTab } from "./tabs/allocation/allocation-settings-tab";
 
 const SETTINGS_TAB_VALUES = [
   "banking",
   "zahlungspartner",
   "recipients",
   "categories",
+  "allocation",
   "sync",
   "productId",
   "database",
@@ -45,6 +48,7 @@ const tabs = [
   { value: "zahlungspartner" as const, label: "Zahlungspartner", icon: Contact },
   { value: "recipients" as const, label: "Empfängerkonten", icon: UserCheck },
   { value: "categories" as const, label: "Kategorien", icon: Tags },
+  { value: "allocation" as const, label: "Allokation", icon: PiggyBank },
   { value: "sync" as const, label: "Sync", icon: RefreshCw },
   { value: "productId" as const, label: "Produkt-ID", icon: Fingerprint },
   { value: "database" as const, label: "Datenbank", icon: Database },
@@ -55,6 +59,7 @@ const tabComponents: Record<SettingsTabValue, () => React.ReactNode> = {
   zahlungspartner: () => <ZahlungspartnerTab />,
   recipients: () => <RecipientAccountsTab />,
   categories: () => <CategoriesTab />,
+  allocation: () => <AllocationSettingsTab />,
   sync: () => <SyncTab />,
   productId: () => <ProductIdTab />,
   database: () => <DbExportImportTab />,

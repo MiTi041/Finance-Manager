@@ -137,7 +137,7 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
             f"SELECT 1 FROM {table} WHERE {pk} = ?", (row_id,)
         ).fetchone()
 
-        if existing and "updated_at" in valid_cols:
+        if existing and "updated_at" in valid_cols and op_type != "INSERT":
             current_updated = connection.execute(
                 f"SELECT updated_at FROM {table} WHERE {pk} = ?", (row_id,)
             ).fetchone()["updated_at"]
