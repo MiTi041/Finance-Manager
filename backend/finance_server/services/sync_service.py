@@ -70,10 +70,16 @@ def load_r2_config() -> dict[str, str] | None:
 def save_r2_recovery_bundle(password: str) -> None:
     config = load_r2_config()
     if not config:
+        logger.warning("No R2 config found, cannot save recovery bundle")
         return
-    key, _ = derive_key(password)
+    key, key_id = derive_key(password)
     encrypted = encrypt_dict(key, config)
     set_setting("sync_r2_recovery_bundle", encrypted.hex())
+    try:
+        r2 = R2Client(**config)
+        r2.put_object(f"_recovery/{key_id}", encrypted)
+    except Exception:
+        logger.exception("Failed to upload recovery bundle to R2")
 
 
 def recover_r2_config(password: str) -> dict[str, str] | None:
@@ -92,6 +98,38 @@ def recover_r2_config(password: str) -> dict[str, str] | None:
         return config
     except Exception:
         logger.exception("Failed to recover R2 config from bundle")
+        return None
+
+
+def recover_r2_config_remote(
+    password: str,
+    account_id: str,
+    bucket: str,
+) -> dict[str, str] | None:
+    key, key_id = derive_key(password)
+    import requests
+    url = f"https://{bucket}.{account_id}.r2.cloudflarestorage.com/_recovery/{key_id}"
+    try:
+        resp = requests.get(url, timeout=10)
+        if resp.status_code != 200:
+            return None
+        data = resp.content
+    except requests.RequestException:
+        logger.exception("Failed to fetch recovery bundle from R2 public URL")
+        return None
+    if not data:
+        return None
+    try:
+        config = decrypt_dict(data, key)
+        save_r2_config(
+            account_id=config["account_id"],
+            access_key_id=config["access_key_id"],
+            secret_access_key=config["secret_access_key"],
+            bucket=config["bucket"],
+        )
+        return config
+    except Exception:
+        logger.exception("Failed to decrypt remote recovery bundle")
         return None
 
 

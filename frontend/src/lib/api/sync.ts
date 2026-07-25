@@ -44,11 +44,17 @@ export async function clearSync(): Promise<void> {
   await parseJsonResponse(response);
 }
 
-export async function recoverSync(password: string): Promise<void> {
+export interface SyncRecoverRequest {
+  password: string;
+  r2_account_id?: string;
+  r2_bucket?: string;
+}
+
+export async function recoverSync(request: SyncRecoverRequest): Promise<void> {
   const response = await fetch(`${getApiBaseUrl()}/sync/recover`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ password }),
+    body: JSON.stringify(request),
   });
   await parseJsonResponse(response);
 }

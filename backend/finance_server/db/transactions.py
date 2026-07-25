@@ -63,6 +63,7 @@ def to_row_payload(tx: dict[str, Any]) -> dict[str, Any]:
         "amount": normalize_local_amount(data.get("amount")),
         "currency": normalize_text(data.get("currency")),
         "dummy_entry": 1 if data.get("dummy_entry") else 0,
+        "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         "created_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
     }
 
@@ -78,6 +79,8 @@ def insert_transactions(rows: Iterable[dict[str, Any]]) -> dict[str, int]:
         return {"received": 0, "inserted": 0, "ignored": 0}
 
     with get_connection() as connection:
+        before_max = connection.execute("SELECT COALESCE(MAX(id), 0) FROM umsaetze").fetchone()[0]
+
         cursor = connection.executemany(
             """
             INSERT OR IGNORE INTO umsaetze (
@@ -112,6 +115,15 @@ def insert_transactions(rows: Iterable[dict[str, Any]]) -> dict[str, int]:
             normalized_rows,
         )
         inserted = cursor.rowcount if cursor.rowcount >= 0 else 0
+
+        if inserted > 0:
+            after_max = connection.execute("SELECT COALESCE(MAX(id), 0) FROM umsaetze").fetchone()[0]
+            new_rows = connection.execute(
+                "SELECT * FROM umsaetze WHERE id > ? AND id <= ?",
+                (before_max, after_max),
+            ).fetchall()
+            for new_row in new_rows:
+                _log("umsaetze", new_row["id"], "INSERT", dict(new_row))
 
     received = len(normalized_rows)
     return {
@@ -287,7 +299,10 @@ def delete_transactions_batch(transaction_ids: list[int]) -> int:
             f"DELETE FROM umsaetze WHERE id IN ({placeholders})",
             transaction_ids,
         )
-        return cursor.rowcount
+        result = cursor.rowcount
+        for tid in transaction_ids:
+            _log("umsaetze", tid, "DELETE")
+        return result
 
 
 def update_transaction_note(transaction_id: int, note: str | None) -> bool:

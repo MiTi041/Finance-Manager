@@ -29,6 +29,7 @@ import {
   ShieldCheck,
   PlugZap,
   Sparkles,
+  ChevronDown,
 } from "lucide-react";
 
 function relativeTime(iso: string | null): string {
@@ -316,12 +317,20 @@ export function SyncTab() {
     };
   }, []);
 
+  const [recoverR2AccountId, setRecoverR2AccountId] = useState("");
+  const [recoverR2Bucket, setRecoverR2Bucket] = useState("");
+  const [showRecoverAdvanced, setShowRecoverAdvanced] = useState(false);
+
   const tryRecover = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     try {
-      await recoverSync(password);
+      await recoverSync({
+        password,
+        ...(recoverR2AccountId ? { r2_account_id: recoverR2AccountId } : {}),
+        ...(recoverR2Bucket ? { r2_bucket: recoverR2Bucket } : {}),
+      });
       startPoll();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
@@ -565,7 +574,7 @@ export function SyncTab() {
 
         {error && <ErrorBanner message={error} />}
 
-        {mode === "connect" ? (
+          {mode === "connect" ? (
           <form onSubmit={tryRecover} className="space-y-4">
             <div className="space-y-2">
               <FieldLabel icon={Lock}>Sync-Passwort</FieldLabel>
@@ -575,6 +584,44 @@ export function SyncTab() {
                 Passwort zum Verbinden.
               </p>
             </div>
+
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => setShowRecoverAdvanced(!showRecoverAdvanced)}
+                className="flex cursor-pointer items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <ChevronDown
+                  className={`size-3 transition-transform ${showRecoverAdvanced ? "rotate-180" : ""}`}
+                />
+                Erweiterte Einstellungen (für neue Geräte)
+              </button>
+              {showRecoverAdvanced && (
+                <div className="space-y-3 rounded-lg border p-3.5">
+                  <p className="text-xs text-muted-foreground">
+                    Für die Ersteinrichtung auf einem neuen Gerät werden die R2-Zugangsdaten benötigt.
+                    Der öffentliche Zugriff auf den Bucket muss in der Cloudflare Console aktiviert sein.
+                  </p>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium">R2 Account ID</label>
+                    <Input
+                      value={recoverR2AccountId}
+                      onChange={(e) => setRecoverR2AccountId(e.target.value)}
+                      placeholder="R2 Account ID"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium">Bucket-Name</label>
+                    <Input
+                      value={recoverR2Bucket}
+                      onChange={(e) => setRecoverR2Bucket(e.target.value)}
+                      placeholder="finance-sync"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
             <Button
               type="submit"
               disabled={loading || password.length < 8}

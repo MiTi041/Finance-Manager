@@ -74,7 +74,7 @@ export function mapTransaction(dto: TransactionDto): Transaction {
     },
 
     zahlungspartner: {
-      name: dto.applicant_name || dto.recipient_name || "",
+      name: dto.applicant_name && !/^[A-Z]{2}\d/.test(dto.applicant_name) ? dto.applicant_name : dto.recipient_name || "",
       datenbankName: "",
       website: null,
       logoUrl: null,

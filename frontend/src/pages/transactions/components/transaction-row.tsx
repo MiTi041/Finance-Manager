@@ -193,7 +193,11 @@ export function TransactionRow({
     transaction.konto.blz === "48250110";
   const displayName = isEntgeltabschluss
     ? "Entgeltabschluss"
-    : subscriptionOverride?.datenbankName || subscriptionOverride?.name || transaction.zahlungspartner.datenbankName || transaction.zahlungspartner.name || "–";
+    : subscriptionOverride?.datenbankName ||
+      subscriptionOverride?.name ||
+      transaction.zahlungspartner.datenbankName ||
+      transaction.zahlungspartner.name ||
+      "–";
   const overridePartnerName =
     subscriptionOverride && transaction.zahlungspartner.name !== displayName
       ? transaction.zahlungspartner.datenbankName || transaction.zahlungspartner.name
@@ -499,12 +503,19 @@ export function TransactionRow({
                   }
                   sizeClassName="size-12 shrink-0"
                   backgroundClassName={
-                    (subscriptionOverride?.logoWhiteBackground ?? transaction.zahlungspartner.logoWhiteBackground)
+                    (subscriptionOverride?.logoWhiteBackground ??
+                    transaction.zahlungspartner.logoWhiteBackground)
                       ? "bg-white"
                       : "bg-zinc-900"
                   }
-                  kind={(subscriptionOverride?.isCompany ?? transaction.zahlungspartner.isCompany) ? "company" : "person"}
-                  imgNoPadding={!(subscriptionOverride?.logoPadding ?? transaction.zahlungspartner.logoPadding)}
+                  kind={
+                    (subscriptionOverride?.isCompany ?? transaction.zahlungspartner.isCompany)
+                      ? "company"
+                      : "person"
+                  }
+                  imgNoPadding={
+                    !(subscriptionOverride?.logoPadding ?? transaction.zahlungspartner.logoPadding)
+                  }
                 />
               )}
 
@@ -513,16 +524,14 @@ export function TransactionRow({
                   <p className="truncate text-sm font-medium text-foreground flex gap-2 items-end">
                     {displayName}
                     {overridePartnerName ? (
-                      <span className="text-xs text-muted-foreground">
-                        {overridePartnerName}
-                      </span>
+                      <span className="text-xs text-muted-foreground">{overridePartnerName}</span>
                     ) : displayName !== transaction.zahlungspartner.name ? (
                       <span className="text-xs text-muted-foreground">
                         {transaction.zahlungspartner.name}
                       </span>
                     ) : null}
                     {deviateApplicant !== transaction.zahlungspartner.name && deviateApplicant ? (
-                      <span className="text-xs text-muted-foreground">{deviateApplicant}</span>
+                      <span className="text-xs text-muted-foreground"> {deviateApplicant}</span>
                     ) : null}
                   </p>
 
@@ -620,10 +629,7 @@ export function TransactionRow({
                     : "text-sm font-semibold tabular-nums text-green-600"
                 }
               >
-                {formatAmount(
-                  displayAmount,
-                  transaction.betrag.waehrung,
-                )}
+                {formatAmount(displayAmount, transaction.betrag.waehrung)}
               </span>
             </span>
             <span
@@ -683,7 +689,9 @@ export function TransactionRow({
                         src={overrideLogoSrc}
                         alt={subscriptionOverride.name}
                         sizeClassName="size-8 shrink-0"
-                        backgroundClassName={subscriptionOverride.logoWhiteBackground ? "bg-white" : "bg-zinc-900"}
+                        backgroundClassName={
+                          subscriptionOverride.logoWhiteBackground ? "bg-white" : "bg-zinc-900"
+                        }
                         kind={subscriptionOverride.isCompany ? "company" : "person"}
                         imgNoPadding={!subscriptionOverride.logoPadding}
                       />
@@ -694,7 +702,11 @@ export function TransactionRow({
                         <div className="flex items-center gap-1">
                           <p className="text-[10px] text-muted-foreground">via Abonnement</p>
                           <HelpButton className="!size-3 !text-[8px]">
-                            <p>Diese Transaktion ist einem Abonnement zugeordnet. Der hier hinterlegte Name überschreibt den ursprünglichen Empfängernamen der Bank und wird stattdessen in der Übersicht angezeigt.</p>
+                            <p>
+                              Diese Transaktion ist einem Abonnement zugeordnet. Der hier
+                              hinterlegte Name überschreibt den ursprünglichen Empfängernamen der
+                              Bank und wird stattdessen in der Übersicht angezeigt.
+                            </p>
                           </HelpButton>
                         </div>
                       </div>
@@ -790,7 +802,12 @@ export function TransactionRow({
                           <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
                             Unbekannte IBAN
                             <HelpButton className="!size-3 !text-[8px]">
-                              <p>Die IBAN dieses Zahlungspartners ist noch keinem Eintrag zugeordnet. Ordne sie einem bestehenden Zahlungspartner zu oder lege einen neuen an, damit die Transaktion korrekt in Analysen und Übersichten erscheint.</p>
+                              <p>
+                                Die IBAN dieses Zahlungspartners ist noch keinem Eintrag zugeordnet.
+                                Ordne sie einem bestehenden Zahlungspartner zu oder lege einen neuen
+                                an, damit die Transaktion korrekt in Analysen und Übersichten
+                                erscheint.
+                              </p>
                             </HelpButton>
                           </p>
                           <div className="flex flex-col gap-4 ">
@@ -981,16 +998,24 @@ export function TransactionRow({
 
                     <div className="flex items-center gap-2">
                       <div className="flex-1">
-                        <div className={cn(
-                          "h-1.5 rounded-full transition-colors",
-                          splitAbsSum === 0 ? "bg-border/40" :
-                          splitMatchesTotal ? "bg-green-500/30" : "bg-destructive/30",
-                        )}>
+                        <div
+                          className={cn(
+                            "h-1.5 rounded-full transition-colors",
+                            splitAbsSum === 0
+                              ? "bg-border/40"
+                              : splitMatchesTotal
+                                ? "bg-green-500/30"
+                                : "bg-destructive/30",
+                          )}
+                        >
                           <div
                             className={cn(
                               "h-full rounded-full transition-all",
-                              splitAbsSum === 0 ? "w-0" :
-                              splitMatchesTotal ? "bg-green-500" : "bg-destructive",
+                              splitAbsSum === 0
+                                ? "w-0"
+                                : splitMatchesTotal
+                                  ? "bg-green-500"
+                                  : "bg-destructive",
                             )}
                             style={{ width: `${Math.min((splitAbsSum / absTotal) * 100, 100)}%` }}
                           />
@@ -999,7 +1024,9 @@ export function TransactionRow({
                       <span
                         className={cn(
                           "text-xs tabular-nums font-medium",
-                          splitMatchesTotal ? "text-green-600 dark:text-green-400" : "text-destructive",
+                          splitMatchesTotal
+                            ? "text-green-600 dark:text-green-400"
+                            : "text-destructive",
                         )}
                       >
                         {formatAmount(splitAbsSum, transaction.betrag.waehrung)}
@@ -1104,7 +1131,8 @@ export function TransactionRow({
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent side="top" className="max-w-[240px] text-xs">
-                        Teilt eine Buchung auf mehrere Kategorien auf – z. B. Lebensmittel und Drogerie bei einem Einkauf.
+                        Teilt eine Buchung auf mehrere Kategorien auf – z. B. Lebensmittel und
+                        Drogerie bei einem Einkauf.
                       </TooltipContent>
                     </Tooltip>
 
@@ -1373,9 +1401,15 @@ function RefundSectionIncoming({
           <div className="flex items-center gap-3 min-w-0">
             <BrandIcon
               src={linkedTransaction.zahlungspartner.logoUrl || undefined}
-              alt={linkedTransaction.zahlungspartner.datenbankName || linkedTransaction.zahlungspartner.name || "?"}
+              alt={
+                linkedTransaction.zahlungspartner.datenbankName ||
+                linkedTransaction.zahlungspartner.name ||
+                "?"
+              }
               sizeClassName="size-8 shrink-0"
-              backgroundClassName={linkedTransaction.zahlungspartner.logoWhiteBackground ? "bg-white" : "bg-zinc-900"}
+              backgroundClassName={
+                linkedTransaction.zahlungspartner.logoWhiteBackground ? "bg-white" : "bg-zinc-900"
+              }
               kind={linkedTransaction.zahlungspartner.isCompany ? "company" : "person"}
               imgNoPadding={!linkedTransaction.zahlungspartner.logoPadding}
             />
@@ -1392,7 +1426,10 @@ function RefundSectionIncoming({
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <span className="rounded-md bg-red-500/10 px-2 py-1 text-xs font-medium tabular-nums text-red-500">
-              {formatAmount(Math.abs(linkedTransaction.betrag.wert), linkedTransaction.betrag.waehrung)}
+              {formatAmount(
+                Math.abs(linkedTransaction.betrag.wert),
+                linkedTransaction.betrag.waehrung,
+              )}
             </span>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -1525,7 +1562,9 @@ function RefundSectionOutgoing({
                 src={refund.zahlungspartner.logoUrl || undefined}
                 alt={refund.zahlungspartner.datenbankName || refund.zahlungspartner.name || "?"}
                 sizeClassName="size-8 shrink-0"
-                backgroundClassName={refund.zahlungspartner.logoWhiteBackground ? "bg-white" : "bg-zinc-900"}
+                backgroundClassName={
+                  refund.zahlungspartner.logoWhiteBackground ? "bg-white" : "bg-zinc-900"
+                }
                 kind={refund.zahlungspartner.isCompany ? "company" : "person"}
                 imgNoPadding={!refund.zahlungspartner.logoPadding}
               />

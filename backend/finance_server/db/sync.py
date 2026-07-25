@@ -71,7 +71,27 @@ VALID_SYNC_TABLES = {"kategorien", "umsaetze", "zahlungspartner", "empfaengerkon
 
 VALID_SYNC_COLUMNS: dict[str, set[str]] = {
     "kategorien": {"id", "name", "typ", "parent_id", "personal_expense", "icon", "updated_at"},
-    "umsaetze": {"id", "kategorie", "note", "splits", "refund_ref_transaction_id", "updated_at"},
+    "umsaetze": {
+        "id",
+        "account_iban", "account_bic", "account_accountnumber", "account_subaccount", "account_blz",
+        "status", "funds_code", "transaction_id", "customer_reference", "bank_reference",
+        "extra_details",
+        "date", "entry_date", "guessed_entry_date",
+        "transaction_reference", "transaction_code", "posting_text", "prima_nota", "purpose",
+        "additional_purpose", "end_to_end_reference", "additional_position_reference",
+        "additional_position_date",
+        "applicant_bic", "applicant_iban", "applicant_name", "recipient_name",
+        "deviate_applicant", "deviate_recipient",
+        "gvc_applicant_iban", "gvc_applicant_bic",
+        "applicant_creditor_id", "debitor_identifier", "return_debit_notes",
+        "purpose_code", "FRST_ONE_OFF_RECC", "old_SEPA_CI",
+        "old_SEPA_additional_position_reference",
+        "settlement_tag",
+        "original_amount", "amount", "currency",
+        "dummy_entry", "transaction_hash",
+        "kategorie", "note", "splits", "refund_ref_transaction_id",
+        "created_at", "updated_at",
+    },
     "zahlungspartner": {"id", "name", "website", "logo_url", "local_logo_path", "is_company", "logo_white_background", "logo_padding", "updated_at"},
     "empfaengerkonten": {"id", "account_name", "iban", "bic", "recipient_name", "is_donation_account", "updated_at"},
     "subscription_identities": {"id", "counterparty_name", "amount", "display_name", "f_zahlungspartner_id", "dismissed", "updated_at"},
@@ -105,6 +125,9 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
 
         if pk == "id" and pk not in filtered_data:
                 return False
+
+        if table == "umsaetze" and "splits" in filtered_data and isinstance(filtered_data["splits"], (dict, list)):
+            filtered_data["splits"] = json.dumps(filtered_data["splits"], ensure_ascii=False) if filtered_data["splits"] else None
 
         columns = [k for k in filtered_data.keys() if k != pk]
         placeholders = [f"{k} = ?" for k in columns]

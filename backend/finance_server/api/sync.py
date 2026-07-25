@@ -11,6 +11,7 @@ from finance_server.services.sync_service import (
     load_r2_config,
     save_r2_recovery_bundle,
     recover_r2_config,
+    recover_r2_config_remote,
 )
 from finance_server.db.sync import bootstrap_sync_ops
 
@@ -73,8 +74,23 @@ def sync_recover(
         raise HTTPException(status_code=409, detail="Sync bereits konfiguriert")
 
     config = recover_r2_config(request.password)
+    if not config and request.r2_account_id and request.r2_bucket:
+        config = recover_r2_config_remote(
+            request.password,
+            request.r2_account_id,
+            request.r2_bucket,
+        )
+
     if not config:
-        raise HTTPException(status_code=400, detail="R2-Konfiguration konnte nicht wiederhergestellt werden. Sync bitte vollständig neu einrichten.")
+        if request.r2_account_id and request.r2_bucket:
+            raise HTTPException(
+                status_code=400,
+                detail="Wiederherstellung fehlgeschlagen. Prüfe Passwort und R2-Zugangsdaten. Der Recovery-Bundle muss vom Hauptgerät in R2 hochgeladen worden sein. Alternativ ist ggf. der öffentliche Zugriff auf den R2-Bucket erforderlich.",
+            )
+        raise HTTPException(
+            status_code=400,
+            detail="Kein lokales Recovery-Bundle gefunden. Gib für die Ersteinrichtung auf einem neuen Gerät bitte auch die R2 Account-ID und den Bucket-Namen mit an.",
+        )
 
     save_sync_key(request.password)
     service.stop()

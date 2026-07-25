@@ -263,9 +263,13 @@ def update_transactions_category_batch(transaction_ids: list[int], category_id: 
     if not transaction_ids:
         return 0
     placeholders = ",".join("?" for _ in transaction_ids)
+    now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     with get_connection() as connection:
         cursor = connection.execute(
             f"UPDATE umsaetze SET kategorie = ? WHERE id IN ({placeholders})",
             [category_id] + transaction_ids,
         )
-        return cursor.rowcount
+        result = cursor.rowcount
+        for tid in transaction_ids:
+            _log("umsaetze", tid, "UPDATE", {"id": tid, "kategorie": category_id, "updated_at": now})
+        return result

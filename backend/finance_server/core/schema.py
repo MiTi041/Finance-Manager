@@ -413,3 +413,6 @@ def initialize_database(connection: sqlite3.Connection) -> None:
             "updated_at": "TEXT",
         },
     )
+    connection.execute(
+        "UPDATE umsaetze SET updated_at = created_at WHERE updated_at IS NULL"
+    )

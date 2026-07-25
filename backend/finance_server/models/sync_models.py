@@ -13,6 +13,8 @@ class SyncSetupRequest(BaseModel):
 
 class SyncRecoverRequest(BaseModel):
     password: str = Field(..., min_length=8, description="Sync-Passwort")
+    r2_account_id: str | None = None
+    r2_bucket: str | None = None
 
 
 class SyncStatusResponse(BaseModel):
