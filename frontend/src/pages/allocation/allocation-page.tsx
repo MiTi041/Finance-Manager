@@ -46,7 +46,7 @@ export default function AllocationPage() {
   }, [status, recipientAccounts]);
 
   const confirmTransfer = useCallback(async (tan?: string) => {
-    await transfer(runBucketIdRef.current);
+    await transfer(runBucketIdRef.current, tan);
   }, [transfer]);
 
   if (loading) {
@@ -94,11 +94,15 @@ export default function AllocationPage() {
           const config = status.config.find((c) => c.id === bucket.bucket_id);
           if (!config) return null;
           if (bucket.bucket_type === "bafoeg" && !config.is_active) return null;
+          const recipient = config.recipient_account_id
+            ? recipientAccounts.find((r) => r.id === config.recipient_account_id)
+            : undefined;
           return (
             <BucketCard
               key={bucket.id}
               bucket={bucket}
               config={config}
+              hasRecipient={!!recipient}
               onTransfer={handleTransfer}
               transferring={transferring === bucket.id}
             />

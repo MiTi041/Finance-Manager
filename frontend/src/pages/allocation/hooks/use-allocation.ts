@@ -38,10 +38,10 @@ export function useAllocation(month?: string) {
     }
   }, [month]);
 
-  const transfer = useCallback(async (runBucketId: number) => {
+  const transfer = useCallback(async (runBucketId: number, tan?: string) => {
     setTransferring(runBucketId);
     try {
-      await executeTransfer(runBucketId);
+      await executeTransfer(runBucketId, tan);
       await load();
     } catch (e) {
       throw e;

@@ -27,11 +27,12 @@ const bucketDescriptions: Record<string, string> = {
 type Props = {
   bucket: AllocationRunBucket;
   config: AllocationBucket;
+  hasRecipient: boolean;
   onTransfer: (runBucketId: number) => void;
   transferring: boolean;
 };
 
-export function BucketCard({ bucket, config, onTransfer, transferring }: Props) {
+export function BucketCard({ bucket, config, hasRecipient, onTransfer, transferring }: Props) {
   const progress = bucket.target_amount > 0
     ? Math.min(100, Math.round((bucket.transferred / bucket.target_amount) * 100))
     : 0;
@@ -77,6 +78,10 @@ export function BucketCard({ bucket, config, onTransfer, transferring }: Props) 
           ) : isPaid ? (
             <div className="flex w-full items-center justify-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-emerald-700">
               <span className="text-sm font-medium">Monatsziel erreicht</span>
+            </div>
+          ) : !hasRecipient ? (
+            <div className="flex w-full items-center justify-center gap-2 rounded-md border border-muted bg-muted/30 px-3 py-2 text-muted-foreground text-xs">
+              Kein Empfänger konfiguriert
             </div>
           ) : (
             <Button
