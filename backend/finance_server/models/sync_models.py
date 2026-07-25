@@ -23,3 +23,5 @@ class SyncStatusResponse(BaseModel):
     r2_bucket: str | None = None
     last_sync_at: str | None = None
     pending_push: int = 0
+    pull_total: int = 0
+    pull_progress: int = 0

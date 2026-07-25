@@ -34,6 +34,8 @@ def sync_status(service: SyncService = Depends(get_sync_service)) -> SyncStatusR
         r2_bucket=r2_config["bucket"] if r2_config else None,
         last_sync_at=status_data.get("last_sync_at"),
         pending_push=status_data.get("pending_push", 0),
+        pull_total=status_data.get("pull_total", 0),
+        pull_progress=status_data.get("pull_progress", 0),
     )
 
 

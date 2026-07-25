@@ -5,7 +5,6 @@ import {
   triggerSync,
   clearSync,
   recoverSync,
-  pollSyncStatus,
   type SyncStatus,
 } from "@/lib/api/sync";
 import { Button } from "@/components/ui/button";
@@ -191,6 +190,8 @@ export function SyncTab() {
   const pollCleanup = useRef<(() => void) | null>(null);
   const initialPendingRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
+  const hasSeenPushRef = useRef(false);
+  const hasSeenPullRef = useRef(false);
 
   const startPoll = (
     title = "Sync wird eingerichtet",
@@ -203,57 +204,99 @@ export function SyncTab() {
     setEtaText(null);
     initialPendingRef.current = null;
     startTimeRef.current = Date.now();
+    hasSeenPushRef.current = false;
+    hasSeenPullRef.current = false;
 
-    pollCleanup.current = pollSyncStatus(
-      2000,
-      (s) => {
+    let cancelled = false;
+    const complete = () => {
+      cancelled = true;
+      setPollMsg(null);
+      refresh();
+    };
+
+    const poll = async () => {
+      if (cancelled) return;
+      try {
+        const s = await getSyncStatus();
+        if (cancelled) return;
         setStatus(s);
 
-        if (initialPendingRef.current === null) {
-          if (s.pending_push > 0) {
-            initialPendingRef.current = s.pending_push;
-          } else {
-            setProgress(100);
-            setEtaText(null);
-          }
+        if (s.pending_push > 0) hasSeenPushRef.current = true;
+        if (s.pull_total > 0) hasSeenPullRef.current = true;
+
+        if (initialPendingRef.current === null && s.pending_push > 0) {
+          initialPendingRef.current = s.pending_push;
         }
 
-        if (initialPendingRef.current !== null) {
+        const elapsed = Date.now() - startTimeRef.current;
+
+        // Progress: prefer pull when active, fall back to push
+        let pct: number | null = null;
+        if (s.pull_total > 0) {
+          pct = Math.min((s.pull_progress / s.pull_total) * 100, 100);
+        } else if (initialPendingRef.current !== null) {
           const total = initialPendingRef.current;
-          const remaining = s.pending_push;
-          const done = Math.max(0, total - remaining);
-          const pct = Math.min((done / total) * 100, 100);
-          setProgress(pct);
+          const done = Math.max(0, total - s.pending_push);
+          pct = Math.min((done / total) * 100, 100);
+        }
+        if (pct !== null) setProgress(pct);
 
-          if (remaining > 0 && done > 0) {
-            const elapsed = Date.now() - startTimeRef.current;
-            if (elapsed > 2000) {
-              const ratePerMs = done / elapsed;
-              const remainingMs = remaining / ratePerMs;
-              setEtaText(formatEta(remainingMs));
-            } else {
-              setEtaText(null);
-            }
-          } else {
-            setEtaText(null);
+        // ETA
+        if (s.pull_total > 0 && s.pull_progress > 0 && s.pull_progress < s.pull_total) {
+          const remaining = s.pull_total - s.pull_progress;
+          if (elapsed > 2000) {
+            const ratePerMs = s.pull_progress / elapsed;
+            setEtaText(formatEta(remaining / ratePerMs));
           }
+        } else if (initialPendingRef.current !== null && s.pending_push > 0) {
+          const total = initialPendingRef.current;
+          const done = Math.max(0, total - s.pending_push);
+          if (done > 0 && elapsed > 2000) {
+            const ratePerMs = done / elapsed;
+            setEtaText(formatEta(s.pending_push / ratePerMs));
+          }
+        } else {
+          setEtaText(null);
         }
 
-        setPollMsg(
-          s.pending_push > 0
-            ? `${s.pending_push} Änderung${s.pending_push === 1 ? "" : "en"} werden übertragen …`
-            : "Synchronisation wird abgeschlossen …",
-        );
-      },
-      () => {
+        // Message
+        if (s.pending_push > 0) {
+          const suffix = s.pending_push === 1 ? "" : "en";
+          setPollMsg(`${s.pending_push} Änderung${suffix} werden übertragen …`);
+        } else if (s.pull_total > 0 && s.pull_progress < s.pull_total) {
+          setPollMsg(`${s.pull_progress} von ${s.pull_total} Datenpaketen empfangen …`);
+        } else if (hasSeenPushRef.current || hasSeenPullRef.current) {
+          setPollMsg("Synchronisation wird abgeschlossen …");
+        } else {
+          setPollMsg("Warte auf Daten von anderen Geräten …");
+        }
+
+        // Completion
+        if (s.configured) {
+          const pushDone = s.pending_push === 0;
+          const pullDone = s.pull_total === 0 || s.pull_progress >= s.pull_total;
+
+          if (pushDone && pullDone) {
+            if (hasSeenPushRef.current || hasSeenPullRef.current) {
+              complete();
+              return;
+            }
+            if (elapsed > 35000) {
+              complete();
+              return;
+            }
+          }
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Sync-Fehler");
         setPollMsg(null);
-        refresh();
-      },
-      (err) => {
-        setError(err.message);
-        setPollMsg(null);
-      },
-    );
+        return;
+      }
+      if (!cancelled) setTimeout(poll, 2000);
+    };
+
+    poll();
+    pollCleanup.current = () => { cancelled = true; };
   };
 
   const refresh = () => {

@@ -16,6 +16,8 @@ export interface SyncStatus {
   r2_bucket: string | null;
   last_sync_at: string | null;
   pending_push: number;
+  pull_total: number;
+  pull_progress: number;
 }
 
 export async function getSyncStatus(): Promise<SyncStatus> {

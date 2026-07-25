@@ -103,6 +103,8 @@ class SyncService:
         self._sync_key: bytes | None = None
         self._last_pushed_id = 0
         self._remote_seqs: dict[str, int] = {}
+        self._pull_total = 0
+        self._pull_progress = 0
 
     def is_configured(self) -> bool:
         return load_sync_key() is not None and load_r2_config() is not None
@@ -153,9 +155,12 @@ class SyncService:
             "device_id": get_or_create_device_id(),
             "last_sync_at": get_sync_state("last_sync_at"),
             "pending_push": count_pending_ops(last_pushed),
+            "pull_total": self._pull_total,
+            "pull_progress": self._pull_progress,
         }
 
     def _run_loop(self) -> None:
+        self._push_all_pending()
         while not self._stop_event.is_set():
             try:
                 self._push_cycle()
@@ -168,10 +173,10 @@ class SyncService:
         from datetime import datetime, timezone
         set_sync_state("last_sync_at", datetime.now(timezone.utc).isoformat())
 
-    def _push_cycle(self) -> None:
-        ops = get_pending_ops(self._last_pushed_id)
+    def _push_batch(self) -> bool:
+        ops = get_pending_ops(self._last_pushed_id, limit=500)
         if not ops:
-            return
+            return False
 
         encrypted = encrypt_batch(ops, self._sync_key)
         device_id = get_or_create_device_id()
@@ -182,11 +187,18 @@ class SyncService:
         set_sync_state("last_pushed_id", str(self._last_pushed_id))
         self._mark_synced()
         logger.info("Pushed %d ops (seq %d-%d)", len(ops), ops[0]["seq"], ops[-1]["seq"])
+        return True
+
+    def _push_all_pending(self) -> None:
+        while self._push_batch():
+            pass
+
+    def _push_cycle(self) -> None:
+        self._push_batch()
 
     def _pull_cycle(self) -> None:
         device_id = get_or_create_device_id()
-        prefix = "ops/"
-        all_keys = self._r2_client.list_objects(prefix)
+        all_keys = self._r2_client.list_objects("ops/")
 
         remote_devices = set()
         for k in all_keys:
@@ -194,19 +206,26 @@ class SyncService:
             if len(parts) >= 2:
                 remote_devices.add(parts[1])
 
+        self._pull_total = 0
+        self._pull_progress = 0
+
         for remote_id in remote_devices:
             if remote_id == device_id:
                 continue
             last_seq = self._remote_seqs.get(remote_id, 0)
             remote_prefix = f"ops/{remote_id}/"
-            keys = [k for k in all_keys if k.startswith(remote_prefix)]
+            keys = sorted(k for k in all_keys if k.startswith(remote_prefix))
 
-            for key in sorted(keys):
-                seq_str = key.split("/")[-1].split(".")[0]
+            for key in keys:
                 try:
-                    seq = int(seq_str)
+                    seq = int(key.split("/")[-1].split(".")[0])
                 except ValueError:
                     continue
+                if seq > last_seq:
+                    self._pull_total += 1
+
+            for key in keys:
+                seq = int(key.split("/")[-1].split(".")[0])
                 if seq <= last_seq:
                     continue
 
@@ -218,6 +237,7 @@ class SyncService:
                     apply_sync_op(op)
                 self._remote_seqs[remote_id] = seq
                 self._mark_synced()
+                self._pull_progress += 1
 
         # persist remote seqs
         for remote_id, seq in self._remote_seqs.items():
