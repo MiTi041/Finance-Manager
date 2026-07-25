@@ -70,9 +70,8 @@ export default function AllocationPage() {
   if (!status) return null;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Finanzplan</h1>
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 py-6">
+      <div className="flex items-center justify-end">
         <Button variant="outline" size="sm" onClick={recalculate}>
           <RefreshCw className="size-4" />
           Neu berechnen

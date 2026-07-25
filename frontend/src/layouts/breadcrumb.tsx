@@ -103,6 +103,7 @@ function DynamicBreadcrumbs() {
     transactions: "Transaktionen",
     subscriptions: "Abonnements",
     analytics: "Analyse",
+    "finance-plan": "Finanzplan",
   };
 
   return (
