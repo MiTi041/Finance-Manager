@@ -3,6 +3,8 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
+from datetime import datetime, timezone
+
 from finance_server.core.seed_data import SEED_CATEGORIES_SQL, SEED_ZAHLUNGSPARTNER_SQL, SEED_IBANS_SQL
 
 
@@ -301,6 +303,70 @@ def create_subscription_identities_table(connection: sqlite3.Connection) -> None
     )
 
 
+def create_allocation_buckets_table(connection: sqlite3.Connection) -> None:
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS allocation_buckets (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            bucket_type TEXT NOT NULL CHECK(bucket_type IN (
+                'bafoeg', 'emergency', 'invest', 'donation', 'spending'
+            )),
+            percentage           REAL NOT NULL DEFAULT 0 CHECK(percentage >= 0 AND percentage <= 100),
+            recipient_account_id INTEGER,
+            sender_iban          TEXT,
+            is_active            INTEGER NOT NULL DEFAULT 1,
+            sort_order           INTEGER NOT NULL DEFAULT 0,
+            created_at           TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at           TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (recipient_account_id) REFERENCES empfaengerkonten(id) ON DELETE SET NULL,
+            UNIQUE(bucket_type)
+        )
+    """)
+
+
+def create_allocation_bafoeg_config_table(connection: sqlite3.Connection) -> None:
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS allocation_bafoeg_config (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            total_debt      REAL NOT NULL DEFAULT 7600,
+            monthly_rate    REAL NOT NULL DEFAULT 267,
+            interest_rate   REAL NOT NULL DEFAULT 2.0,
+            payout_date     TEXT,
+            created_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+
+def create_allocation_runs_table(connection: sqlite3.Connection) -> None:
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS allocation_runs (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            month           TEXT NOT NULL,
+            net_income      REAL NOT NULL,
+            total_allocated REAL NOT NULL,
+            status          TEXT NOT NULL DEFAULT 'calculated'
+                CHECK(status IN ('calculated', 'partial', 'completed')),
+            created_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+
+def create_allocation_run_buckets_table(connection: sqlite3.Connection) -> None:
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS allocation_run_buckets (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id          INTEGER NOT NULL,
+            bucket_id       INTEGER NOT NULL,
+            target_amount   REAL NOT NULL,
+            transferred     REAL NOT NULL DEFAULT 0,
+            transferred_at  TEXT,
+            is_completed    INTEGER NOT NULL DEFAULT 0,
+            FOREIGN KEY (run_id) REFERENCES allocation_runs(id) ON DELETE CASCADE,
+            FOREIGN KEY (bucket_id) REFERENCES allocation_buckets(id) ON DELETE CASCADE
+        )
+    """)
+
+
 def migrate_subscription_identities(connection: sqlite3.Connection) -> None:
     _ensure_table_columns(
         connection,
@@ -388,6 +454,29 @@ def initialize_database(connection: sqlite3.Connection) -> None:
     create_subscription_identities_table(connection)
     migrate_subscription_identities(connection)
     create_app_settings_table(connection)
+    create_allocation_buckets_table(connection)
+    create_allocation_bafoeg_config_table(connection)
+    create_allocation_runs_table(connection)
+    create_allocation_run_buckets_table(connection)
+
+    row_count = connection.execute("SELECT COUNT(*) FROM allocation_buckets").fetchone()[0]
+    if row_count == 0:
+        default_buckets = [
+            ("bafoeg", 0.0, None, None, 0, 0),
+            ("emergency", 30.0, None, None, 1, 1),
+            ("invest", 30.0, None, None, 1, 2),
+            ("donation", 10.0, None, None, 1, 3),
+            ("spending", 30.0, None, None, 1, 4),
+        ]
+        now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+        for bt, pct, ra_id, s_iban, active, order in default_buckets:
+            connection.execute(
+                """INSERT INTO allocation_buckets
+                   (bucket_type, percentage, recipient_account_id, sender_iban, is_active, sort_order, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (bt, pct, ra_id, s_iban, active, order, now, now),
+            )
+
     create_sync_tables(connection)
 
     _ensure_table_columns(
