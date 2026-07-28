@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import type { AllocationStatus } from "@/lib/allocation";
-import { fetchAllocationStatus, recalculateRun, executeTransfer } from "@/lib/allocation";
+import { fetchAllocationStatus, recalculateRun, executeTransfer, executeSavingsPlanTransfer } from "@/lib/allocation";
 
 export function useAllocation(month?: string) {
   const [status, setStatus] = useState<AllocationStatus | null>(null);
@@ -8,8 +8,8 @@ export function useAllocation(month?: string) {
   const [error, setError] = useState<string | null>(null);
   const [transferring, setTransferring] = useState<number | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (isInitial = false) => {
+    if (isInitial) setLoading(true);
     setError(null);
     try {
       const data = await fetchAllocationStatus(month);
@@ -17,12 +17,12 @@ export function useAllocation(month?: string) {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Fehler beim Laden");
     } finally {
-      setLoading(false);
+      if (isInitial) setLoading(false);
     }
   }, [month]);
 
   useEffect(() => {
-    void load();
+    void load(true);
 
     const onRefresh = () => void load();
     window.addEventListener("finance-data-refresh", onRefresh);
@@ -31,7 +31,7 @@ export function useAllocation(month?: string) {
 
   const recalculate = useCallback(async () => {
     try {
-      const data = await recalculateRun(month);
+      const data = await recalculateRun(month, true);
       setStatus(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Fehler beim Berechnen");
@@ -50,5 +50,14 @@ export function useAllocation(month?: string) {
     }
   }, [load]);
 
-  return { status, loading, error, load, recalculate, transfer, transferring };
+  const transferSavings = useCallback(async (planId: number, tan?: string, amount?: number) => {
+    try {
+      await executeSavingsPlanTransfer(planId, tan, amount);
+      await load();
+    } catch (e) {
+      throw e;
+    }
+  }, [load]);
+
+  return { status, loading, error, load, recalculate, transfer, transferring, transferSavings };
 }

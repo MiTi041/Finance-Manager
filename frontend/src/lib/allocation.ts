@@ -9,6 +9,8 @@ export type AllocationBucket = {
   sender_iban: string | null;
   is_active: boolean;
   sort_order: number;
+  target_amount?: number | null;
+  target_months?: number | null;
 };
 
 export type AllocationRunBucket = {
@@ -20,6 +22,35 @@ export type AllocationRunBucket = {
   transferred: number;
   transferred_at: string | null;
   is_completed: boolean;
+  spent?: number;
+  saved_total?: number;
+  saved_einzahlungen?: number;
+  saved_entnahmen?: number;
+  month_einzahlungen?: number;
+  goal_amount?: number;
+  months_left?: number;
+};
+
+export type SavingsPlan = {
+  id: number;
+  name: string;
+  tag: string | null;
+  target_amount: number | null;
+  target_date: string | null;
+  target_recipient_name: string | null;
+  target_recipient_iban: string | null;
+  target_recipient_bic: string | null;
+  sender_iban: string | null;
+  is_visible: boolean;
+  monthly_rate: number;
+  saved_amount: number;
+  this_month: number;
+  required_monthly_rate: number | null;
+  income_events_left: number | null;
+  saved_einzahlungen: number;
+  saved_entnahmen: number;
+  month_einzahlungen: number;
+  month_entnahmen: number;
 };
 
 export type AllocationStatus = {
@@ -30,17 +61,9 @@ export type AllocationStatus = {
   status: string;
   buckets: AllocationRunBucket[];
   config: AllocationBucket[];
-};
-
-export type BafoegConfig = {
-  total_debt: number;
-  monthly_rate: number;
-  interest_rate: number;
-  payout_date: string | null;
-};
-
-export type AllocationSettings = {
-  bafoeg_enabled: boolean;
+  savings_total: number;
+  savings_plans: SavingsPlan[];
+  auto_hidden_plan_ids: number[];
 };
 
 export async function fetchAllocationStatus(month?: string): Promise<AllocationStatus> {
@@ -57,7 +80,7 @@ export async function fetchAllocationBuckets(): Promise<AllocationBucket[]> {
 
 export async function updateAllocationBucket(
   bucketId: number,
-  payload: Partial<Pick<AllocationBucket, "percentage" | "recipient_account_id" | "sender_iban" | "is_active">>,
+  payload: Partial<Pick<AllocationBucket, "percentage" | "recipient_account_id" | "sender_iban" | "is_active" | "target_amount" | "target_months">>,
 ): Promise<AllocationBucket> {
   const response = await fetch(`${getApiBaseUrl()}/allocation/buckets/${bucketId}`, {
     method: "PUT",
@@ -69,32 +92,15 @@ export async function updateAllocationBucket(
   return result;
 }
 
-export async function fetchBafoegConfig(): Promise<BafoegConfig> {
-  const response = await fetch(`${getApiBaseUrl()}/allocation/bafoeg-config`);
-  return parseJsonResponse(response);
-}
+export class TanRequiredError extends Error {
+  challenge: string | null;
+  decoupled: boolean;
 
-export async function updateBafoegConfig(payload: Partial<BafoegConfig>): Promise<BafoegConfig> {
-  const response = await fetch(`${getApiBaseUrl()}/allocation/bafoeg-config`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  return parseJsonResponse(response);
-}
-
-export async function fetchAllocationSettings(): Promise<AllocationSettings> {
-  const response = await fetch(`${getApiBaseUrl()}/allocation/settings`);
-  return parseJsonResponse(response);
-}
-
-export async function updateAllocationSettings(payload: Partial<AllocationSettings>): Promise<AllocationSettings> {
-  const response = await fetch(`${getApiBaseUrl()}/allocation/settings`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  return parseJsonResponse(response);
+  constructor(challenge: string | null, decoupled: boolean) {
+    super(challenge || "TAN erforderlich");
+    this.challenge = challenge;
+    this.decoupled = decoupled;
+  }
 }
 
 export async function executeTransfer(
@@ -106,14 +112,26 @@ export async function executeTransfer(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(tan ? { tan } : {}),
   });
+
+  if (response.status === 409) {
+    const payload = await response.json().catch(() => ({}));
+    const detail = payload?.detail || {};
+    if (detail?.code === "TAN_REQUIRED") {
+      throw new TanRequiredError(detail.challenge, detail.decoupled);
+    }
+  }
+
   const result = await parseJsonResponse(response);
   await emitReferenceChange();
   return result;
 }
 
-export async function recalculateRun(month?: string): Promise<AllocationStatus> {
-  const params = month ? `?month=${month}` : "";
-  const response = await fetch(`${getApiBaseUrl()}/allocation/run${params}`, {
+export async function recalculateRun(month?: string, force?: boolean): Promise<AllocationStatus> {
+  const params = new URLSearchParams();
+  if (month) params.set("month", month);
+  if (force) params.set("force", "true");
+  const qs = params.toString();
+  const response = await fetch(`${getApiBaseUrl()}/allocation/run${qs ? `?${qs}` : ""}`, {
     method: "POST",
   });
   return parseJsonResponse(response);
@@ -123,4 +141,93 @@ export async function fetchAllocationHistory(): Promise<{ id: number; month: str
   const response = await fetch(`${getApiBaseUrl()}/allocation/history`);
   const data = await parseJsonResponse(response);
   return data.history ?? [];
+}
+
+export type DonationAnalyticsAccount = {
+  account_name: string;
+  recipient_name: string;
+  iban: string;
+  total: number;
+  count: number;
+  logo_url: string | null;
+  logo_white_background: boolean;
+  logo_padding: boolean;
+};
+
+export type DonationAnalytics = {
+  accounts: DonationAnalyticsAccount[];
+  others: { total: number; count: number } | null;
+  total: number;
+};
+
+export async function fetchDonationAnalytics(): Promise<DonationAnalytics> {
+  const response = await fetch(`${getApiBaseUrl()}/allocation/donation-analytics`);
+  return parseJsonResponse(response);
+}
+
+export async function fetchSavingsPlans(): Promise<SavingsPlan[]> {
+  const response = await fetch(`${getApiBaseUrl()}/allocation/savings-plans`);
+  const data = await parseJsonResponse(response);
+  return data.plans ?? [];
+}
+
+export async function createSavingsPlan(payload: {
+  name: string;
+  tag?: string | null;
+  target_amount: number;
+  target_date: string;
+  target_recipient_name?: string | null;
+  target_recipient_iban?: string | null;
+  target_recipient_bic?: string | null;
+  sender_iban?: string | null;
+}): Promise<SavingsPlan> {
+  const response = await fetch(`${getApiBaseUrl()}/allocation/savings-plans`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return parseJsonResponse(response);
+}
+
+export async function updateSavingsPlan(planId: number, payload: Partial<Pick<SavingsPlan, "name" | "tag" | "target_amount" | "target_date" | "target_recipient_name" | "target_recipient_iban" | "target_recipient_bic" | "sender_iban" | "is_visible">>): Promise<SavingsPlan> {
+  const response = await fetch(`${getApiBaseUrl()}/allocation/savings-plans/${planId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return parseJsonResponse(response);
+}
+
+export async function deleteSavingsPlan(planId: number): Promise<void> {
+  const response = await fetch(`${getApiBaseUrl()}/allocation/savings-plans/${planId}`, {
+    method: "DELETE",
+  });
+  await parseJsonResponse(response);
+}
+
+export async function executeSavingsPlanTransfer(
+  planId: number,
+  tan?: string,
+  amount?: number,
+): Promise<{ status: string; transfer: unknown }> {
+  const body: Record<string, unknown> = {};
+  if (tan) body.tan = tan;
+  if (amount != null) body.amount = amount;
+  const response = await fetch(`${getApiBaseUrl()}/allocation/savings-plans/${planId}/transfer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (response.status === 409) {
+    const payload = await response.json().catch(() => ({}));
+    const detail = payload?.detail || {};
+    if (detail?.code === "TAN_REQUIRED") {
+      throw new TanRequiredError(detail.challenge, detail.decoupled);
+    }
+  }
+
+  const result = await parseJsonResponse(response);
+  await emitReferenceChange();
+  return result;
 }

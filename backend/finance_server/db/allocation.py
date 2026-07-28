@@ -22,10 +22,12 @@ def get_bucket(bucket_id: int) -> dict[str, Any] | None:
     return dict(row) if row else None
 
 
-def update_bucket(bucket_id: int, payload: dict[str, Any]) -> dict[str, Any] | None:
+def update_bucket(bucket_id: int, payload: dict[str, Any], set_null: list[str] | None = None) -> dict[str, Any] | None:
     now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     # Include False values (is_active), only exclude None
     fields = {k: v for k, v in payload.items() if v is not None}
+    for k in (set_null or []):
+        fields[k] = None
     if not fields:
         return get_bucket(bucket_id)
     fields["updated_at"] = now
@@ -130,6 +132,26 @@ def list_runs() -> list[dict[str, Any]]:
             "SELECT * FROM allocation_runs ORDER BY month DESC LIMIT 12"
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def delete_run(month: str) -> None:
+    with get_connection() as connection:
+        row = connection.execute(
+            "SELECT id FROM allocation_runs WHERE month = ? ORDER BY created_at DESC LIMIT 1",
+            (month,),
+        ).fetchone()
+        if row:
+            connection.execute("DELETE FROM allocation_run_buckets WHERE run_id = ?", (row["id"],))
+            connection.execute("DELETE FROM allocation_runs WHERE id = ?", (row["id"],))
+
+
+def set_bucket_active_by_type(bucket_type: str, is_active: bool) -> None:
+    now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    with get_connection() as connection:
+        connection.execute(
+            "UPDATE allocation_buckets SET is_active = ?, updated_at = ? WHERE bucket_type = ?",
+            (1 if is_active else 0, now, bucket_type),
+        )
 
 
 def get_active_buckets_sum_percentage() -> float:

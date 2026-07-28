@@ -214,6 +214,18 @@ def list_bank_credentials() -> list[dict[str, Any]]:
     return credentials
 
 
+def load_bank_credentials_by_iban(iban: str) -> dict[str, Any] | None:
+    """Find stored credentials whose accounts include the given IBAN."""
+    normalized = iban.strip().upper()
+    all_creds = list_bank_credentials()
+    for cred in all_creds:
+        accounts = cred.get("accounts") or []
+        for acc in accounts:
+            if acc.get("iban", "").strip().upper() == normalized:
+                return cred
+    return None
+
+
 def bank_credentials_configured(scope: str | None = None) -> bool:
     return load_bank_credentials(scope) is not None
 

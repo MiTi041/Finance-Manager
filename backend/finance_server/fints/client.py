@@ -9,11 +9,11 @@ from fints.exceptions import FinTSClientError
 from fints.utils import minimal_interactive_cli_bootstrap
 
 from finance_server.core.config import settings
-from finance_server.db import get_setting, set_setting, save_bank_credentials, load_bank_credentials
+from finance_server.db import get_setting, set_setting, save_bank_credentials, load_bank_credentials, load_bank_credentials_by_iban
 from finance_server.models.bank import BankCredentials
 from finance_server.fints.banks import get_bank_definition
 from finance_server.fints.common import (
-    BASE_DIR, WORKSPACE_DIR, STATE_FILE, LEGACY_STATE_FILE,
+    BASE_DIR, WORKSPACE_DIR, STATE_FILE,
     TanRequired, TanTimeout,
 )
 
@@ -43,10 +43,16 @@ def set_product_id(value: str | None) -> None:
 def resolve_bank_credentials(
     provided: BankCredentials | None = None,
     scope: str | None = None,
+    sender_iban: str | None = None,
 ) -> BankCredentials:
     if provided is not None:
         save_bank_credentials(provided.model_dump())
         return provided
+
+    if sender_iban:
+        stored = load_bank_credentials_by_iban(sender_iban)
+        if stored:
+            return BankCredentials.model_validate(stored)
 
     stored = load_bank_credentials(scope)
     if stored is None:
@@ -83,8 +89,6 @@ def get_state_file_paths() -> list[Path]:
         primary = STATE_FILE
 
     paths = [primary]
-    if primary != LEGACY_STATE_FILE:
-        paths.append(LEGACY_STATE_FILE)
     return paths
 
 
@@ -99,21 +103,22 @@ def get_state_file_paths_for_creds(creds: BankCredentials) -> list[Path]:
         primary = STATE_FILE.parent / f".fints_state_{creds.bank_key}_{creds.username}"
 
     paths = [primary]
-    paths.append(LEGACY_STATE_FILE)
     return paths
 
 
-def load_state(creds: BankCredentials | None = None) -> bytes | None:
-    paths = get_state_file_paths_for_creds(creds) if creds is not None else get_state_file_paths()
-    with _state_file_lock:
-        for path in paths:
-            try:
-                if path.exists():
-                    return path.read_bytes()
-            except OSError:
-                logging.warning("Failed to read state file: %s", path)
-                continue
-    return None
+def load_state(creds=None):
+       paths = get_state_file_paths_for_creds(creds) if creds else get_state_file_paths()
+       primary, *fallbacks = paths
+       if primary.exists():
+           return primary.read_bytes()
+       for fb in fallbacks:
+           if fb.exists():
+               data = fb.read_bytes()
+               # einmalig migrieren, danach nicht mehr als Fallback nutzen
+               primary.write_bytes(data)
+               fb.unlink(missing_ok=True)
+               return data
+       return None
 
 
 def save_state(client: FinTS3PinTanClient, creds: BankCredentials | None = None) -> None:
@@ -202,6 +207,8 @@ def validate_transfer_result(result: Any) -> None:
     if not isinstance(result, TransactionResponse):
         return
     responses = [{"code": getattr(r, "code", None), "text": getattr(r, "text", None)} for r in getattr(result, "responses", [])]
+    logger = logging.getLogger("finance.fints.transfer")
+    logger.info("Bank response codes: %s", responses)
     codes = {r["code"] for r in responses if r["code"]}
     if "9160" in codes:
         raise TanRequired(challenge="Erforderliche TAN fehlt.", decoupled=False)
@@ -240,3 +247,6 @@ def resolve_tan_until_done(
             time.sleep(poll_seconds)
             elapsed += poll_seconds
     return result
+
+
+

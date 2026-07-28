@@ -18,7 +18,6 @@ else:
 WORKSPACE_DIR = BASE_DIR.parent
 
 STATE_FILE = BASE_DIR / "state" / ".fints_state"
-LEGACY_STATE_FILE = WORKSPACE_DIR / ".fints_state"
 MAX_DAYS = settings.fints_max_days
 INITIAL_SYNC_DAYS = settings.fints_initial_sync_days
 TRANSACTIONS_CACHE_TTL_SECONDS = settings.fints_transactions_cache_ttl_seconds

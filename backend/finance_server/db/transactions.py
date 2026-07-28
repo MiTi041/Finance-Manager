@@ -122,8 +122,10 @@ def insert_transactions(rows: Iterable[dict[str, Any]]) -> dict[str, int]:
                 "SELECT * FROM umsaetze WHERE id > ? AND id <= ?",
                 (before_max, after_max),
             ).fetchall()
-            for new_row in new_rows:
-                _log("umsaetze", new_row["id"], "INSERT", dict(new_row))
+
+    if inserted > 0:
+        for new_row in new_rows:
+            _log("umsaetze", new_row["id"], "INSERT", dict(new_row))
 
     received = len(normalized_rows)
     return {

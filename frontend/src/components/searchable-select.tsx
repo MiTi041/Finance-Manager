@@ -5,11 +5,7 @@ import { Check, ChevronsUpDown } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command,
   CommandEmpty,
@@ -42,6 +38,7 @@ type SearchableSelectProps = {
   noneValue?: string;
   renderOption?: (option: SelectOption) => React.ReactNode;
   renderSelected?: (option: SelectOption) => React.ReactNode;
+  height?: number;
 };
 
 export function SearchableSelect({
@@ -62,6 +59,7 @@ export function SearchableSelect({
   noneValue = "__none__",
   renderOption,
   renderSelected,
+  height,
 }: SearchableSelectProps) {
   const [open, setOpen] = React.useState(false);
 
@@ -77,9 +75,11 @@ export function SearchableSelect({
           disabled={disabled}
           id={triggerId}
           onKeyDown={onKeyDown}
+          height={height}
           className={cn(
             "w-full justify-between font-normal shadow-none",
             !selected && "text-muted-foreground",
+            className,
             triggerClassName,
           )}
         >
@@ -87,11 +87,7 @@ export function SearchableSelect({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent
-        className={cn("p-0", contentClassName)}
-        align="start"
-        sideOffset={4}
-      >
+      <PopoverContent className={cn("p-0", contentClassName)} align="start" sideOffset={4}>
         <Command>
           <CommandInput placeholder={searchPlaceholder} />
           <CommandList>

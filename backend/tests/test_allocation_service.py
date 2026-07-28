@@ -34,15 +34,14 @@ class TestDetectIncome:
             result = service._detect_income("2026-07")
         assert result == 3500.0
 
-    def test_falls_back_when_no_recurring_pattern(self):
+    def test_returns_zero_when_no_recurring_pattern(self):
         service = AllocationService()
         with patch("finance_server.services.allocation_service.get_connection") as mock_conn:
             cursor = Mock()
             cursor.fetchall.return_value = []
-            cursor.fetchone.return_value = [2100.0]
             mock_conn.return_value.__enter__.return_value.execute.return_value = cursor
             result = service._detect_income("2026-07")
-        assert result == 2100.0
+        assert result == 0.0
 
 
 class TestBuildRunResponse:

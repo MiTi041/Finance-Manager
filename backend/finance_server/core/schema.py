@@ -337,6 +337,23 @@ def create_allocation_bafoeg_config_table(connection: sqlite3.Connection) -> Non
     """)
 
 
+def create_savings_plans_table(connection: sqlite3.Connection) -> None:
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS savings_plans (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            name            TEXT NOT NULL,
+            tag             TEXT,
+            target_amount   REAL,
+            target_date     TEXT,
+            target_recipient_name   TEXT,
+            target_recipient_iban   TEXT,
+            target_recipient_bic    TEXT,
+            is_visible      INTEGER NOT NULL DEFAULT 1,
+            created_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
 def create_allocation_runs_table(connection: sqlite3.Connection) -> None:
     connection.execute("""
         CREATE TABLE IF NOT EXISTS allocation_runs (
@@ -456,6 +473,26 @@ def initialize_database(connection: sqlite3.Connection) -> None:
     create_app_settings_table(connection)
     create_allocation_buckets_table(connection)
     create_allocation_bafoeg_config_table(connection)
+    _ensure_table_columns(
+        connection,
+        "allocation_buckets",
+        {
+            "target_amount": "REAL",
+            "target_months": "REAL",
+        },
+    )
+    create_savings_plans_table(connection)
+    _ensure_table_columns(
+        connection,
+        "savings_plans",
+        {
+            "tag": "TEXT",
+            "target_recipient_name": "TEXT",
+            "target_recipient_iban": "TEXT",
+            "target_recipient_bic": "TEXT",
+            "sender_iban": "TEXT",
+        },
+    )
     create_allocation_runs_table(connection)
     create_allocation_run_buckets_table(connection)
 

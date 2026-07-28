@@ -41,6 +41,7 @@ function Button({
   size,
   asChild = false,
   height = 10,
+  style,
   ...props
 }: React.ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
@@ -54,9 +55,9 @@ function Button({
       data-slot="button"
       className={cn(
         buttonVariants({ variant, size, className }),
-        `!h-${height}`,
         "hover:cursor-pointer",
       )}
+      style={{ height: `${height * 4}px`, ...style }}
       {...props}
     />
   );

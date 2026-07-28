@@ -18,6 +18,8 @@ class AllocationBucketUpdate(BaseModel):
     recipient_account_id: int | None = None
     sender_iban: str | None = None
     is_active: bool | None = None
+    target_amount: float | None = None
+    target_months: float | None = None
 
 
 class BafoegConfig(BaseModel):
@@ -29,6 +31,42 @@ class BafoegConfig(BaseModel):
 
 class AllocationSettingsUpdate(BaseModel):
     bafoeg_enabled: bool
+
+
+class SavingsPlan(BaseModel):
+    id: int
+    name: str
+    tag: str | None = None
+    target_amount: float | None = None
+    target_date: str | None = None
+    target_recipient_name: str | None = None
+    target_recipient_iban: str | None = None
+    target_recipient_bic: str | None = None
+    sender_iban: str | None = None
+    is_visible: bool = True
+
+
+class SavingsPlanCreate(BaseModel):
+    name: str
+    tag: str | None = None
+    target_amount: float
+    target_date: str
+    target_recipient_name: str | None = None
+    target_recipient_iban: str | None = None
+    target_recipient_bic: str | None = None
+    sender_iban: str | None = None
+
+
+class SavingsPlanUpdate(BaseModel):
+    name: str | None = None
+    tag: str | None = None
+    target_amount: float | None = None
+    target_date: str | None = None
+    target_recipient_name: str | None = None
+    target_recipient_iban: str | None = None
+    target_recipient_bic: str | None = None
+    sender_iban: str | None = None
+    is_visible: bool | None = None
 
 
 class AllocationRun(BaseModel):

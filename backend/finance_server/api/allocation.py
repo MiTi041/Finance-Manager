@@ -6,11 +6,13 @@ from typing import Any
 from fastapi import APIRouter, Body, Depends, HTTPException, Path as ApiPath
 
 from finance_server.fints.common import TanRequired, TanTimeout
-from finance_server.fints.transfer import send_transfer
+from finance_server.fints.transfer import FinTSClientError, send_transfer
 from finance_server.models.allocation import (
     AllocationBucketUpdate,
     BafoegConfig,
     AllocationSettingsUpdate,
+    SavingsPlanCreate,
+    SavingsPlanUpdate,
 )
 from finance_server.models.fints import TransferRequest
 from finance_server.services.allocation_service import AllocationService
@@ -42,7 +44,11 @@ def update_allocation_bucket(
     payload: AllocationBucketUpdate = Body(...),
     service: AllocationService = Depends(get_allocation_service),
 ) -> dict[str, Any]:
-    updated = service.update_bucket(bucket_id, payload.model_dump(exclude_none=True))
+    dump = payload.model_dump(exclude_unset=True)
+    remove_none = {k for k, v in dump.items() if v is None}
+    for k in remove_none:
+        del dump[k]
+    updated = service.update_bucket(bucket_id, dump, set_null=list(remove_none))
     if not updated:
         raise HTTPException(status_code=404, detail="Bucket nicht gefunden")
     return updated
@@ -84,11 +90,12 @@ def update_allocation_settings(
 @router.post("/allocation/run")
 def calculate_run(
     month: str | None = None,
+    force: bool = False,
     service: AllocationService = Depends(get_allocation_service),
 ) -> dict[str, Any]:
     from datetime import datetime
     target_month = month or datetime.now().strftime("%Y-%m")
-    return service.get_or_create_run(target_month)
+    return service.get_or_create_run(target_month, force=force)
 
 
 @router.post("/allocation/transfer/{run_bucket_id}")
@@ -132,3 +139,92 @@ def get_allocation_history(
 ) -> dict[str, Any]:
     history = service.get_history()
     return {"history": history}
+
+
+@router.get("/allocation/donation-analytics")
+def get_donation_analytics(
+    service: AllocationService = Depends(get_allocation_service),
+) -> dict[str, Any]:
+    return service.get_donation_analytics()
+
+
+@router.get("/allocation/savings-plans")
+def list_savings_plans(
+    service: AllocationService = Depends(get_allocation_service),
+) -> dict[str, Any]:
+    return {"plans": service.list_savings_plans()}
+
+
+@router.post("/allocation/savings-plans")
+def create_savings_plan(
+    payload: SavingsPlanCreate,
+    service: AllocationService = Depends(get_allocation_service),
+) -> dict[str, Any]:
+    return service.create_savings_plan(payload.model_dump())
+
+
+@router.put("/allocation/savings-plans/{plan_id}")
+def update_savings_plan(
+    plan_id: int,
+    payload: SavingsPlanUpdate,
+    service: AllocationService = Depends(get_allocation_service),
+) -> dict[str, Any]:
+    updated = service.update_savings_plan(plan_id, payload.model_dump(exclude_none=True))
+    if not updated:
+        raise HTTPException(status_code=404, detail="Plan nicht gefunden")
+    return updated
+
+
+@router.delete("/allocation/savings-plans/{plan_id}")
+def delete_savings_plan(
+    plan_id: int,
+    service: AllocationService = Depends(get_allocation_service),
+) -> dict[str, Any]:
+    if not service.delete_savings_plan(plan_id):
+        raise HTTPException(status_code=404, detail="Plan nicht gefunden")
+    return {"status": "ok"}
+
+
+@router.post("/allocation/savings-plans/{plan_id}/transfer")
+def execute_savings_plan_transfer(
+    plan_id: int = ApiPath(..., ge=1),
+    body: dict[str, Any] | None = None,
+    service: AllocationService = Depends(get_allocation_service),
+) -> dict[str, Any]:
+    tan = (body or {}).get("tan")
+    month = (body or {}).get("month")
+    custom_amount = (body or {}).get("amount")
+    transfer_data = service.transfer_savings_plan(plan_id, month, custom_amount)
+
+    req = TransferRequest(
+        recipient_iban=transfer_data["recipient_iban"],
+        recipient_name=transfer_data["recipient_name"],
+        amount=transfer_data["amount"],
+        reason=transfer_data["purpose"],
+        recipient_bic=transfer_data.get("recipient_bic"),
+        sender_iban=transfer_data.get("sender_iban") or "",
+        sender_name=transfer_data.get("sender_name") or "Finance-Manager",
+        tan=tan,
+    )
+    try:
+        result = send_transfer(req)
+    except Exception as e:
+        if isinstance(e, TanRequired):
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "TAN_REQUIRED", "challenge": e.challenge, "decoupled": e.decoupled},
+            )
+        if isinstance(e, TanTimeout):
+            raise HTTPException(status_code=408, detail=str(e))
+        if isinstance(e, FinTSClientError):
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "FinTS-Initialisierung fehlgeschlagen. Bitte FINTS_URL/FINTS_BLZ pruefen "
+                    "und ggf. gespeicherten FinTS-State zuruecksetzen. "
+                    f"Originalfehler: {e}"
+                ),
+            ) from e
+        raise HTTPException(status_code=502, detail=f"Überweisung fehlgeschlagen: {e}")
+
+    return {"status": "ok", "transfer": result}

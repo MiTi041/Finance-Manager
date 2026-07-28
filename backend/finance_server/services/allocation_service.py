@@ -8,6 +8,13 @@ from fastapi import HTTPException
 
 from finance_server.core.database import get_connection
 from finance_server.db import allocation as db
+from finance_server.db.references import get_zahlungspartner_by_iban
+from finance_server.db.savings import (
+    list_plans, create_plan, update_plan, delete_plan, get_plan,
+    get_saved_amount, get_month_amount,
+    get_saved_breakdown, get_month_breakdown,
+    get_income_payout_days, count_income_events_until,
+)
 from finance_server.db.settings import get_setting, set_setting
 
 
@@ -23,7 +30,7 @@ class AllocationService:
     def get_buckets(self) -> list[dict[str, Any]]:
         return db.list_buckets()
 
-    def update_bucket(self, bucket_id: int, payload: dict[str, Any]) -> dict[str, Any] | None:
+    def update_bucket(self, bucket_id: int, payload: dict[str, Any], set_null: list[str] | None = None) -> dict[str, Any] | None:
         if "percentage" in payload:
             buckets = db.list_buckets()
             other_sum = sum(
@@ -32,7 +39,10 @@ class AllocationService:
             )
             if other_sum + payload["percentage"] > 100:
                 raise HTTPException(status_code=400, detail="Prozentsätze dürfen 100% nicht überschreiten")
-        return db.update_bucket(bucket_id, payload)
+        if set_null:
+            for k in set_null:
+                payload.pop(k, None)
+        return db.update_bucket(bucket_id, payload, set_null)
 
     def get_bafoeg_config(self) -> dict[str, Any] | None:
         return db.get_bafoeg_config()
@@ -48,32 +58,79 @@ class AllocationService:
     def update_settings(self, payload: dict[str, Any]) -> dict[str, Any]:
         if "bafoeg_enabled" in payload:
             set_setting("bafoeg_enabled", "true" if payload["bafoeg_enabled"] else "false")
+            db.set_bucket_active_by_type("bafoeg", payload["bafoeg_enabled"])
         return self.get_settings()
 
-    def get_or_create_run(self, month: str) -> dict[str, Any]:
+    def get_or_create_run(self, month: str, force: bool = False) -> dict[str, Any]:
         existing = db.get_run_for_month(month)
         if existing:
-            return self._build_run_response(existing)
+            if force:
+                db.delete_run(month)
+            else:
+                return self._build_run_response(existing)
 
         net_income = self._detect_income(month)
-        buckets = [b for b in db.list_buckets() if b["is_active"]]
-        active_percentage_sum = db.get_active_buckets_sum_percentage()
-
         run_id = db.create_run(month, net_income, net_income)
+        all_buckets = db.list_buckets()
 
-        for bucket in buckets:
-            btype = bucket["bucket_type"]
-            if btype == "spending":
-                pct = max(0, 100 - active_percentage_sum)
-            else:
-                pct = bucket["percentage"]
-            target = round(net_income * pct / 100, 2)
+        # Pinned: BAföG bucket (fixed monthly rate, not percentage-based)
+        bafoeg_amount = 0.0
+        if get_setting("bafoeg_enabled") == "true":
+            bafoeg_config = db.get_bafoeg_config()
+            if bafoeg_config:
+                bafoeg_amount = bafoeg_config["monthly_rate"]
+                bafoeg_bucket = next((b for b in all_buckets if b["bucket_type"] == "bafoeg"), None)
+                if bafoeg_bucket:
+                    db.create_run_bucket(run_id, bafoeg_bucket["id"], bafoeg_amount)
+
+        # Effective income = net_income minus pinned fixed amounts
+        effective = net_income - bafoeg_amount
+        savings_total = self.get_savings_total(month)
+        active = [b for b in all_buckets if b["is_active"] and b["bucket_type"] != "bafoeg"]
+
+        # Donation from effective (before savings plans)
+        donation_config = next((b for b in active if b["bucket_type"] == "donation"), None)
+        donation_target = 0.0
+        if donation_config:
+            donation_target = round(effective * donation_config["percentage"] / 100, 2)
+            db.create_run_bucket(run_id, donation_config["id"], donation_target)
+
+        # Auto-hide newest savings plans if total exceeds available budget
+        available_for_savings = effective - donation_target
+        auto_hidden: list[int] = []
+        print(f"[auto-hide] savings_total={savings_total}, available_for_savings={available_for_savings}", flush=True)
+        if savings_total > available_for_savings:
+            all_plans = sorted(list_plans(), key=lambda p: p["created_at"])
+            visible = [p for p in all_plans if p.get("is_visible")]
+            total = sum(self._enrich_savings_plan(p, month)["monthly_rate"] for p in visible)
+            for p in reversed(visible):
+                if total <= available_for_savings:
+                    break
+                rate = self._enrich_savings_plan(p, month)["monthly_rate"]
+                update_plan(p["id"], {"is_visible": False})
+                total -= rate
+                auto_hidden.append(p["id"])
+            savings_total = total
+
+        # Remaining after donation and savings plans → invest, emergency
+        remaining = effective - donation_target - savings_total
+        bucket_sum = 0.0
+        for bucket in active:
+            if bucket["bucket_type"] in ("donation", "spending"):
+                continue
+            target = round(remaining * bucket["percentage"] / 100, 2)
+            bucket_sum += target
             db.create_run_bucket(run_id, bucket["id"], target)
 
-        run = db.get_run_for_month(month)
-        return self._build_run_response(run)
+        # Spending = what's left of remaining
+        spending_config = next((b for b in active if b["bucket_type"] == "spending"), None)
+        if spending_config:
+            db.create_run_bucket(run_id, spending_config["id"], round(remaining - bucket_sum, 2))
 
-    def _build_run_response(self, run: dict[str, Any]) -> dict[str, Any]:
+        run = db.get_run_for_month(month)
+        return self._build_run_response(run, auto_hidden)
+
+    def _build_run_response(self, run: dict[str, Any], auto_hidden: list[int] | None = None) -> dict[str, Any]:
         buckets = db.get_run_buckets(run["id"])
         config_buckets = db.list_buckets()
         start = f"{run['month']}-01"
@@ -87,20 +144,60 @@ class AllocationService:
                         (f"%{tag}%", start, end),
                     ).fetchone()
                 bucket["transferred"] = round(bucket["transferred"] + row[0], 2)
+                if bucket["bucket_type"] == "emergency":
+                    breakdown = get_saved_breakdown(tag)
+                    month_breakdown = get_month_breakdown(tag, run["month"])
+                    bucket["saved_total"] = round(breakdown["saldo"], 2)
+                    bucket["saved_einzahlungen"] = round(breakdown["einzahlungen"], 2)
+                    bucket["saved_entnahmen"] = round(breakdown["entnahmen"], 2)
+                    bucket["month_einzahlungen"] = round(month_breakdown["einzahlungen"], 2)
+                    cfg = next((c for c in config_buckets if c["id"] == bucket["bucket_id"]), None)
+                    if cfg:
+                        monthly_rate = bucket["target_amount"]
+                        if cfg.get("target_months") and cfg["target_months"] > 0:
+                            bucket["goal_amount"] = round(run["net_income"] * cfg["target_months"], 2)
+                        elif cfg.get("target_amount") and cfg["target_amount"] > 0:
+                            bucket["goal_amount"] = cfg["target_amount"]
+                        if bucket.get("goal_amount") and monthly_rate > 0:
+                            remaining = max(0, bucket["goal_amount"] - bucket["saved_total"])
+                            import math
+                            bucket["months_left"] = math.ceil(remaining / monthly_rate)
+            if bucket["bucket_type"] == "spending":
+                with get_connection() as conn:
+                    row = conn.execute(
+                        """SELECT COALESCE(SUM(ABS(amount)), 0) FROM umsaetze
+                           WHERE amount < 0 AND date >= ? AND date <= ?
+                           AND (purpose IS NULL OR (
+                               purpose NOT LIKE '%tag.bafoegrueckzahlung%'
+                               AND purpose NOT LIKE '%tag.notfallfonds%'
+                               AND purpose NOT LIKE '%tag.investieren%'
+                               AND purpose NOT LIKE '%tag.spenden%'
+                           ))""",
+                        (start, end),
+                    ).fetchone()
+                bucket["spent"] = round(row[0], 2) if row else 0.0
+        plans = list_plans()
+        savings_plans = [self._enrich_savings_plan(p, run["month"]) for p in plans]
+        savings_total = sum(p["monthly_rate"] for p in savings_plans if p["is_visible"])
+        total_bucket_sum = round(sum(b["target_amount"] for b in buckets), 2)
+        allocated = round(total_bucket_sum + savings_total, 2)
         return {
             "month": run["month"],
             "net_income": run["net_income"],
-            "total_allocated": run["total_allocated"],
-            "remaining": round(run["net_income"] - sum(b["target_amount"] for b in buckets), 2),
+            "total_allocated": allocated,
+            "remaining": round(run["net_income"] - allocated, 2),
             "status": run["status"],
             "buckets": buckets,
             "config": config_buckets,
+            "savings_total": savings_total,
+            "savings_plans": savings_plans,
+            "auto_hidden_plan_ids": auto_hidden or [],
         }
 
     def _detect_income(self, month: str) -> float:
-        """Recurring income detection like finance_local (4-month lookback, group by counterparty+purpose, 3+ occurrences, ~30d cadence)."""
+        """Recurring income detection matching finance_local (3-month lookback, group by counterparty+purpose, 3+ occurrences, ~30d cadence)."""
         start_parts = month.split("-")
-        m = int(start_parts[1]) - 4
+        m = int(start_parts[1]) - 3
         y = int(start_parts[0])
         if m <= 0:
             m += 12
@@ -143,16 +240,26 @@ class AllocationService:
             if recurring:
                 total += txs[-1][0]
 
-        if total > 0:
-            return round(total, 2)
+        return round(total, 2)
 
-        # Fallback: sum all positive transactions this month
+    def _check_sender_balance(self, sender_iban: str | None, amount: float) -> None:
+        if not sender_iban:
+            return
         with get_connection() as conn:
-            row = conn.execute(
-                "SELECT COALESCE(SUM(amount), 0) FROM umsaetze WHERE amount > 0 AND date >= ? AND date <= ?",
-                (f"{month}-01", month_end),
+            tx_row = conn.execute(
+                "SELECT COALESCE(SUM(amount), 0) AS balance FROM umsaetze WHERE UPPER(account_iban) = UPPER(?)",
+                (sender_iban,),
             ).fetchone()
-            return round(row[0], 2) if row else 0.0
+            corr_row = conn.execute(
+                "SELECT balance FROM bank_accounts WHERE UPPER(iban) = UPPER(?) LIMIT 1",
+                (sender_iban,),
+            ).fetchone()
+        balance = float(tx_row["balance"] or 0) + float(corr_row["balance"] if corr_row else 0)
+        if balance < amount:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Kontostand ({balance:.2f} €) reicht nicht aus für Überweisung ({amount:.2f} €)",
+            )
 
     def transfer_run_bucket(self, run_bucket_id: int) -> dict[str, Any]:
         with get_connection() as connection:
@@ -170,21 +277,34 @@ class AllocationService:
         if rb["is_completed"]:
             raise HTTPException(status_code=400, detail="Dieser Bucket wurde bereits überwiesen")
 
-        recipient_account_id = rb.get("recipient_account_id")
-        if not recipient_account_id:
-            raise HTTPException(status_code=400, detail="Kein Empfängerkonto konfiguriert")
+        amount = rb["target_amount"] - rb["transferred"]
+        self._check_sender_balance(rb.get("sender_iban"), amount)
 
-        with get_connection() as connection:
-            recipient = connection.execute(
-                "SELECT * FROM empfaengerkonten WHERE id = ?",
-                (recipient_account_id,),
-            ).fetchone()
-        if not recipient:
-            raise HTTPException(status_code=400, detail="Empfängerkonto nicht gefunden")
+        if rb["bucket_type"] == "donation":
+            with get_connection() as connection:
+                accounts = connection.execute(
+                    "SELECT * FROM empfaengerkonten WHERE is_donation_account = 1"
+                ).fetchall()
+            if not accounts:
+                raise HTTPException(status_code=400, detail="Kein Spendenkonto konfiguriert")
+            recipient = dict(accounts[run_bucket_id % len(accounts)])
+        else:
+            recipient_account_id = rb.get("recipient_account_id")
+            if not recipient_account_id:
+                raise HTTPException(status_code=400, detail="Kein Empfängerkonto konfiguriert")
+
+            with get_connection() as connection:
+                recipient_row = connection.execute(
+                    "SELECT * FROM empfaengerkonten WHERE id = ?",
+                    (recipient_account_id,),
+                ).fetchone()
+            if not recipient_row:
+                raise HTTPException(status_code=400, detail="Empfängerkonto nicht gefunden")
+            recipient = dict(recipient_row)
 
         return {
             "run_bucket_id": run_bucket_id,
-            "amount": rb["target_amount"] - rb["transferred"],
+            "amount": amount,
             "recipient_iban": recipient["iban"],
             "recipient_name": recipient["recipient_name"],
             "recipient_bic": recipient.get("bic"),
@@ -208,3 +328,181 @@ class AllocationService:
                 "buckets": buckets,
             })
         return result
+
+    def get_donation_analytics(self) -> dict[str, Any]:
+        with get_connection() as conn:
+            accounts = [
+                dict(r) for r in conn.execute(
+                    "SELECT * FROM empfaengerkonten WHERE is_donation_account = 1"
+                ).fetchall()
+            ]
+            ibans = [a["iban"] for a in accounts]
+            placeholders = ",".join("?" for _ in ibans) if ibans else "''"
+            rows = conn.execute(
+                f"""SELECT id, amount, applicant_iban, applicant_name, recipient_name, purpose, date
+                    FROM umsaetze
+                    WHERE amount < 0
+                      AND (purpose LIKE '%tag.spenden%'
+                           {'OR UPPER(applicant_iban) IN (' + placeholders + ')' if ibans else ''})
+                    ORDER BY date DESC""",
+                ibans if ibans else [],
+            ).fetchall()
+
+        matched: dict[int, dict[str, Any]] = {}
+        other_total = 0.0
+        other_count = 0
+        for row in rows:
+            t = dict(row)
+            acc = None
+            for a in accounts:
+                if a["iban"].upper() == (t.get("applicant_iban") or "").upper():
+                    acc = a
+                    break
+            if not acc:
+                purpose = (t.get("purpose") or "").lower()
+                rname = (t.get("recipient_name") or "").lower()
+                aname = (t.get("applicant_name") or "").lower()
+                for a in accounts:
+                    rn = (a["recipient_name"] or "").lower()
+                    if rn and (rn in purpose or rn in rname or rn in aname):
+                        acc = a
+                        break
+            if acc:
+                aid = acc["id"]
+                if aid not in matched:
+                    matched[aid] = {**acc, "total": 0.0, "count": 0}
+                matched[aid]["total"] += abs(t["amount"])
+                matched[aid]["count"] += 1
+            else:
+                other_total += abs(t["amount"])
+                other_count += 1
+
+        breakdown = []
+        for entry in matched.values():
+            partner = get_zahlungspartner_by_iban(entry["iban"])
+            breakdown.append({
+                "account_name": entry["account_name"],
+                "recipient_name": entry["recipient_name"],
+                "iban": entry["iban"],
+                "total": round(entry["total"], 2),
+                "count": entry["count"],
+                "logo_url": partner["logo_url"] if partner else None,
+                "logo_white_background": bool(partner["logo_white_background"]) if partner else False,
+                "logo_padding": bool(partner["logo_padding"]) if partner else False,
+            })
+        breakdown.sort(key=lambda x: x["total"], reverse=True)
+
+        total = round(sum(b["total"] for b in breakdown) + other_total, 2)
+        return {
+            "accounts": breakdown,
+            "others": {"total": round(other_total, 2), "count": other_count} if other_count > 0 else None,
+            "total": total,
+        }
+
+    def _enrich_savings_plan(self, plan: dict[str, Any], month: str | None = None) -> dict[str, Any]:
+        tag = plan.get("tag")
+        target_amount = plan.get("target_amount")
+        target_date = plan.get("target_date")
+        payout_days = get_income_payout_days(month) if month else [1]
+        saved_breakdown = get_saved_breakdown(tag) if tag else {}
+        month_breakdown = get_month_breakdown(tag, month) if tag and month else {}
+        saved_amount = saved_breakdown.get("saldo", 0.0)
+        this_month = month_breakdown.get("saldo", 0.0)
+        target_amount_f = target_amount if target_amount else 0.0
+        from_date = f"{month}-01" if month else None
+
+        required_rate = None
+        income_events_left = None
+        if target_amount and target_date:
+            saved_before_this = max(0.0, saved_amount - this_month)
+            remaining = max(0.0, target_amount_f - saved_before_this)
+            if remaining == 0.0:
+                required_rate = 0.0
+                income_events_left = count_income_events_until(target_date, payout_days, from_date)
+            else:
+                income_events_left = count_income_events_until(target_date, payout_days, from_date)
+                required_rate = round(remaining / income_events_left, 2)
+        else:
+            required_rate = None if not target_amount else 0.0
+
+        return {
+            **plan,
+            "monthly_rate": required_rate if required_rate is not None else 0.0,
+            "saved_amount": saved_amount,
+            "this_month": this_month,
+            "required_monthly_rate": required_rate,
+            "income_events_left": income_events_left,
+            "saved_einzahlungen": saved_breakdown.get("einzahlungen", 0.0),
+            "saved_entnahmen": saved_breakdown.get("entnahmen", 0.0),
+            "month_einzahlungen": month_breakdown.get("einzahlungen", 0.0),
+            "month_entnahmen": month_breakdown.get("entnahmen", 0.0),
+        }
+
+    def get_savings_total(self, month: str | None = None) -> float:
+        plans = list_plans()
+        return sum(
+            self._enrich_savings_plan(p, month)["monthly_rate"]
+            for p in plans if p.get("is_visible")
+        )
+
+    def list_savings_plans(self, month: str | None = None) -> list[dict[str, Any]]:
+        plans = list_plans()
+        return [self._enrich_savings_plan(p, month) for p in plans]
+
+    def create_savings_plan(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return create_plan(payload)
+
+    def update_savings_plan(self, plan_id: int, payload: dict[str, Any]) -> dict[str, Any] | None:
+        return update_plan(plan_id, payload)
+
+    def delete_savings_plan(self, plan_id: int) -> bool:
+        return delete_plan(plan_id)
+
+    def transfer_savings_plan(self, plan_id: int, month: str | None = None, amount: float | None = None) -> dict[str, Any]:
+        target_month = month or datetime.now().strftime("%Y-%m")
+        plan = get_plan(plan_id)
+
+        if not plan:
+            raise HTTPException(status_code=404, detail="Sparplan nicht gefunden")
+
+        enriched = self._enrich_savings_plan(plan, target_month)
+
+        if not enriched.get("target_recipient_iban") or not enriched.get("target_recipient_name"):
+            raise HTTPException(status_code=400, detail="Zahlungsdaten des Sparplans unvollständig")
+
+        target_amount = enriched.get("target_amount")
+        saved_amount = enriched.get("saved_amount", 0)
+
+        if amount is not None:
+            if amount <= 0:
+                raise HTTPException(status_code=400, detail="Betrag muss positiv sein")
+            if target_amount and amount > max(0, target_amount - saved_amount):
+                raise HTTPException(status_code=400, detail="Betrag überschreitet das Sparziel")
+            use_amount = amount
+        else:
+            required_rate = enriched.get("required_monthly_rate")
+            month_einzahlungen = enriched.get("month_einzahlungen", 0)
+            if required_rate is None:
+                raise HTTPException(status_code=400, detail="Keine fällige Rate für diesen Monat")
+            use_amount = max(0, required_rate - month_einzahlungen)
+            if use_amount <= 0:
+                raise HTTPException(status_code=400, detail="Monatsziel bereits erreicht")
+
+        self._check_sender_balance(plan.get("sender_iban"), use_amount)
+
+        tag = enriched.get("tag", "")
+        purpose = f"Sparplan {enriched['name']}"
+        if tag:
+            tag_clean = tag if tag.startswith("tag.") else f"tag.{tag}"
+            purpose += f" {tag_clean}"
+
+        return {
+            "plan_id": plan_id,
+            "amount": use_amount,
+            "recipient_iban": enriched["target_recipient_iban"],
+            "recipient_name": enriched["target_recipient_name"],
+            "recipient_bic": enriched.get("target_recipient_bic"),
+            "sender_iban": plan.get("sender_iban"),
+            "sender_name": plan.get("sender_name"),
+            "purpose": purpose,
+        }
