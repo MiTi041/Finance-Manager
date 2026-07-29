@@ -69,8 +69,14 @@ export function useCategories({
     cleanedTransactions.forEach((t) => {
       const catId = t.technisch.kategorieId;
       if (catId == null) return;
+      let effective = t.betrag.wert;
+      if (t.betrag.wert < 0) {
+        effective = t.betrag.wert + t.betrag.refundTotal;
+      } else if (t.betrag.wert > 0 && t.technisch.isRefund) {
+        effective = 0;
+      }
       const existing = byCategory.get(catId) ?? { total: 0, count: 0 };
-      existing.total += t.betrag.wert;
+      existing.total += effective;
       existing.count += 1;
       byCategory.set(catId, existing);
     });

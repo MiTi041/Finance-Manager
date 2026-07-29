@@ -3,6 +3,7 @@
 import * as React from "react";
 import { CalendarDays, ChevronDownIcon } from "lucide-react";
 
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Label } from "@/components/ui/label";
@@ -15,9 +16,11 @@ import {
 export function DatePicker({
   value,
   onChange,
+  className,
 }: {
   value: Date | null;
   onChange: (date: Date | null) => void;
+  className?: string;
 }) {
   const [open, setOpen] = React.useState(false);
   const now = new Date();
@@ -31,7 +34,7 @@ export function DatePicker({
           <Button
             variant="outline"
             id="date"
-            className="w-48 justify-between font-normal"
+            className={cn("w-48 justify-between font-normal", className)}
           >
             <CalendarDays className="size-4" />
             {value ? value.toLocaleDateString() : "Select date"}

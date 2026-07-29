@@ -113,6 +113,8 @@ export function mapTransaction(dto: TransactionDto): Transaction {
       originalWert: dto.original_amount,
 
       waehrung: dto.currency,
+
+      refundTotal: dto.refund_total ?? 0,
     },
 
     technisch: {
@@ -131,6 +133,7 @@ export function mapTransaction(dto: TransactionDto): Transaction {
       bankDeleted: dto.bank_deleted,
 
       refundRefTransactionId: dto.refund_ref_transaction_id ?? null,
+      isRefund: !!dto.is_refund,
     },
   };
 }

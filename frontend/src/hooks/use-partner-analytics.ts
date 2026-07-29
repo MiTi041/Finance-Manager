@@ -27,14 +27,20 @@ export function usePartnerAnalytics({
 
     txs.forEach((t) => {
       const name = t.zahlungspartner.datenbankName || t.zahlungspartner.name || "Unbekannt";
+      let effective = t.betrag.wert;
+      if (t.betrag.wert < 0) {
+        effective = t.betrag.wert + t.betrag.refundTotal;
+      } else if (t.betrag.wert > 0 && t.technisch.isRefund) {
+        effective = 0;
+      }
       const existing = map.get(name);
       if (existing) {
-        existing.totalAmount += t.betrag.wert;
+        existing.totalAmount += effective;
         existing.transactionCount += 1;
       } else {
         map.set(name, {
           name,
-          totalAmount: t.betrag.wert,
+          totalAmount: effective,
           transactionCount: 1,
           logoUrl: t.zahlungspartner.logoUrl,
           logoWhiteBackground: t.zahlungspartner.logoWhiteBackground,

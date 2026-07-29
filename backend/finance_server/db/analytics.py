@@ -41,8 +41,8 @@ def fetch_summary(
             f"""
             SELECT
                 COALESCE(SUM(amount), 0) AS balance,
-                COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0) AS incomes,
-                COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END), 0) AS expenses,
+                COALESCE(SUM(CASE WHEN amount > 0 AND refund_ref_transaction_id IS NULL THEN amount ELSE 0 END), 0) AS incomes,
+                COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) - COALESCE(refund_total, 0) ELSE 0 END), 0) AS expenses,
                 COUNT(*) AS transaction_count
             FROM umsaetze
             WHERE {where_sql}
@@ -135,7 +135,13 @@ def fetch_category_analytics(
 
     with get_connection() as conn:
         total_row = conn.execute(
-            f"SELECT COALESCE(SUM(ABS(u.amount)), 0) AS total FROM umsaetze u WHERE {where_sql}",
+            f"""SELECT COALESCE(SUM(ABS(
+                CASE
+                    WHEN u.amount > 0 AND u.refund_ref_transaction_id IS NOT NULL THEN 0
+                    WHEN u.amount < 0 THEN u.amount + COALESCE(u.refund_total, 0)
+                    ELSE u.amount
+                END
+            )), 0) AS total FROM umsaetze u WHERE {where_sql}""",
             params,
         ).fetchone()
         total = float(total_row["total"]) if total_row else 1
@@ -147,13 +153,25 @@ def fetch_category_analytics(
                 COALESCE(k.name, 'Nicht kategorisiert') AS name,
                 COALESCE(k.typ, 'Ausgabe') AS typ,
                 k.icon,
-                COALESCE(SUM(u.amount), 0) AS total_amount,
+                COALESCE(SUM(
+                    CASE
+                        WHEN u.amount > 0 AND u.refund_ref_transaction_id IS NOT NULL THEN 0
+                        WHEN u.amount < 0 THEN u.amount + COALESCE(u.refund_total, 0)
+                        ELSE u.amount
+                    END
+                ), 0) AS total_amount,
                 COUNT(*) AS transaction_count
             FROM umsaetze u
             LEFT JOIN kategorien k ON u.kategorie = k.id
             WHERE {where_sql}
             GROUP BY COALESCE(u.kategorie, 0)
-            ORDER BY COALESCE(SUM(ABS(u.amount)), 0) DESC
+            ORDER BY COALESCE(SUM(ABS(
+                CASE
+                    WHEN u.amount > 0 AND u.refund_ref_transaction_id IS NOT NULL THEN 0
+                    WHEN u.amount < 0 THEN u.amount + COALESCE(u.refund_total, 0)
+                    ELSE u.amount
+                END
+            )), 0) DESC
             """,
             params,
         ).fetchall()
@@ -208,12 +226,24 @@ def fetch_partner_analytics(
             SELECT
                 COALESCE(NULLIF(recipient_name, ''), NULLIF(applicant_name, ''), 'Unbekannt') AS partner_name,
                 COALESCE(NULLIF(applicant_iban, ''), NULLIF(gvc_applicant_iban, ''), '') AS partner_iban,
-                SUM(amount) AS total_amount,
+                SUM(
+                    CASE
+                        WHEN amount > 0 AND refund_ref_transaction_id IS NOT NULL THEN 0
+                        WHEN amount < 0 THEN amount + COALESCE(refund_total, 0)
+                        ELSE amount
+                    END
+                ) AS total_amount,
                 COUNT(*) AS transaction_count
             FROM umsaetze
             WHERE {where_sql}
             GROUP BY partner_name
-            ORDER BY SUM(ABS(amount)) DESC
+            ORDER BY SUM(ABS(
+                CASE
+                    WHEN amount > 0 AND refund_ref_transaction_id IS NOT NULL THEN 0
+                    WHEN amount < 0 THEN amount + COALESCE(refund_total, 0)
+                    ELSE amount
+                END
+            )) DESC
             """,
             params,
         ).fetchall()

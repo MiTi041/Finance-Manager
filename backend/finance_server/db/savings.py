@@ -88,6 +88,35 @@ def get_month_amount(tag: str, month: str) -> float:
     return get_month_breakdown(tag, month)["saldo"]
 
 
+def get_bafoeg_breakdown() -> dict[str, float]:
+    with get_connection() as connection:
+        ein_rows = connection.execute(
+            """SELECT amount, purpose, note FROM umsaetze
+               WHERE ((' ' || COALESCE(purpose, '') || ' ') LIKE '% tag.bafoegschulden %'
+                  OR (' ' || COALESCE(note, '') || ' ') LIKE '% tag.bafoegschulden %')
+                 AND amount < 0""",
+        ).fetchall()
+        ent_rows = connection.execute(
+            """SELECT amount, purpose, note FROM umsaetze
+               WHERE ((' ' || COALESCE(purpose, '') || ' ') LIKE '% tag.bafoegschulden.entnahme %'
+                  OR (' ' || COALESCE(note, '') || ' ') LIKE '% tag.bafoegschulden.entnahme %')
+                 AND amount > 0""",
+        ).fetchall()
+        tilg_rows = connection.execute(
+            """SELECT amount, purpose, note FROM umsaetze
+               WHERE ((' ' || COALESCE(purpose, '') || ' ') LIKE '% tag.bafoegschulden.entnahme %'
+                  OR (' ' || COALESCE(note, '') || ' ') LIKE '% tag.bafoegschulden.entnahme %')
+                 AND amount < 0""",
+        ).fetchall()
+    breakdown = _tag_breakdown("tag.bafoegschulden", ein_rows)
+    entnahmen = sum(r["amount"] for r in ent_rows) if ent_rows else 0.0
+    tilgungen = sum(abs(r["amount"]) for r in tilg_rows) if tilg_rows else 0.0
+    breakdown["entnahmen"] = round(entnahmen, 2)
+    breakdown["tilgungen"] = round(tilgungen, 2)
+    breakdown["saldo"] = round(breakdown["einzahlungen"] - entnahmen + tilgungen, 2)
+    return breakdown
+
+
 def get_saved_breakdown(tag: str) -> dict[str, float]:
     tag_pattern = tag if tag.startswith("tag.") else f"tag.{tag}"
     with get_connection() as connection:

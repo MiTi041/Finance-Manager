@@ -10,9 +10,9 @@ from finance_server.core.database import get_connection
 from .utils import build_transaction_hash, normalize_local_amount, normalize_text
 
 
-def _log(table_name: str, row_id: int | None, op_type: str, data: Any = None) -> None:
+def _log(table_name: str, row_id: int | None, op_type: str, data: Any = None, connection: sqlite3.Connection | None = None) -> None:
     from finance_server.services.sync_logger import log_crud_event
-    log_crud_event(table_name, row_id, op_type, data)
+    log_crud_event(table_name, row_id, op_type, data, connection)
 
 
 def to_row_payload(tx: dict[str, Any]) -> dict[str, Any]:
@@ -188,6 +188,8 @@ def row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
         "created_at": row["created_at"],
         "bank_deleted": bool(dict(row).get("bank_deleted", False)),
         "refund_ref_transaction_id": row["refund_ref_transaction_id"],
+        "refund_total": row["refund_total"],
+        "is_refund": row["refund_ref_transaction_id"] is not None and row["amount"] > 0,
     }
 
 
@@ -286,9 +288,16 @@ def fetch_transaction_balance(account_iban: str) -> float:
 
 def delete_transaction(transaction_id: int) -> bool:
     with get_connection() as connection:
+        row = connection.execute(
+            "SELECT refund_ref_transaction_id FROM umsaetze WHERE id = ?",
+            (transaction_id,),
+        ).fetchone()
+        parent_id = row["refund_ref_transaction_id"] if row else None
         cursor = connection.execute("DELETE FROM umsaetze WHERE id = ?", (transaction_id,))
         result = cursor.rowcount > 0
-        _log("umsaetze", transaction_id, "DELETE")
+        _log("umsaetze", transaction_id, "DELETE", connection=connection)
+        if parent_id:
+            _recalc_refund_total(parent_id, connection)
         return result
 
 
@@ -297,13 +306,19 @@ def delete_transactions_batch(transaction_ids: list[int]) -> int:
         return 0
     placeholders = ",".join("?" for _ in transaction_ids)
     with get_connection() as connection:
+        parents = connection.execute(
+            f"SELECT DISTINCT refund_ref_transaction_id FROM umsaetze WHERE id IN ({placeholders}) AND refund_ref_transaction_id IS NOT NULL",
+            transaction_ids,
+        ).fetchall()
         cursor = connection.execute(
             f"DELETE FROM umsaetze WHERE id IN ({placeholders})",
             transaction_ids,
         )
         result = cursor.rowcount
         for tid in transaction_ids:
-            _log("umsaetze", tid, "DELETE")
+            _log("umsaetze", tid, "DELETE", connection=connection)
+        for p in parents:
+            _recalc_refund_total(p["refund_ref_transaction_id"], connection)
         return result
 
 
@@ -317,7 +332,7 @@ def update_transaction_note(transaction_id: int, note: str | None) -> bool:
             (stored_note, transaction_id),
         )
         result = cursor.rowcount > 0
-        _log("umsaetze", transaction_id, "UPDATE", {"id": transaction_id, "note": note, "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat()})
+        _log("umsaetze", transaction_id, "UPDATE", {"id": transaction_id, "note": note, "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat()}, connection=connection)
         return result
 
 
@@ -330,16 +345,38 @@ def update_transaction_splits(transaction_id: int, splits: list[dict[str, Any]] 
             (stored_splits, transaction_id),
         )
         result = cursor.rowcount > 0
-        _log("umsaetze", transaction_id, "UPDATE", {"id": transaction_id, "splits": splits, "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat()})
+        _log("umsaetze", transaction_id, "UPDATE", {"id": transaction_id, "splits": splits, "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat()}, connection=connection)
         return result
+
+
+def _recalc_refund_total(tx_id: int, connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """UPDATE umsaetze SET refund_total = (
+            SELECT COALESCE(SUM(r.amount), 0)
+            FROM umsaetze r
+            WHERE r.refund_ref_transaction_id = umsaetze.id AND r.amount > 0
+        ) WHERE id = ?""",
+        (tx_id,),
+    )
 
 
 def update_transaction_refund_link(transaction_id: int, refund_ref_transaction_id: int | None) -> bool:
     with get_connection() as connection:
+        old_row = connection.execute(
+            "SELECT refund_ref_transaction_id AS old_parent FROM umsaetze WHERE id = ?",
+            (transaction_id,),
+        ).fetchone()
+        old_parent = old_row["old_parent"] if old_row else None
+
         cursor = connection.execute(
             "UPDATE umsaetze SET refund_ref_transaction_id = ? WHERE id = ?",
             (refund_ref_transaction_id, transaction_id),
         )
         result = cursor.rowcount > 0
-        _log("umsaetze", transaction_id, "UPDATE", {"id": transaction_id, "refund_ref_transaction_id": refund_ref_transaction_id, "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat()})
+        _log("umsaetze", transaction_id, "UPDATE", {"id": transaction_id, "refund_ref_transaction_id": refund_ref_transaction_id, "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat()}, connection=connection)
+
+        parents = {p for p in (old_parent, refund_ref_transaction_id) if p is not None}
+        for pid in parents:
+            _recalc_refund_total(pid, connection)
+
         return result

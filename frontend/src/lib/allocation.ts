@@ -26,9 +26,15 @@ export type AllocationRunBucket = {
   saved_total?: number;
   saved_einzahlungen?: number;
   saved_entnahmen?: number;
+  saved_profit?: number;
+  saved_tilgungen?: number;
   month_einzahlungen?: number;
   goal_amount?: number;
   months_left?: number;
+  interest_rate?: number;
+  payout_date?: string | null;
+  required_monthly_rate?: number;
+  income_events_left?: number;
 };
 
 export type SavingsPlan = {
@@ -106,11 +112,15 @@ export class TanRequiredError extends Error {
 export async function executeTransfer(
   runBucketId: number,
   tan?: string,
+  amount?: number,
 ): Promise<{ status: string; transfer: unknown }> {
+  const body: Record<string, unknown> = {};
+  if (tan) body.tan = tan;
+  if (amount != null) body.amount = amount;
   const response = await fetch(`${getApiBaseUrl()}/allocation/transfer/${runBucketId}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(tan ? { tan } : {}),
+    body: JSON.stringify(body),
   });
 
   if (response.status === 409) {
@@ -159,6 +169,50 @@ export type DonationAnalytics = {
   others: { total: number; count: number } | null;
   total: number;
 };
+
+export type BafoegConfig = {
+  id?: number;
+  total_debt: number;
+  monthly_rate: number;
+  interest_rate: number;
+  current_balance: number;
+  payout_date: string | null;
+};
+
+export type BafoegRateResponse = {
+  required_monthly_rate: number;
+  projected_end_balance: number;
+  interest_earned: number;
+};
+
+export async function fetchBafoegConfig(): Promise<BafoegConfig> {
+  const response = await fetch(`${getApiBaseUrl()}/allocation/bafoeg-config`);
+  return parseJsonResponse(response);
+}
+
+export async function updateBafoegConfig(payload: Partial<BafoegConfig>): Promise<BafoegConfig> {
+  const response = await fetch(`${getApiBaseUrl()}/allocation/bafoeg-config`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return parseJsonResponse(response);
+}
+
+export async function berechneBafoegRate(payload: {
+  current_balance: number;
+  total_debt?: number;
+  interest_rate?: number;
+  payout_date: string;
+  offene_zinsen?: number;
+}): Promise<BafoegRateResponse> {
+  const response = await fetch(`${getApiBaseUrl()}/allocation/bafoeg/berechne-rate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return parseJsonResponse(response);
+}
 
 export async function fetchDonationAnalytics(): Promise<DonationAnalytics> {
   const response = await fetch(`${getApiBaseUrl()}/allocation/donation-analytics`);

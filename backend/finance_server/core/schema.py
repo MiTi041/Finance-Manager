@@ -467,12 +467,35 @@ def initialize_database(connection: sqlite3.Connection) -> None:
         },
     )
 
+    _ensure_table_columns(
+        connection,
+        "umsaetze",
+        {
+            "refund_total": "REAL NOT NULL DEFAULT 0",
+        },
+    )
+
+    connection.execute("""
+        UPDATE umsaetze SET refund_total = (
+            SELECT COALESCE(SUM(r.amount), 0)
+            FROM umsaetze r
+            WHERE r.refund_ref_transaction_id = umsaetze.id AND r.amount > 0
+        ) WHERE amount < 0
+    """)
+
     create_belege_table(connection)
     create_subscription_identities_table(connection)
     migrate_subscription_identities(connection)
     create_app_settings_table(connection)
     create_allocation_buckets_table(connection)
     create_allocation_bafoeg_config_table(connection)
+    _ensure_table_columns(
+        connection,
+        "allocation_bafoeg_config",
+        {
+            "current_balance": "REAL NOT NULL DEFAULT 0",
+        },
+    )
     _ensure_table_columns(
         connection,
         "allocation_buckets",

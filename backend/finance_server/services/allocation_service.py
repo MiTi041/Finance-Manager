@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import re
 from datetime import datetime
 from typing import Any
@@ -14,12 +15,13 @@ from finance_server.db.savings import (
     get_saved_amount, get_month_amount,
     get_saved_breakdown, get_month_breakdown,
     get_income_payout_days, count_income_events_until,
+    get_bafoeg_breakdown,
 )
 from finance_server.db.settings import get_setting, set_setting
 
 
 BUCKET_TAGS: dict[str, str] = {
-    "bafoeg": "tag.bafoegrueckzahlung",
+    "bafoeg": "tag.bafoegschulden",
     "emergency": "tag.notfallfonds",
     "invest": "tag.investieren",
     "donation": "tag.spenden",
@@ -140,7 +142,13 @@ class AllocationService:
             if tag:
                 with get_connection() as conn:
                     row = conn.execute(
-                        "SELECT COALESCE(SUM(ABS(amount)), 0) FROM umsaetze WHERE purpose LIKE ? AND date >= ? AND date <= ?",
+                        """SELECT COALESCE(SUM(
+                            CASE
+                                WHEN amount > 0 AND refund_ref_transaction_id IS NOT NULL THEN 0
+                                WHEN amount < 0 THEN ABS(amount) - COALESCE(refund_total, 0)
+                                ELSE ABS(amount)
+                            END
+                        ), 0) FROM umsaetze WHERE purpose LIKE ? AND date >= ? AND date <= ?""",
                         (f"%{tag}%", start, end),
                     ).fetchone()
                 bucket["transferred"] = round(bucket["transferred"] + row[0], 2)
@@ -160,20 +168,83 @@ class AllocationService:
                             bucket["goal_amount"] = cfg["target_amount"]
                         if bucket.get("goal_amount") and monthly_rate > 0:
                             remaining = max(0, bucket["goal_amount"] - bucket["saved_total"])
-                            import math
                             bucket["months_left"] = math.ceil(remaining / monthly_rate)
+                if bucket["bucket_type"] == "bafoeg":
+                    from datetime import date
+                    from finance_server.services.zins_service import berechne_monatsrate
+                    breakdown = get_bafoeg_breakdown()
+                    with get_connection() as conn:
+                        month_rows = conn.execute(
+                            """SELECT amount FROM umsaetze
+                               WHERE ((' ' || COALESCE(purpose, '') || ' ') LIKE '% tag.bafoegschulden %'
+                                  OR (' ' || COALESCE(note, '') || ' ') LIKE '% tag.bafoegschulden %')
+                                 AND amount < 0 AND date >= ? AND date <= ?""",
+                            (f"{run['month']}-01", f"{run['month']}-31"),
+                        ).fetchall()
+                    month_einz = sum(abs(r["amount"]) for r in month_rows)
+                    bafoeg_cfg = db.get_bafoeg_config()
+                    seed = bafoeg_cfg.get("current_balance", 0) if bafoeg_cfg else 0
+                    bucket["saved_total"] = round(seed + breakdown["einzahlungen"], 2)
+                    bucket["saved_einzahlungen"] = round(breakdown["einzahlungen"], 2)
+                    bucket["saved_entnahmen"] = round(breakdown["entnahmen"], 2)
+                    bucket["saved_tilgungen"] = round(breakdown.get("tilgungen", 0), 2)
+                    bucket["month_einzahlungen"] = round(month_einz, 2)
+                    if bafoeg_cfg:
+                        total_debt = bafoeg_cfg.get("total_debt", 7600)
+                        bucket["goal_amount"] = total_debt
+                        bucket["interest_rate"] = bafoeg_cfg.get("interest_rate", 2.0)
+                        payout = bafoeg_cfg.get("payout_date")
+                        bucket["payout_date"] = payout
+                        if payout:
+                            payout_date = datetime.strptime(payout, "%Y-%m-%d").date()
+                            start_date = datetime.strptime(f"{run['month']}-01", "%Y-%m-%d").date()
+                            zinsverlauf = [
+                                {"datum": date(2025, 7, 6), "zinssatz": 0.02},
+                                {"datum": date(2026, 4, 29), "zinssatz": 0.02},
+                                {"datum": date(2027, 1, 1), "zinssatz": 0.025},
+                            ]
+                            zinsverlauf.append({"datum": start_date, "zinssatz": bafoeg_cfg.get("interest_rate", 2.0) / 100})
+                            payout_days = get_income_payout_days(run["month"])
+                            bucket["income_events_left"] = count_income_events_until(
+                                payout, payout_days, f"{run['month']}-01"
+                            )
+                            outstanding = max(0, (breakdown["entnahmen"] or 0) - (breakdown.get("tilgungen", 0) or 0))
+                            req_rate = berechne_monatsrate(bucket["saved_total"] + outstanding, total_debt, zinsverlauf, start_date, payout_date, payout_days=payout_days)
+                            bucket["required_monthly_rate"] = round(req_rate, 2)
+                            bucket["months_left"] = bucket["income_events_left"]
+                if bucket["bucket_type"] == "invest":
+                    breakdown = get_saved_breakdown(tag)
+                    bucket["saved_einzahlungen"] = round(breakdown["einzahlungen"], 2)
+                    bucket["saved_entnahmen"] = round(breakdown["entnahmen"], 2)
+                    net = round(breakdown["saldo"], 2)
+                    if net < 0:
+                        bucket["saved_total"] = 0.0
+                        bucket["saved_profit"] = round(abs(net), 2)
+                    else:
+                        bucket["saved_total"] = net
+                        bucket["saved_profit"] = 0.0
             if bucket["bucket_type"] == "spending":
+                exclude_tags = [
+                    "tag.bafoegrueckzahlung",
+                    "tag.notfallfonds",
+                    "tag.investieren",
+                    "tag.spenden",
+                    "tag.bafoegschulden",
+                ]
+                for plan in list_plans():
+                    t = plan.get("tag")
+                    if t:
+                        tag = t if t.startswith("tag.") else f"tag.{t}"
+                        if tag not in exclude_tags:
+                            exclude_tags.append(tag)
+                conditions = " AND ".join("purpose NOT LIKE ?" for _ in exclude_tags)
+                params = [start, end] + [f"%{t}%" for t in exclude_tags]
                 with get_connection() as conn:
                     row = conn.execute(
-                        """SELECT COALESCE(SUM(ABS(amount)), 0) FROM umsaetze
+                        f"""SELECT COALESCE(SUM(ABS(amount) - COALESCE(refund_total, 0)), 0) FROM umsaetze
                            WHERE amount < 0 AND date >= ? AND date <= ?
-                           AND (purpose IS NULL OR (
-                               purpose NOT LIKE '%tag.bafoegrueckzahlung%'
-                               AND purpose NOT LIKE '%tag.notfallfonds%'
-                               AND purpose NOT LIKE '%tag.investieren%'
-                               AND purpose NOT LIKE '%tag.spenden%'
-                           ))""",
-                        (start, end),
+                           AND (purpose IS NULL OR ({conditions}))""",
+                        params,
                     ).fetchone()
                 bucket["spent"] = round(row[0], 2) if row else 0.0
         plans = list_plans()
@@ -210,6 +281,7 @@ class AllocationService:
                 """SELECT applicant_name, purpose, amount, date
                    FROM umsaetze
                    WHERE amount > 0
+                     AND refund_ref_transaction_id IS NULL
                      AND date >= ? AND date <= ?
                      AND (purpose IS NULL OR purpose NOT LIKE '%tag.%')
                    ORDER BY applicant_name, purpose, date""",
@@ -261,7 +333,7 @@ class AllocationService:
                 detail=f"Kontostand ({balance:.2f} €) reicht nicht aus für Überweisung ({amount:.2f} €)",
             )
 
-    def transfer_run_bucket(self, run_bucket_id: int) -> dict[str, Any]:
+    def transfer_run_bucket(self, run_bucket_id: int, custom_amount: float | None = None) -> dict[str, Any]:
         with get_connection() as connection:
             row = connection.execute(
                 """SELECT arb.*, ab.bucket_type, ab.recipient_account_id, ab.sender_iban
@@ -277,7 +349,15 @@ class AllocationService:
         if rb["is_completed"]:
             raise HTTPException(status_code=400, detail="Dieser Bucket wurde bereits überwiesen")
 
-        amount = rb["target_amount"] - rb["transferred"]
+        remaining = rb["target_amount"] - rb["transferred"]
+        if custom_amount is not None:
+            if custom_amount <= 0:
+                raise HTTPException(status_code=400, detail="Betrag muss positiv sein")
+            if rb["bucket_type"] != "bafoeg" and custom_amount > remaining:
+                raise HTTPException(status_code=400, detail="Betrag überschreitet den offenen Betrag")
+            amount = custom_amount
+        else:
+            amount = remaining
         self._check_sender_balance(rb.get("sender_iban"), amount)
 
         if rb["bucket_type"] == "donation":

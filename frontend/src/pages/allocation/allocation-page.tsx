@@ -36,6 +36,7 @@ export default function AllocationPage() {
   const [recipientAccounts, setRecipientAccounts] = useState<RecipientAccountRecord[]>([]);
   const [bankAccounts, setBankAccounts] = useState<{ iban: string; name: string }[]>([]);
   const runBucketIdRef = useRef<number>(0);
+  const runBucketAmountRef = useRef<number>(0);
   const savingsPlanIdRef = useRef<number>(0);
   const savingsPlanAmountRef = useRef<number>(0);
   const [transferState, setTransferState] = useState<{
@@ -45,6 +46,7 @@ export default function AllocationPage() {
     accountName: string;
     recipientName: string;
     recipientIban: string;
+    purpose: string;
   }>({
     open: false,
     runBucketId: 0,
@@ -52,6 +54,7 @@ export default function AllocationPage() {
     accountName: "",
     recipientName: "",
     recipientIban: "",
+    purpose: "",
   });
   const [donationAnalysisOpen, setDonationAnalysisOpen] = useState(false);
 
@@ -78,7 +81,7 @@ export default function AllocationPage() {
   );
 
   const handleTransfer = useCallback(
-    async (runBucketId: number) => {
+    async (runBucketId: number, amount?: number) => {
       const bucket = status?.buckets.find((b) => b.id === runBucketId);
       if (!bucket) return;
       const cfg = status?.config.find((c) => c.id === bucket.bucket_id);
@@ -104,16 +107,26 @@ export default function AllocationPage() {
         recipientIban = recipient.iban;
       }
 
+      const bucketTags: Record<string, string> = {
+        bafoeg: "tag.bafoegschulden",
+        emergency: "tag.notfallfonds",
+        invest: "tag.investieren",
+        donation: "tag.spenden",
+      };
+      const purpose = `Allokation ${bucket.bucket_type} ${bucketTags[bucket.bucket_type] ?? ""}`.trim();
+
       runBucketIdRef.current = runBucketId;
+      runBucketAmountRef.current = amount ?? bucket.target_amount - bucket.transferred;
       savingsPlanIdRef.current = 0;
 
       setTransferState({
         open: true,
         runBucketId,
-        amount: bucket.target_amount - bucket.transferred,
+        amount: amount ?? bucket.target_amount - bucket.transferred,
         accountName,
         recipientName,
         recipientIban,
+        purpose,
       });
     },
     [status, recipientAccounts, donationAccounts],
@@ -128,7 +141,7 @@ export default function AllocationPage() {
           savingsPlanIdRef.current = 0;
           savingsPlanAmountRef.current = 0;
         } else {
-          await transfer(runBucketIdRef.current, tan);
+          await transfer(runBucketIdRef.current, tan, runBucketAmountRef.current > 0 ? runBucketAmountRef.current : undefined);
         }
         toast.success("Überweisung erfolgreich!", { id: tid });
       } catch (e) {
@@ -136,7 +149,7 @@ export default function AllocationPage() {
         throw e;
       }
     },
-    [transfer, transferSavings],
+    [transfer, transferSavings, transferState.amount],
   );
 
   const handleSavingsPlanTransfer = useCallback(
@@ -147,6 +160,10 @@ export default function AllocationPage() {
         ? Math.max(0, plan.required_monthly_rate - (plan.month_einzahlungen ?? 0))
         : 0);
       savingsPlanAmountRef.current = amount;
+      const tag = plan.tag ?? "";
+      const tagClean = tag.startsWith("tag.") ? tag : `tag.${tag}`;
+      const purpose = `Sparplan ${plan.name}${tagClean ? ` ${tagClean}` : ""}`;
+
       const acc = recipientAccounts.find((r) => r.iban === plan.target_recipient_iban);
       setTransferState({
         open: true,
@@ -155,6 +172,7 @@ export default function AllocationPage() {
         accountName: acc?.account_name ?? plan.target_recipient_name,
         recipientName: plan.target_recipient_name,
         recipientIban: plan.target_recipient_iban,
+        purpose,
       });
     },
     [recipientAccounts],
@@ -242,7 +260,7 @@ export default function AllocationPage() {
           text="Aktiviere mindestens einen Topf, um deine Verteilung zu sehen."
         />
       ) : (
-        <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+        <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3">
           {visibleBuckets.map((bucket) => {
             const config = status.config.find((c) => c.id === bucket.bucket_id)!;
             const donationAvailable = donationAccounts.length > 0;
@@ -267,6 +285,7 @@ export default function AllocationPage() {
                 onTransfer={handleTransfer}
                 onUpdateConfig={handleUpdateConfig}
                 onAnalyse={() => setDonationAnalysisOpen(true)}
+                onRefresh={load}
                 transferring={transferring === bucket.id}
               />
             );
@@ -292,6 +311,7 @@ export default function AllocationPage() {
         accountName={transferState.accountName}
         recipientName={transferState.recipientName}
         recipientIban={transferState.recipientIban}
+        purpose={transferState.purpose}
         onConfirm={confirmTransfer}
       />
 

@@ -26,7 +26,22 @@ class BafoegConfig(BaseModel):
     total_debt: float = 7600
     monthly_rate: float = 267
     interest_rate: float = 2.0
+    current_balance: float = 0
     payout_date: str | None = None
+
+
+class BafoegRateRequest(BaseModel):
+    current_balance: float
+    total_debt: float = 7600
+    interest_rate: float = 2.0
+    payout_date: str
+    offene_zinsen: float = 0
+
+
+class BafoegRateResponse(BaseModel):
+    required_monthly_rate: float
+    projected_end_balance: float
+    interest_earned: float
 
 
 class AllocationSettingsUpdate(BaseModel):

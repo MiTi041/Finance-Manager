@@ -9,22 +9,22 @@ from typing import Any
 from finance_server.core.database import get_connection
 
 
-def get_or_create_device_id() -> str:
-    device_id = get_sync_state("local_device_id")
+def get_or_create_device_id(connection: sqlite3.Connection | None = None) -> str:
+    device_id = get_sync_state("local_device_id", connection)
     if device_id:
         return device_id
     device_id = str(uuid.uuid4())
-    set_sync_state("local_device_id", device_id)
+    set_sync_state("local_device_id", device_id, connection)
     return device_id
 
 
-def get_next_seq() -> int:
-    val = get_sync_state("last_seq")
+def get_next_seq(connection: sqlite3.Connection | None = None) -> int:
+    val = get_sync_state("last_seq", connection)
     if val is None:
-        set_sync_state("last_seq", "1")
+        set_sync_state("last_seq", "1", connection)
         return 1
     next_seq = int(val) + 1
-    set_sync_state("last_seq", str(next_seq))
+    set_sync_state("last_seq", str(next_seq), connection)
     return next_seq
 
 
@@ -33,20 +33,25 @@ def log_sync_op(
     row_id: int | None,
     op_type: str,
     data: dict[str, Any] | None,
+    connection: sqlite3.Connection | None = None,
 ) -> int:
-    device_id = get_or_create_device_id()
-    seq = get_next_seq()
+    device_id = get_or_create_device_id(connection)
+    seq = get_next_seq(connection)
     data_json = json.dumps(data, ensure_ascii=False, default=str) if data else None
     checksum = None
     if data_json:
         checksum = hashlib.sha256(data_json.encode("utf-8")).hexdigest()
 
-    with get_connection() as connection:
+    if connection:
         cursor = connection.execute(
-            """
-            INSERT INTO sync_ops (device_id, seq, table_name, row_id, op_type, data, checksum)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
+            "INSERT INTO sync_ops (device_id, seq, table_name, row_id, op_type, data, checksum) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (device_id, seq, table_name, row_id, op_type, data_json, checksum),
+        )
+        return int(cursor.lastrowid)
+
+    with get_connection() as conn:
+        cursor = conn.execute(
+            "INSERT INTO sync_ops (device_id, seq, table_name, row_id, op_type, data, checksum) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (device_id, seq, table_name, row_id, op_type, data_json, checksum),
         )
         return int(cursor.lastrowid)
@@ -181,11 +186,16 @@ def count_pending_ops(last_pushed_id: int = 0) -> int:
     return row["cnt"] if row else 0
 
 
-def get_sync_state(key: str) -> str | None:
-    with get_connection() as connection:
+def get_sync_state(key: str, connection: sqlite3.Connection | None = None) -> str | None:
+    if connection:
         row = connection.execute(
             "SELECT value FROM sync_state WHERE key = ?", (key,)
         ).fetchone()
+    else:
+        with get_connection() as conn:
+            row = conn.execute(
+                "SELECT value FROM sync_state WHERE key = ?", (key,)
+            ).fetchone()
     return row["value"] if row else None
 
 
@@ -204,9 +214,15 @@ def get_all_remote_seqs() -> dict[str, int]:
     return seqs
 
 
-def set_sync_state(key: str, value: str) -> None:
-    with get_connection() as connection:
+def set_sync_state(key: str, value: str, connection: sqlite3.Connection | None = None) -> None:
+    if connection:
         connection.execute(
             "INSERT INTO sync_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             (key, value),
         )
+    else:
+        with get_connection() as conn:
+            conn.execute(
+                "INSERT INTO sync_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (key, value),
+            )

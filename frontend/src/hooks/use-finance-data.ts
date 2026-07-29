@@ -34,12 +34,16 @@ function formatBalance(balance: number) {
 }
 
 function calculateIncomes(transactions: Transaction[]) {
-  return transactions.reduce((total, t) => (t.betrag.wert > 0 ? total + t.betrag.wert : total), 0);
+  return transactions.reduce(
+    (total, t) => (t.betrag.wert > 0 && !t.technisch.isRefund ? total + t.betrag.wert : total),
+    0,
+  );
 }
 
 function calculateExpenses(transactions: Transaction[]) {
   return transactions.reduce(
-    (total, t) => (t.betrag.wert < 0 ? total + Math.abs(t.betrag.wert) : total),
+    (total, t) =>
+      t.betrag.wert < 0 ? total + Math.abs(t.betrag.wert) - t.betrag.refundTotal : total,
     0,
   );
 }

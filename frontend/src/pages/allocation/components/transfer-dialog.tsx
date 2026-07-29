@@ -20,6 +20,7 @@ type Props = {
   accountName: string;
   recipientName: string;
   recipientIban: string;
+  purpose?: string;
   onConfirm: (tan?: string) => Promise<void>;
 };
 
@@ -34,6 +35,7 @@ export function TransferDialog({
   accountName,
   recipientName,
   recipientIban,
+  purpose,
   onConfirm,
 }: Props) {
   const [tan, setTan] = useState("");
@@ -121,6 +123,12 @@ export function TransferDialog({
               <span className="text-xs text-muted-foreground">IBAN</span>
               <span className="truncate font-mono text-sm">{formatIban(recipientIban)}</span>
             </div>
+            {purpose && (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-muted-foreground">Verwendungszweck</span>
+                <span className="truncate text-sm font-medium">{purpose}</span>
+              </div>
+            )}
           </div>
 
           {error && (

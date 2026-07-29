@@ -10,12 +10,14 @@ from finance_server.fints.transfer import FinTSClientError, send_transfer
 from finance_server.models.allocation import (
     AllocationBucketUpdate,
     BafoegConfig,
+    BafoegRateRequest,
     AllocationSettingsUpdate,
     SavingsPlanCreate,
     SavingsPlanUpdate,
 )
 from finance_server.models.fints import TransferRequest
 from finance_server.services.allocation_service import AllocationService
+from finance_server.services.zins_service import aktuellen_taeglichen_zins, berechne_endguthaben, berechne_monatsrate
 from finance_server.api.deps import get_allocation_service
 
 router = APIRouter()
@@ -72,6 +74,37 @@ def update_bafoeg_config(
     return service.update_bafoeg_config(payload.model_dump(exclude_none=True))
 
 
+@router.post("/allocation/bafoeg/berechne-rate")
+def berechne_bafoeg_rate(
+    payload: BafoegRateRequest = Body(...),
+) -> dict[str, Any]:
+    from datetime import date, datetime
+
+    today = date.today()
+    payout = datetime.strptime(payload.payout_date, "%Y-%m-%d").date()
+
+    zinsverlauf = [
+        {"datum": date(2025, 7, 6), "zinssatz": 0.02},
+        {"datum": date(2026, 4, 29), "zinssatz": 0.02},
+        {"datum": date(2027, 1, 1), "zinssatz": 0.025},
+    ]
+    zinsverlauf.append({"datum": today, "zinssatz": payload.interest_rate / 100})
+
+    erforderliche_rate = berechne_monatsrate(
+        payload.current_balance, payload.total_debt, zinsverlauf, today, payout
+    )
+    endguthaben = berechne_endguthaben(
+        payload.current_balance, erforderliche_rate, zinsverlauf, today, payout, payload.offene_zinsen
+    )[0]
+    zinsgewinn = endguthaben - (payload.current_balance + erforderliche_rate * max(1, (payout.year - today.year) * 12 + payout.month - today.month))
+
+    return {
+        "required_monthly_rate": round(erforderliche_rate, 2),
+        "projected_end_balance": round(endguthaben, 2),
+        "interest_earned": round(zinsgewinn, 2),
+    }
+
+
 @router.get("/allocation/settings")
 def get_allocation_settings(
     service: AllocationService = Depends(get_allocation_service),
@@ -105,7 +138,8 @@ def execute_transfer(
     service: AllocationService = Depends(get_allocation_service),
 ) -> dict[str, Any]:
     tan = (body or {}).get("tan")
-    transfer_data = service.transfer_run_bucket(run_bucket_id)
+    custom_amount = (body or {}).get("amount")
+    transfer_data = service.transfer_run_bucket(run_bucket_id, custom_amount)
 
     req = TransferRequest(
         recipient_iban=transfer_data["recipient_iban"],

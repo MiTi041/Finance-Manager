@@ -93,6 +93,8 @@ export interface TransactionDto {
   created_at: Date;
   bank_deleted: boolean;
   refund_ref_transaction_id: number | null;
+  refund_total: number;
+  is_refund: boolean;
 }
 
 /**
@@ -190,6 +192,7 @@ export interface Transaction {
     wert: number;
     originalWert: number;
     waehrung: CurrencyCode | string;
+    refundTotal: number;
   };
 
   technisch: {
@@ -212,6 +215,7 @@ export interface Transaction {
     bankDeleted: boolean;
 
     refundRefTransactionId: number | null;
+    isRefund: boolean;
   };
 }
 
