@@ -17,6 +17,8 @@ from .utils import normalize_text
 
 def _log(table_name: str, row_id: int | None, op_type: str, data: Any = None, connection=None) -> None:
     from finance_server.services.sync_logger import log_crud_event
+    if data and "ibans" in data:
+        data = {k: v for k, v in data.items() if k != "ibans"}
     log_crud_event(table_name, row_id, op_type, data, connection=connection)
 
 
@@ -140,7 +142,7 @@ def _store_zahlungspartner_logo(zahlungspartner_id: int, logo_url: str) -> None:
 
 
 def _serialize_zahlungspartner_row(row: sqlite3.Row) -> dict[str, Any]:
-    return {
+    result: dict[str, Any] = {
         "id": row["id"],
         "name": row["name"],
         "website": row["website"],
@@ -150,6 +152,11 @@ def _serialize_zahlungspartner_row(row: sqlite3.Row) -> dict[str, Any]:
         "logo_padding": bool(row["logo_padding"]),
         "is_company": bool(row["is_company"]),
     }
+    try:
+        result["updated_at"] = row["updated_at"]
+    except (IndexError, KeyError):
+        pass
+    return result
 
 
 def list_zahlungspartner_records() -> list[dict[str, Any]]:

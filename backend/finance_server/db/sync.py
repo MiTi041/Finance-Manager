@@ -72,7 +72,11 @@ def get_pending_ops(last_pushed_id: int = 0, limit: int = 100) -> list[dict[str,
     return [dict(row) for row in rows]
 
 
-VALID_SYNC_TABLES = {"kategorien", "umsaetze", "zahlungspartner", "empfaengerkonten", "subscription_identities", "ibans"}
+VALID_SYNC_TABLES = {
+    "kategorien", "umsaetze", "zahlungspartner", "empfaengerkonten",
+    "subscription_identities", "ibans",
+    "allocation_buckets", "allocation_bafoeg_config", "savings_plans",
+}
 
 VALID_SYNC_COLUMNS: dict[str, set[str]] = {
     "kategorien": {"id", "name", "typ", "parent_id", "personal_expense", "icon", "updated_at"},
@@ -101,7 +105,24 @@ VALID_SYNC_COLUMNS: dict[str, set[str]] = {
     "empfaengerkonten": {"id", "account_name", "iban", "bic", "recipient_name", "is_donation_account", "updated_at"},
     "subscription_identities": {"id", "counterparty_name", "amount", "display_name", "f_zahlungspartner_id", "dismissed", "updated_at"},
     "ibans": {"iban", "f_zahlungspartner_id"},
+    "allocation_buckets": {"id", "bucket_type", "percentage", "recipient_account_id", "sender_iban", "is_active", "sort_order", "created_at", "updated_at"},
+    "allocation_bafoeg_config": {"id", "total_debt", "monthly_rate", "interest_rate", "payout_date", "created_at", "updated_at"},
+    "savings_plans": {"id", "name", "tag", "target_amount", "target_date", "target_recipient_name", "target_recipient_iban", "target_recipient_bic", "is_visible", "sender_iban", "sender_name", "created_at", "updated_at"},
 }
+
+
+def _resolve_lookup(
+    table: str, row_id: int | None, data: dict[str, Any] | None
+) -> tuple[str, Any, int | None]:
+    if table == "allocation_buckets" and data and data.get("bucket_type"):
+        return "bucket_type", data["bucket_type"], row_id
+    if table == "allocation_bafoeg_config":
+        return "id", 1, 1
+    if table == "umsaetze" and data and data.get("transaction_hash"):
+        return "transaction_hash", data["transaction_hash"], row_id
+    if table == "ibans":
+        return "iban", row_id, row_id
+    return "id", row_id, row_id
 
 
 def apply_sync_op(op: dict[str, Any]) -> bool:
@@ -114,10 +135,15 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
 
     with get_connection() as connection:
         connection.execute("PRAGMA foreign_keys = OFF")
-        pk = "iban" if table == "ibans" else "id"
+        pk, pk_value, use_id = _resolve_lookup(table, row_id, data)
 
         if op_type == "DELETE":
-            cursor = connection.execute(f"DELETE FROM {table} WHERE {pk} = ?", (row_id,))
+            if table == "allocation_buckets":
+                cursor = connection.execute(
+                    "DELETE FROM allocation_buckets WHERE bucket_type = ?", (pk_value,)
+                )
+            else:
+                cursor = connection.execute(f"DELETE FROM {table} WHERE {pk} = ?", (pk_value,))
             return cursor.rowcount > 0
 
         if not data:
@@ -128,8 +154,8 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
         if not filtered_data:
             return False
 
-        if pk == "id" and pk not in filtered_data:
-                return False
+        if pk == "id" and "id" not in filtered_data:
+            return False
 
         if table == "umsaetze" and "splits" in filtered_data and isinstance(filtered_data["splits"], (dict, list)):
             filtered_data["splits"] = json.dumps(filtered_data["splits"], ensure_ascii=False) if filtered_data["splits"] else None
@@ -139,24 +165,28 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
         values = [filtered_data[k] for k in columns]
 
         existing = connection.execute(
-            f"SELECT 1 FROM {table} WHERE {pk} = ?", (row_id,)
+            f"SELECT 1 FROM {table} WHERE {pk} = ?", (pk_value,)
         ).fetchone()
+        if table == "allocation_buckets" and existing:
+            use_id = existing["id"] if existing else row_id
 
         if existing and "updated_at" in valid_cols and op_type != "INSERT":
             current_updated = connection.execute(
-                f"SELECT updated_at FROM {table} WHERE {pk} = ?", (row_id,)
+                f"SELECT updated_at FROM {table} WHERE {pk} = ?", (pk_value,)
             ).fetchone()["updated_at"]
             if data.get("updated_at") and current_updated and current_updated >= data["updated_at"]:
                 return False
 
         if existing:
-            sql = f"UPDATE {table} SET {', '.join(placeholders)} WHERE {pk} = ?"
-            values.append(row_id)
+            where_pk = "id" if table == "allocation_buckets" else pk
+            where_val = use_id if table == "allocation_buckets" else pk_value
+            sql = f"UPDATE {table} SET {', '.join(placeholders)} WHERE {where_pk} = ?"
+            values.append(where_val)
             cursor = connection.execute(sql, values)
         else:
-            all_columns = [pk] + columns
+            all_columns = [pk] + columns if table != "allocation_buckets" else ["id"] + columns
             all_placeholders = ["?"] * len(all_columns)
-            all_values = [row_id] + values
+            all_values = [pk_value if table != "allocation_buckets" else (use_id or row_id)] + values
             sql = f"INSERT OR IGNORE INTO {table} ({', '.join(all_columns)}) VALUES ({', '.join(all_placeholders)})"
             cursor = connection.execute(sql, all_values)
         return cursor.rowcount > 0

@@ -247,6 +247,7 @@ class AllocationService:
                         params,
                     ).fetchone()
                 bucket["spent"] = round(row[0], 2) if row else 0.0
+                bucket["available"] = round(max(0.0, bucket["target_amount"] - bucket["spent"]), 2)
         plans = list_plans()
         savings_plans = [self._enrich_savings_plan(p, run["month"]) for p in plans]
         savings_total = sum(p["monthly_rate"] for p in savings_plans if p["is_visible"])

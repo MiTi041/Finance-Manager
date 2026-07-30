@@ -23,6 +23,7 @@ export type AllocationRunBucket = {
   transferred_at: string | null;
   is_completed: boolean;
   spent?: number;
+  available?: number;
   saved_total?: number;
   saved_einzahlungen?: number;
   saved_entnahmen?: number;

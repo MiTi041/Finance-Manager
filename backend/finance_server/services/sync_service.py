@@ -272,7 +272,11 @@ class SyncService:
                     continue
                 ops = decrypt_batch(data, self._sync_key)
                 for op in ops:
-                    apply_sync_op(op)
+                    try:
+                        apply_sync_op(op)
+                    except Exception:
+                        logger.exception("Failed to apply sync op: %s/%s id=%s",
+                                          op.get("table_name"), op.get("op_type"), op.get("row_id"))
                 self._remote_seqs[remote_id] = seq
                 self._mark_synced()
                 self._pull_progress += 1

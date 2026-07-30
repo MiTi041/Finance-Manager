@@ -35,9 +35,12 @@ def create_plan(payload: dict[str, Any]) -> dict[str, Any]:
             f"INSERT INTO savings_plans ({keys}) VALUES ({placeholders})",
             list(payload.values()),
         )
-        return dict(connection.execute(
+        row = dict(connection.execute(
             "SELECT * FROM savings_plans WHERE id = ?", (cursor.lastrowid,)
         ).fetchone())
+    from finance_server.services.sync_logger import log_crud_event
+    log_crud_event("savings_plans", row["id"], "INSERT", row)
+    return row
 
 
 def update_plan(plan_id: int, payload: dict[str, Any]) -> dict[str, Any] | None:
@@ -53,10 +56,18 @@ def update_plan(plan_id: int, payload: dict[str, Any]) -> dict[str, Any] | None:
             f"UPDATE savings_plans SET {set_clause} WHERE id = ?",
             values,
         )
-    return get_plan(plan_id)
+    result = get_plan(plan_id)
+    if result:
+        from finance_server.services.sync_logger import log_crud_event
+        log_crud_event("savings_plans", plan_id, "UPDATE", result)
+    return result
 
 
 def delete_plan(plan_id: int) -> bool:
+    plan = get_plan(plan_id)
+    if plan:
+        from finance_server.services.sync_logger import log_crud_event
+        log_crud_event("savings_plans", plan_id, "DELETE", plan)
     with get_connection() as connection:
         cursor = connection.execute(
             "DELETE FROM savings_plans WHERE id = ?", (plan_id,)
