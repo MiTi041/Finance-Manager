@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Iterable
 import sqlite3
@@ -68,11 +67,12 @@ def to_row_payload(tx: dict[str, Any]) -> dict[str, Any]:
         "created_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
     }
 
-    if not payload.get("applicant_iban") and payload.get("applicant_name"):
-        m = re.match(r"(DE\d{20})\s*(.*)", payload["applicant_name"])
-        if m:
-            payload["applicant_iban"] = m.group(1)
-            payload["applicant_name"] = m.group(2).strip()
+    if not payload.get("applicant_iban") and payload.get("applicant_name") and len(payload["applicant_name"]) > 4:
+        country = payload["applicant_name"][:2]
+        iban_len = {"DE": 22, "LU": 20, "AT": 20, "FR": 27, "ES": 24, "IT": 27, "NL": 18, "BE": 16, "CH": 21, "GB": 22, "IE": 22, "DK": 18, "FI": 18, "NO": 15, "SE": 24, "PL": 28, "CZ": 24, "HU": 28, "GR": 27, "PT": 25, "RO": 24, "SK": 24, "SI": 19, "HR": 21, "LT": 20, "LV": 21, "EE": 20, "BG": 22, "MT": 31, "CY": 28}.get(country)
+        if iban_len and len(payload["applicant_name"]) > iban_len:
+            payload["applicant_iban"] = payload["applicant_name"][:iban_len]
+            payload["applicant_name"] = payload["applicant_name"][iban_len:].strip()
 
     payload["transaction_hash"] = build_transaction_hash(payload)
     return payload
