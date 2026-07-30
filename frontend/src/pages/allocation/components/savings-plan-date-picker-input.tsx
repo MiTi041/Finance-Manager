@@ -21,7 +21,7 @@ export function SavingsPlanDatePickerInput({
     const [date, setDate] = useState<Date | undefined>(parseIsoDate(defaultValue))
     const [month, setMonth] = useState<Date | undefined>(parseIsoDate(defaultValue) ?? new Date())
     const now = new Date()
-    const startMonth = new Date(now.getFullYear() - 50, 0, 1)
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     const endMonth = new Date(now.getFullYear() + 50, 11, 31)
 
     return (
@@ -50,8 +50,9 @@ export function SavingsPlanDatePickerInput({
                         selected={date}
                         month={month}
                         captionLayout="dropdown"
-                        startMonth={startMonth}
+                        fromDate={today}
                         endMonth={endMonth}
+                        disabled={{ before: today }}
                         onMonthChange={setMonth}
                         onSelect={(selectedDate) => {
                             setDate(selectedDate)

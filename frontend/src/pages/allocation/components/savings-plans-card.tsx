@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Car,
   CheckCircle2,
@@ -47,6 +47,7 @@ import { formatDateInputValue, parseIsoDate } from "../utils";
 type Props = {
   plans: SavingsPlan[];
   savingsTotal: number;
+  availableForSavings: number;
   currentMonth: string;
   onRefresh: () => void;
   onTransfer: (plan: SavingsPlan, customAmount?: number) => void;
@@ -91,7 +92,30 @@ const emptyForm: FormValues = {
 };
 
 function isFormValid(v: FormValues) {
-  return v.name.trim() && v.tag.trim() && v.recipientName.trim() && v.recipientIban.trim() && v.senderIban.trim();
+  return (
+    v.name.trim() &&
+    v.tag.trim() &&
+    v.recipientName.trim() &&
+    v.recipientIban.trim() &&
+    v.senderIban.trim()
+  );
+}
+
+function computeMonthlyRate(
+  targetAmount: string,
+  targetDate: Date | null,
+  savedAmount: number,
+): number | null {
+  const amount = parseFloat(targetAmount.replace(",", "."));
+  if (!targetDate || isNaN(amount) || amount <= 0) return null;
+  const now = new Date();
+  if (targetDate <= now) return null;
+  const months =
+    (targetDate.getFullYear() - now.getFullYear()) * 12 + (targetDate.getMonth() - now.getMonth());
+  if (months <= 0) return null;
+  const remaining = amount - savedAmount;
+  if (remaining <= 0) return 0;
+  return Math.round((remaining / months) * 100) / 100;
 }
 
 // Shared field layout for both the create and edit dialogs, so the two
@@ -102,12 +126,32 @@ function PlanFormFields({
   onChange,
   recipientAccounts,
   bankAccounts,
+  existingTotal,
+  availableForSavings,
+  savedAmount = 0,
 }: {
   values: FormValues;
   onChange: (v: FormValues) => void;
   recipientAccounts: RecipientAccountRecord[];
   bankAccounts: { iban: string; name: string }[];
+  existingTotal: number;
+  availableForSavings: number;
+  savedAmount?: number;
 }) {
+  const [debouncing, setDebouncing] = useState(false);
+  const [computedRate, setComputedRate] = useState<number | null>(null);
+
+  useEffect(() => {
+    setDebouncing(true);
+    const timer = setTimeout(() => {
+      setComputedRate(computeMonthlyRate(values.targetAmount, values.targetDate, savedAmount));
+      setDebouncing(false);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [values.targetAmount, values.targetDate, savedAmount]);
+
+  const rateExceedsBudget =
+    computedRate != null && existingTotal + computedRate > availableForSavings + 0.001;
   const set = <K extends keyof FormValues>(key: K, value: FormValues[K]) =>
     onChange({ ...values, [key]: value });
 
@@ -176,6 +220,32 @@ function PlanFormFields({
           />
         </div>
       </div>
+
+      <div className="flex items-center gap-2 text-sm">
+        {debouncing ? (
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <Loader2 className="size-3 animate-spin" />
+            <span>Monatliche Rate wird berechnet…</span>
+          </div>
+        ) : computedRate != null ? (
+          <>
+            <span className="font-medium">Monatliche Rate: {formatAmount(computedRate)}</span>
+            <span className="text-xs text-muted-foreground">
+              (max. mögliche monatliche Rate:{" "}
+              {formatAmount(Math.max(0, availableForSavings - existingTotal))})
+            </span>
+          </>
+        ) : values.targetAmount.trim() && values.targetDate ? (
+          <span className="text-muted-foreground">Monatliche Rate: 0,00 €</span>
+        ) : null}
+      </div>
+
+      {rateExceedsBudget && (
+        <p className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+          <TriangleAlert className="size-3 shrink-0" />
+          Sparplan überschreitet das verfügbare Budget und wird automatisch ausgeblendet.
+        </p>
+      )}
 
       <div className="space-y-3 rounded-lg border p-3">
         <p className="text-xs font-medium text-muted-foreground">Zahlungsempfänger</p>
@@ -278,7 +348,9 @@ function PlanFormFields({
       </div>
 
       <div className="space-y-3 rounded-lg border p-3">
-        <p className="text-xs font-medium text-muted-foreground">Absenderkonto <span className="text-destructive">*</span></p>
+        <p className="text-xs font-medium text-muted-foreground">
+          Absenderkonto <span className="text-destructive">*</span>
+        </p>
         <SearchableSelect
           height={15}
           value={values.senderIban}
@@ -326,6 +398,7 @@ function PlanFormFields({
 export function SavingsPlansCard({
   plans,
   savingsTotal,
+  availableForSavings,
   currentMonth,
   onRefresh,
   onTransfer,
@@ -392,7 +465,7 @@ export function SavingsPlansCard({
       recipientBic: plan.target_recipient_bic ?? "",
       targetAmount: plan.target_amount != null ? String(plan.target_amount) : "",
       targetDate: parseIsoDate(plan.target_date) ?? null,
-      senderIban: (plan as Record<string, unknown>).sender_iban as string ?? "",
+      senderIban: ((plan as Record<string, unknown>).sender_iban as string) ?? "",
     });
   };
 
@@ -421,7 +494,7 @@ export function SavingsPlansCard({
         sender_iban: editValues.senderIban.trim() || null,
       });
       if (autoHiddenPlanIds.includes(editingPlan.id)) {
-        await updateSavingsPlan(editingPlan.id, { is_visible: true });
+        await updateSavingsPlan(editingPlan.id, { is_visible: true, auto_hidden: false });
       }
       setEditingPlan(null);
       onRefresh();
@@ -448,7 +521,10 @@ export function SavingsPlansCard({
     setMenuOpenId(null);
     setTogglingId(plan.id);
     try {
-      await updateSavingsPlan(plan.id, { is_visible: !plan.is_visible });
+      await updateSavingsPlan(plan.id, {
+        is_visible: !plan.is_visible,
+        auto_hidden: plan.is_visible ? undefined : false,
+      });
       onRefresh();
     } finally {
       setTogglingId(null);
@@ -488,6 +564,8 @@ export function SavingsPlansCard({
                 onChange={setCreateValues}
                 recipientAccounts={recipientAccounts}
                 bankAccounts={bankAccounts}
+                existingTotal={savingsTotal}
+                availableForSavings={availableForSavings}
               />
               {createError && (
                 <p className="flex items-center gap-1.5 text-sm text-destructive">
@@ -498,7 +576,10 @@ export function SavingsPlansCard({
                 <Button variant="ghost" onClick={() => setCreateOpen(false)} disabled={creating}>
                   Abbrechen
                 </Button>
-                <Button onClick={handleCreate} disabled={creating || !createValues.senderIban.trim()}>
+                <Button
+                  onClick={handleCreate}
+                  disabled={creating || !createValues.senderIban.trim()}
+                >
                   {creating ? (
                     <Loader2 className="size-4 animate-spin" />
                   ) : (
@@ -524,7 +605,9 @@ export function SavingsPlansCard({
 
         {autoHiddenPlanIds.length > 0 && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
-            ⚠ {autoHiddenPlanIds.length} Sparplan{autoHiddenPlanIds.length !== 1 ? " wurden" : " wurde"} ausgeblendet - Budget nicht ausreichend. Älteste Sparpläne haben Vorrang.
+            ⚠ {autoHiddenPlanIds.length} Sparplan
+            {autoHiddenPlanIds.length !== 1 ? " wurden" : " wurde"} ausgeblendet - Budget nicht
+            ausreichend. Älteste Sparpläne haben Vorrang.
           </div>
         )}
 
@@ -626,56 +709,56 @@ export function SavingsPlansCard({
                   </div>
 
                   {!isAutoHidden && (
-                  <Popover
-                    open={menuOpenId === plan.id}
-                    onOpenChange={(open) => setMenuOpenId(open ? plan.id : null)}
-                  >
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-7 cursor-pointer text-muted-foreground hover:text-foreground"
-                        aria-label={`Optionen für ${plan.name}`}
-                      >
-                        <MoreVertical className="size-4" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent align="end" className="w-48 p-1">
-                      <Button
-                        variant="ghost"
-                        className="w-full cursor-pointer justify-start gap-2 px-2 py-1.5 text-sm"
-                        onClick={() => openEditDialog(plan)}
-                      >
-                        <Pencil className="size-4" /> Bearbeiten
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        disabled={isToggling}
-                        className="w-full cursor-pointer justify-start gap-2 px-2 py-1.5 text-sm disabled:cursor-not-allowed"
-                        onClick={() => handleToggleVisibility(plan)}
-                      >
-                        {isToggling ? (
-                          <Loader2 className="size-4 animate-spin" />
-                        ) : isVisible ? (
-                          <EyeOff className="size-4" />
-                        ) : (
-                          <Eye className="size-4" />
-                        )}
-                        {isVisible ? "Ausblenden" : "Einblenden"}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        className="w-full cursor-pointer justify-start gap-2 px-2 py-1.5 text-sm text-destructive hover:bg-destructive/10"
-                        onClick={() => {
-                          setMenuOpenId(null);
-                          setDeletingPlan(plan);
-                        }}
-                      >
-                        <Trash2 className="size-4" /> Löschen
-                      </Button>
-                    </PopoverContent>
-                  </Popover>
-                )}
+                    <Popover
+                      open={menuOpenId === plan.id}
+                      onOpenChange={(open) => setMenuOpenId(open ? plan.id : null)}
+                    >
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-7 cursor-pointer text-muted-foreground hover:text-foreground"
+                          aria-label={`Optionen für ${plan.name}`}
+                        >
+                          <MoreVertical className="size-4" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent align="end" className="w-48 p-1">
+                        <Button
+                          variant="ghost"
+                          className="w-full cursor-pointer justify-start gap-2 px-2 py-1.5 text-sm"
+                          onClick={() => openEditDialog(plan)}
+                        >
+                          <Pencil className="size-4" /> Bearbeiten
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          disabled={isToggling}
+                          className="w-full cursor-pointer justify-start gap-2 px-2 py-1.5 text-sm disabled:cursor-not-allowed"
+                          onClick={() => handleToggleVisibility(plan)}
+                        >
+                          {isToggling ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : isVisible ? (
+                            <EyeOff className="size-4" />
+                          ) : (
+                            <Eye className="size-4" />
+                          )}
+                          {isVisible ? "Ausblenden" : "Einblenden"}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          className="w-full cursor-pointer justify-start gap-2 px-2 py-1.5 text-sm text-destructive hover:bg-destructive/10"
+                          onClick={() => {
+                            setMenuOpenId(null);
+                            setDeletingPlan(plan);
+                          }}
+                        >
+                          <Trash2 className="size-4" /> Löschen
+                        </Button>
+                      </PopoverContent>
+                    </Popover>
+                  )}
                 </div>
 
                 <div className="space-y-1.5">
@@ -696,7 +779,12 @@ export function SavingsPlansCard({
                         <TooltipTrigger asChild>
                           <div
                             className="h-full rounded-full bg-emerald-500/40 cursor-pointer"
-                            style={{ width: `${beforeMonthPct}%`, minWidth: beforeMonthPct > 0 ? "8px" : undefined } as React.CSSProperties}
+                            style={
+                              {
+                                width: `${beforeMonthPct}%`,
+                                minWidth: beforeMonthPct > 0 ? "8px" : undefined,
+                              } as React.CSSProperties
+                            }
                           />
                         </TooltipTrigger>
                         <TooltipContent side="top">
@@ -709,7 +797,12 @@ export function SavingsPlansCard({
                         <TooltipTrigger asChild>
                           <div
                             className="h-full rounded-full bg-emerald-500 cursor-pointer"
-                            style={{ width: `${monthPct}%`, minWidth: monthPct > 0 ? "8px" : undefined } as React.CSSProperties}
+                            style={
+                              {
+                                width: `${monthPct}%`,
+                                minWidth: monthPct > 0 ? "8px" : undefined,
+                              } as React.CSSProperties
+                            }
                           />
                         </TooltipTrigger>
                         <TooltipContent side="top">
@@ -722,7 +815,12 @@ export function SavingsPlansCard({
                         <TooltipTrigger asChild>
                           <div
                             className="h-full rounded-full bg-orange-500/20 cursor-pointer"
-                            style={{ width: `${entnahmenPct}%`, minWidth: entnahmenPct > 0 ? "8px" : undefined } as React.CSSProperties}
+                            style={
+                              {
+                                width: `${entnahmenPct}%`,
+                                minWidth: entnahmenPct > 0 ? "8px" : undefined,
+                              } as React.CSSProperties
+                            }
                           />
                         </TooltipTrigger>
                         <TooltipContent side="top">
@@ -856,6 +954,13 @@ export function SavingsPlansCard({
             onChange={setEditValues}
             recipientAccounts={recipientAccounts}
             bankAccounts={bankAccounts}
+            existingTotal={
+              editingPlan && autoHiddenPlanIds.includes(editingPlan.id)
+                ? savingsTotal
+                : savingsTotal - (editingPlan?.monthly_rate ?? 0)
+            }
+            availableForSavings={availableForSavings}
+            savedAmount={editingPlan?.saved_amount ?? 0}
           />
           {editError && (
             <p className="flex items-center gap-1.5 text-sm text-destructive">

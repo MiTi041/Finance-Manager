@@ -22,17 +22,33 @@ type Props = {
 
 export function BucketProgress(props: Props) {
   const {
-    bucket, accent, isInfoOnly, hasEmergencyGoal, hasBafoegGoal,
-    bafoegSafeTarget, bafoegBeforeMonthPct, bafoegMonthPct, bafoegOutstandingPct,
-    bafoegBeforeMonth, bafoegMonthEinz, bafoegOutstanding, progress, onAnalyse,
+    bucket,
+    accent,
+    isInfoOnly,
+    hasEmergencyGoal,
+    hasBafoegGoal,
+    bafoegSafeTarget,
+    bafoegBeforeMonthPct,
+    bafoegMonthPct,
+    bafoegOutstandingPct,
+    bafoegBeforeMonth,
+    bafoegMonthEinz,
+    bafoegOutstanding,
+    progress,
+    onAnalyse,
   } = props;
 
-  const spendingPct = bucket.spent != null ? Math.min(100, Math.round((bucket.spent / bucket.target_amount) * 100)) : 0;
+  const spendingPct =
+    bucket.spent != null
+      ? Math.min(100, Math.round((bucket.spent / bucket.target_amount) * 100))
+      : 0;
 
   const segSafeTarget =
     hasEmergencyGoal && bucket.goal_amount != null && bucket.goal_amount > 0
       ? bucket.goal_amount
-      : bucket.target_amount > 0 ? bucket.target_amount : 1;
+      : bucket.target_amount > 0
+        ? bucket.target_amount
+        : 1;
   const segTotalEinz = bucket.saved_einzahlungen ?? 0;
   const segMonthEinz = bucket.month_einzahlungen ?? 0;
   const segBeforeMonthEinz = Math.max(0, segTotalEinz - segMonthEinz);
@@ -85,7 +101,9 @@ export function BucketProgress(props: Props) {
               <TooltipTrigger asChild>
                 <div
                   className="h-full rounded-full bg-amber-500/40 cursor-pointer"
-                  style={{ width: `${bafoegBeforeMonthPct}%`, minWidth: "8px" } as React.CSSProperties}
+                  style={
+                    { width: `${bafoegBeforeMonthPct}%`, minWidth: "8px" } as React.CSSProperties
+                  }
                 />
               </TooltipTrigger>
               <TooltipContent side="top">
@@ -111,7 +129,9 @@ export function BucketProgress(props: Props) {
               <TooltipTrigger asChild>
                 <div
                   className="h-full rounded-full bg-red-500/40 cursor-pointer"
-                  style={{ width: `${bafoegOutstandingPct}%`, minWidth: "8px" } as React.CSSProperties}
+                  style={
+                    { width: `${bafoegOutstandingPct}%`, minWidth: "8px" } as React.CSSProperties
+                  }
                 />
               </TooltipTrigger>
               <TooltipContent side="top">
@@ -121,17 +141,25 @@ export function BucketProgress(props: Props) {
           )}
           <div className="h-full flex-1 rounded-full bg-muted" />
         </div>
-      ) : (bucket.bucket_type === "emergency" || bucket.bucket_type === "invest") && bucket.saved_einzahlungen != null ? (
+      ) : (bucket.bucket_type === "emergency" || bucket.bucket_type === "invest") &&
+        bucket.saved_einzahlungen != null ? (
         <div className="flex h-2 w-full gap-1">
           {segBeforeMonthPct > 0 && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <div
                   className={`h-full rounded-full cursor-pointer ${accent.barMuted}`}
-                  style={{ width: `${segBeforeMonthPct}%`, minWidth: segBeforeMonthPct > 0 ? "8px" : undefined } as React.CSSProperties}
+                  style={
+                    {
+                      width: `${segBeforeMonthPct}%`,
+                      minWidth: segBeforeMonthPct > 0 ? "8px" : undefined,
+                    } as React.CSSProperties
+                  }
                 />
               </TooltipTrigger>
-              <TooltipContent side="top">{formatAmount(segBeforeMonthEinz)} eingezahlt (vorherige Monate)</TooltipContent>
+              <TooltipContent side="top">
+                {formatAmount(segBeforeMonthEinz)} eingezahlt (vorherige Monate)
+              </TooltipContent>
             </Tooltip>
           )}
           {segMonthPct > 0 && (
@@ -139,10 +167,17 @@ export function BucketProgress(props: Props) {
               <TooltipTrigger asChild>
                 <div
                   className={`h-full rounded-full cursor-pointer ${accent.bar}`}
-                  style={{ width: `${segMonthPct}%`, minWidth: segMonthPct > 0 ? "8px" : undefined } as React.CSSProperties}
+                  style={
+                    {
+                      width: `${segMonthPct}%`,
+                      minWidth: segMonthPct > 0 ? "8px" : undefined,
+                    } as React.CSSProperties
+                  }
                 />
               </TooltipTrigger>
-              <TooltipContent side="top">{formatAmount(segMonthEinz)} eingezahlt (diesen Monat)</TooltipContent>
+              <TooltipContent side="top">
+                {formatAmount(segMonthEinz)} eingezahlt (diesen Monat)
+              </TooltipContent>
             </Tooltip>
           )}
           {segEntnahmenPct > 0 && (
@@ -150,10 +185,17 @@ export function BucketProgress(props: Props) {
               <TooltipTrigger asChild>
                 <div
                   className="h-full rounded-full cursor-pointer bg-orange-500/20"
-                  style={{ width: `${segEntnahmenPct}%`, minWidth: segEntnahmenPct > 0 ? "8px" : undefined } as React.CSSProperties}
+                  style={
+                    {
+                      width: `${segEntnahmenPct}%`,
+                      minWidth: segEntnahmenPct > 0 ? "8px" : undefined,
+                    } as React.CSSProperties
+                  }
                 />
               </TooltipTrigger>
-              <TooltipContent side="top">{formatAmount(segTotalEntnahmen)} entnommen</TooltipContent>
+              <TooltipContent side="top">
+                {formatAmount(segTotalEntnahmen)} entnommen
+              </TooltipContent>
             </Tooltip>
           )}
           <div className="h-full flex-1 rounded-full bg-muted" />
@@ -186,7 +228,8 @@ export function BucketProgress(props: Props) {
           ) : hasEmergencyGoal ? (
             <>
               <span>
-                {formatAmount(bucket.saved_total ?? 0)} von {formatAmount(bucket.goal_amount!)} gespart
+                {formatAmount(bucket.saved_total ?? 0)} von {formatAmount(bucket.goal_amount!)}{" "}
+                gespart
               </span>
             </>
           ) : (
@@ -204,7 +247,10 @@ export function BucketProgress(props: Props) {
           <span className="font-medium tabular-nums">
             {formatAmount(bucket.saved_total)}
             {bucket.saved_profit != null && bucket.saved_profit > 0 && (
-              <span className="text-emerald-500"> (Gewinn: {formatAmount(bucket.saved_profit)})</span>
+              <span className="text-emerald-500">
+                {" "}
+                (Gewinn: {formatAmount(bucket.saved_profit)})
+              </span>
             )}
           </span>
         </div>
@@ -213,7 +259,7 @@ export function BucketProgress(props: Props) {
       {bucket.bucket_type === "donation" && (
         <button
           onClick={onAnalyse}
-          className="flex cursor-pointer items-center gap-1.5 self-start rounded-md border border-pink-500/20 px-2.5 py-1 text-xs font-medium text-pink-600 dark:text-pink-400 hover:bg-pink-500/10 transition-colors"
+          className="flex cursor-pointer text-start items-center gap-1.5 self-start rounded-md border border-pink-500/20 px-2.5 py-1 text-xs font-medium text-pink-600 dark:text-pink-400 hover:bg-pink-500/10 transition-colors"
         >
           <PieChart className="size-3.5" />
           Details zur Spendenverteilung ansehen

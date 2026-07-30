@@ -49,6 +49,7 @@ export type SavingsPlan = {
   target_recipient_bic: string | null;
   sender_iban: string | null;
   is_visible: boolean;
+  auto_hidden: boolean;
   monthly_rate: number;
   saved_amount: number;
   this_month: number;
@@ -71,6 +72,7 @@ export type AllocationStatus = {
   savings_total: number;
   savings_plans: SavingsPlan[];
   auto_hidden_plan_ids: number[];
+  available_for_savings: number;
 };
 
 export async function fetchAllocationStatus(month?: string): Promise<AllocationStatus> {
@@ -244,7 +246,7 @@ export async function createSavingsPlan(payload: {
   return parseJsonResponse(response);
 }
 
-export async function updateSavingsPlan(planId: number, payload: Partial<Pick<SavingsPlan, "name" | "tag" | "target_amount" | "target_date" | "target_recipient_name" | "target_recipient_iban" | "target_recipient_bic" | "sender_iban" | "is_visible">>): Promise<SavingsPlan> {
+export async function updateSavingsPlan(planId: number, payload: Partial<Pick<SavingsPlan, "name" | "tag" | "target_amount" | "target_date" | "target_recipient_name" | "target_recipient_iban" | "target_recipient_bic" | "sender_iban" | "is_visible" | "auto_hidden">>): Promise<SavingsPlan> {
   const response = await fetch(`${getApiBaseUrl()}/allocation/savings-plans/${planId}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },

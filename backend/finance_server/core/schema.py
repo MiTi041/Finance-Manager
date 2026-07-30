@@ -514,6 +514,7 @@ def initialize_database(connection: sqlite3.Connection) -> None:
             "target_recipient_iban": "TEXT",
             "target_recipient_bic": "TEXT",
             "sender_iban": "TEXT",
+            "auto_hidden": "INTEGER NOT NULL DEFAULT 0",
         },
     )
     create_allocation_runs_table(connection)

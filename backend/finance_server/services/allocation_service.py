@@ -109,7 +109,7 @@ class AllocationService:
                 if total <= available_for_savings:
                     break
                 rate = self._enrich_savings_plan(p, month)["monthly_rate"]
-                update_plan(p["id"], {"is_visible": False})
+                update_plan(p["id"], {"is_visible": False, "auto_hidden": True})
                 total -= rate
                 auto_hidden.append(p["id"])
             savings_total = total
@@ -251,8 +251,17 @@ class AllocationService:
         plans = list_plans()
         savings_plans = [self._enrich_savings_plan(p, run["month"]) for p in plans]
         savings_total = sum(p["monthly_rate"] for p in savings_plans if p["is_visible"])
-        total_bucket_sum = round(sum(b["target_amount"] for b in buckets), 2)
+        total_bucket_sum = round(sum(b["target_amount"] for b in buckets if b["bucket_type"] != "spending"), 2)
         allocated = round(total_bucket_sum + savings_total, 2)
+
+        bafoeg_amount = 0.0
+        bafoeg_bucket = next((b for b in buckets if b["bucket_type"] == "bafoeg"), None)
+        if bafoeg_bucket:
+            bafoeg_amount = bafoeg_bucket["target_amount"]
+        donation_bucket = next((b for b in buckets if b["bucket_type"] == "donation"), None)
+        donation_target = donation_bucket["target_amount"] if donation_bucket else 0.0
+        available_for_savings = round(run["net_income"] - bafoeg_amount - donation_target, 2)
+
         return {
             "month": run["month"],
             "net_income": run["net_income"],
@@ -263,7 +272,10 @@ class AllocationService:
             "config": config_buckets,
             "savings_total": savings_total,
             "savings_plans": savings_plans,
-            "auto_hidden_plan_ids": auto_hidden or [],
+            "auto_hidden_plan_ids": auto_hidden if auto_hidden is not None else [
+                p["id"] for p in savings_plans if p.get("auto_hidden")
+            ],
+            "available_for_savings": available_for_savings,
         }
 
     def _detect_income(self, month: str) -> float:

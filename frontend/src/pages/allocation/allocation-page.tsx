@@ -32,7 +32,8 @@ function extractBankAccounts(banks: StoredBankCredentials[]): { iban: string; na
 }
 
 export default function AllocationPage() {
-  const { status, loading, error, load, recalculate, transfer, transferring, transferSavings } = useAllocation();
+  const { status, loading, error, load, recalculate, transfer, transferring, transferSavings } =
+    useAllocation();
   const [recipientAccounts, setRecipientAccounts] = useState<RecipientAccountRecord[]>([]);
   const [bankAccounts, setBankAccounts] = useState<{ iban: string; name: string }[]>([]);
   const runBucketIdRef = useRef<number>(0);
@@ -113,7 +114,8 @@ export default function AllocationPage() {
         invest: "tag.investieren",
         donation: "tag.spenden",
       };
-      const purpose = `Allokation ${bucket.bucket_type} ${bucketTags[bucket.bucket_type] ?? ""}`.trim();
+      const purpose =
+        `Allokation ${bucket.bucket_type} ${bucketTags[bucket.bucket_type] ?? ""}`.trim();
 
       runBucketIdRef.current = runBucketId;
       runBucketAmountRef.current = amount ?? bucket.target_amount - bucket.transferred;
@@ -137,11 +139,19 @@ export default function AllocationPage() {
       const tid = toast.loading("Überweisung wird durchgeführt…");
       try {
         if (savingsPlanIdRef.current) {
-          await transferSavings(savingsPlanIdRef.current, tan, savingsPlanAmountRef.current || undefined);
+          await transferSavings(
+            savingsPlanIdRef.current,
+            tan,
+            savingsPlanAmountRef.current || undefined,
+          );
           savingsPlanIdRef.current = 0;
           savingsPlanAmountRef.current = 0;
         } else {
-          await transfer(runBucketIdRef.current, tan, runBucketAmountRef.current > 0 ? runBucketAmountRef.current : undefined);
+          await transfer(
+            runBucketIdRef.current,
+            tan,
+            runBucketAmountRef.current > 0 ? runBucketAmountRef.current : undefined,
+          );
         }
         toast.success("Überweisung erfolgreich!", { id: tid });
       } catch (e) {
@@ -156,9 +166,11 @@ export default function AllocationPage() {
     (plan: SavingsPlan, customAmount?: number) => {
       if (!plan.target_recipient_name || !plan.target_recipient_iban) return;
       savingsPlanIdRef.current = plan.id;
-      const amount = customAmount ?? (plan.required_monthly_rate != null
-        ? Math.max(0, plan.required_monthly_rate - (plan.month_einzahlungen ?? 0))
-        : 0);
+      const amount =
+        customAmount ??
+        (plan.required_monthly_rate != null
+          ? Math.max(0, plan.required_monthly_rate - (plan.month_einzahlungen ?? 0))
+          : 0);
       savingsPlanAmountRef.current = amount;
       const tag = plan.tag ?? "";
       const tagClean = tag.startsWith("tag.") ? tag : `tag.${tag}`;
@@ -205,54 +217,61 @@ export default function AllocationPage() {
   const visibleBuckets = status.buckets.filter((bucket) => {
     const config = status.config.find((c) => c.id === bucket.bucket_id);
     if (!config) return false;
-    if (bucket.bucket_type === "bafoeg" && import.meta.env.VITE_SHOW_BAFOEG_BUCKET?.toLowerCase() !== "true") return false;
+    if (
+      bucket.bucket_type === "bafoeg" &&
+      import.meta.env.VITE_SHOW_BAFOEG_BUCKET?.toLowerCase() !== "true"
+    )
+      return false;
     return true;
   });
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 py-6">
-      {!balanced && (
-        <Card className="border-none bg-muted/40 shadow-none" role="status" aria-live="polite">
-          <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-            <div className="flex items-center gap-2.5">
-              {balanced ? (
-                <CheckCircle2 className="size-5 shrink-0 text-emerald-500" />
-              ) : (
-                <TriangleAlert className="size-5 shrink-0 text-amber-500" />
-              )}
-              <div>
-                <p
-                  className={`text-sm font-medium ${balanced ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}`}
-                >
-                  {balanced ? "Allokation ausgeglichen" : "Allokation weicht ab"}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {balanced
-                    ? "Netto-Einkommen ist vollständig verteilt"
-                    : `Differenz von ${formatAmount(diff)} zum Netto-Einkommen`}
-                </p>
-              </div>
+      <Card className="border-none bg-muted/40 shadow-none">
+        <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+          <div className="flex items-center gap-2.5">
+            {balanced ? (
+              <CheckCircle2 className="size-5 shrink-0 text-emerald-500" />
+            ) : (
+              <TriangleAlert className="size-5 shrink-0 text-amber-500" />
+            )}
+            <div>
+              <p
+                className={`text-sm font-medium ${balanced ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}`}
+              >
+                {balanced ? "Verteilung ausgeglichen" : "Verteilung weicht ab"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {balanced
+                  ? "Netto-Einkommen ist vollständig verteilt"
+                  : `Differenz von ${formatAmount(diff)} zum Netto-Einkommen`}
+              </p>
             </div>
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs sm:text-sm">
-              <div>
-                <p className="text-muted-foreground">Netto</p>
-                <p className="font-semibold tabular-nums">{formatAmount(status.net_income)}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Verteilt</p>
-                <p className="font-semibold tabular-nums">{formatAmount(status.total_allocated)}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Übrig</p>
-                <p className="font-semibold tabular-nums">{formatAmount(status.remaining)}</p>
-              </div>
-              <Button variant="outline" size="sm" onClick={() => recalculate()} className="h-7 text-xs">
-                Neu berechnen
-              </Button>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs sm:text-sm">
+            <div>
+              <p className="text-muted-foreground">Netto</p>
+              <p className="font-semibold tabular-nums">{formatAmount(status.net_income)}</p>
             </div>
-          </CardContent>
-        </Card>
-      )}
+            <div>
+              <p className="text-muted-foreground">Verteilt</p>
+              <p className="font-semibold tabular-nums">{formatAmount(status.total_allocated)}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Übrig</p>
+              <p className="font-semibold tabular-nums">{formatAmount(status.remaining)}</p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => recalculate()}
+              className="h-7 text-xs"
+            >
+              Neu berechnen
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {visibleBuckets.length === 0 ? (
         <EmptyState
@@ -281,7 +300,10 @@ export default function AllocationPage() {
                   iban: r.iban,
                 }))}
                 bankAccounts={bankAccounts}
-                bafoegActive={status.config.some((c) => c.bucket_type === "bafoeg" && c.is_active) && import.meta.env.VITE_SHOW_BAFOEG_BUCKET?.toLowerCase() === "true"}
+                bafoegActive={
+                  status.config.some((c) => c.bucket_type === "bafoeg" && c.is_active) &&
+                  import.meta.env.VITE_SHOW_BAFOEG_BUCKET?.toLowerCase() === "true"
+                }
                 onTransfer={handleTransfer}
                 onUpdateConfig={handleUpdateConfig}
                 onAnalyse={() => setDonationAnalysisOpen(true)}
@@ -296,6 +318,7 @@ export default function AllocationPage() {
       <SavingsPlansCard
         plans={status.savings_plans}
         savingsTotal={status.savings_total}
+        availableForSavings={status.available_for_savings}
         currentMonth={status.month}
         onRefresh={handleSavingsRefresh}
         onTransfer={handleSavingsPlanTransfer}
@@ -315,10 +338,7 @@ export default function AllocationPage() {
         onConfirm={confirmTransfer}
       />
 
-      <DonationAnalysisDialog
-        open={donationAnalysisOpen}
-        onOpenChange={setDonationAnalysisOpen}
-      />
+      <DonationAnalysisDialog open={donationAnalysisOpen} onOpenChange={setDonationAnalysisOpen} />
     </div>
   );
 }
