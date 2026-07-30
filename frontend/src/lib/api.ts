@@ -7,15 +7,27 @@ export function getApiBaseUrl(): string {
 
 import { fetchCachedJson } from "./fetch-cache";
 
+function toErrorMessage(val: unknown): string {
+  if (!val) return "";
+  if (typeof val === "string") return val;
+  if (Array.isArray(val)) {
+    return val.map(toErrorMessage).filter(Boolean).join("; ");
+  }
+  if (typeof val === "object") {
+    const obj = val as Record<string, unknown>;
+    return toErrorMessage(obj.message ?? obj.msg ?? JSON.stringify(val));
+  }
+  return String(val);
+}
+
 export async function parseJsonResponse(response: Response, fallbackMessage?: string) {
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
     throw new Error(
-      payload?.detail?.message ??
-        payload?.detail ??
-        payload?.message ??
-        fallbackMessage ??
+      toErrorMessage(payload?.detail) ||
+        toErrorMessage(payload?.message) ||
+        fallbackMessage ||
         "Anfrage fehlgeschlagen",
     );
   }

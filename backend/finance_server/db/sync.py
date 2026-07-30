@@ -107,7 +107,7 @@ VALID_SYNC_COLUMNS: dict[str, set[str]] = {
     "ibans": {"iban", "f_zahlungspartner_id"},
     "allocation_buckets": {"id", "bucket_type", "percentage", "recipient_account_id", "sender_iban", "is_active", "sort_order", "created_at", "updated_at"},
     "allocation_bafoeg_config": {"id", "total_debt", "monthly_rate", "interest_rate", "payout_date", "created_at", "updated_at"},
-    "savings_plans": {"id", "name", "tag", "target_amount", "target_date", "target_recipient_name", "target_recipient_iban", "target_recipient_bic", "is_visible", "sender_iban", "sender_name", "created_at", "updated_at"},
+    "savings_plans": {"id", "name", "tag", "target_amount", "target_date", "target_recipient_name", "target_recipient_iban", "target_recipient_bic", "is_visible", "sender_iban", "created_at", "updated_at"},
 }
 
 
@@ -184,9 +184,13 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
             values.append(where_val)
             cursor = connection.execute(sql, values)
         else:
-            all_columns = [pk] + columns if table != "allocation_buckets" else ["id"] + columns
+            if table == "allocation_buckets":
+                all_columns = ["id"] + columns + ["bucket_type"]
+                all_values = [use_id or row_id] + values + [filtered_data.get("bucket_type", "")]
+            else:
+                all_columns = [pk] + columns
+                all_values = [pk_value] + values
             all_placeholders = ["?"] * len(all_columns)
-            all_values = [pk_value if table != "allocation_buckets" else (use_id or row_id)] + values
             sql = f"INSERT OR IGNORE INTO {table} ({', '.join(all_columns)}) VALUES ({', '.join(all_placeholders)})"
             cursor = connection.execute(sql, all_values)
         return cursor.rowcount > 0

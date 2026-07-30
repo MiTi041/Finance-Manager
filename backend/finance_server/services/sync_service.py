@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from typing import Any
 
 from finance_server.db.credentials import get_credentials_fernet
@@ -198,7 +199,10 @@ class SyncService:
         }
 
     def _run_loop(self) -> None:
-        self._push_all_pending()
+        try:
+            self._push_all_pending()
+        except Exception:
+            logger.exception("Initial push failed, will retry in cycle")
         while not self._stop_event.is_set():
             try:
                 self._push_cycle()
@@ -211,7 +215,7 @@ class SyncService:
         from datetime import datetime, timezone
         set_sync_state("last_sync_at", datetime.now(timezone.utc).isoformat())
 
-    def _push_batch(self) -> bool:
+    def _push_batch(self, retries: int = 3) -> bool:
         ops = get_pending_ops(self._last_pushed_id, limit=500)
         if not ops:
             return False
@@ -220,7 +224,19 @@ class SyncService:
         device_id = get_or_create_device_id()
         start_seq = ops[0]["seq"]
         key = f"ops/{device_id}/{start_seq:06d}.enc"
-        self._r2_client.put_object(key, encrypted)
+
+        for attempt in range(retries):
+            try:
+                self._r2_client.put_object(key, encrypted)
+                break
+            except Exception:
+                if attempt < retries - 1:
+                    logger.warning("Push batch seq %d failed (attempt %d/%d), retrying...", start_seq, attempt + 1, retries)
+                    time.sleep(2 ** attempt)
+                else:
+                    logger.exception("Push batch seq %d failed after %d attempts", start_seq, retries)
+                    return False
+
         self._last_pushed_id = ops[-1]["id"]
         set_sync_state("last_pushed_id", str(self._last_pushed_id))
         self._mark_synced()
@@ -273,7 +289,10 @@ class SyncService:
                 ops = decrypt_batch(data, self._sync_key)
                 for op in ops:
                     try:
-                        apply_sync_op(op)
+                        result = apply_sync_op(op)
+                        if not result:
+                            logger.warning("Sync op skipped: %s/%s id=%s",
+                                           op.get("table_name"), op.get("op_type"), op.get("row_id"))
                     except Exception:
                         logger.exception("Failed to apply sync op: %s/%s id=%s",
                                           op.get("table_name"), op.get("op_type"), op.get("row_id"))

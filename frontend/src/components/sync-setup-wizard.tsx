@@ -54,7 +54,7 @@ export function SyncSetupWizard({ onComplete }: { onComplete: () => void }) {
     }
     setError(null);
     try {
-      await recoverSync(password);
+      await recoverSync({ password });
       startSyncPoll();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
