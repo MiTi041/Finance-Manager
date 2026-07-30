@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Iterable
 import sqlite3
@@ -66,6 +67,12 @@ def to_row_payload(tx: dict[str, Any]) -> dict[str, Any]:
         "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         "created_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
     }
+
+    if not payload.get("applicant_iban") and payload.get("applicant_name"):
+        m = re.match(r"(DE\d{20})\s*(.*)", payload["applicant_name"])
+        if m:
+            payload["applicant_iban"] = m.group(1)
+            payload["applicant_name"] = m.group(2).strip()
 
     payload["transaction_hash"] = build_transaction_hash(payload)
     return payload
