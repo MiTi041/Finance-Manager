@@ -135,6 +135,8 @@ jobs:
             --hidden-import fints.exceptions \
             --hidden-import fints.utils \
             --hidden-import fints.formals \
+            --hidden-import bleach \
+            --hidden-import sepaxml \
             run_server.py
 
       - name: Build and publish

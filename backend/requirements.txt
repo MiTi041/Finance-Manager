@@ -9,4 +9,7 @@ scikit-learn
 easyocr
 Pillow
 boto3
+fints
+bleach
+sepaxml
 pytest
