@@ -23,10 +23,6 @@ export function useAllocation(month?: string) {
 
   useEffect(() => {
     void load(true);
-
-    const onRefresh = () => void load();
-    window.addEventListener("finance-data-refresh", onRefresh);
-    return () => window.removeEventListener("finance-data-refresh", onRefresh);
   }, [load]);
 
   const recalculate = useCallback(async () => {

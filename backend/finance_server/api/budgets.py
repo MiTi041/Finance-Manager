@@ -23,14 +23,19 @@ def get_budgets(month: str = Query(...)) -> dict[str, Any]:
 @router.post("/db/budgets")
 def create_budget_endpoint(request: BudgetCreateRequest) -> dict[str, Any]:
     try:
-        return create_budget(request.category_id, request.monthly_amount)
+        return create_budget(request.name, request.category_ids, request.monthly_amount)
     except ValueError as err:
         raise HTTPException(status_code=400, detail=str(err)) from err
 
 
 @router.put("/db/budgets/{budget_id}")
 def update_budget_endpoint(budget_id: int, request: BudgetUpdateRequest) -> dict[str, Any]:
-    result = update_budget(budget_id, request.monthly_amount)
+    result = update_budget(
+        budget_id,
+        name=request.name,
+        category_ids=request.category_ids,
+        monthly_amount=request.monthly_amount,
+    )
     if result is None:
         raise HTTPException(status_code=404, detail="Budget nicht gefunden")
     return result

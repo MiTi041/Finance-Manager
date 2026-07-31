@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { cn } from "@/lib/utils";
 import type { FinanceCategory } from "@/lib/categories/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { CategoryMultiSelect } from "./category-multi-select";
 
 export function AddBudgetDialog({
   open,
@@ -16,11 +16,35 @@ export function AddBudgetDialog({
   onOpenChange: (open: boolean) => void;
   categories: FinanceCategory[];
   existingCategoryIds: Set<number>;
-  onCreate: (categoryId: number, amount: number) => void;
+  onCreate: (name: string, categoryIds: number[], amount: number) => void;
 }) {
-  const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const available = categories.filter((c) => !existingCategoryIds.has(c.id));
+
+  const toggle = (id: number) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const submit = () => {
+    if (selected.size === 0 || !(Number(amount) > 0) || !name.trim()) return;
+    onCreate(name.trim(), [...selected], Number(amount));
+    setSelected(new Set());
+    setName("");
+    setAmount("");
+    onOpenChange(false);
+  };
+
+  const canSubmit = selected.size > 0 && Number(amount) > 0 && name.trim().length > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -28,29 +52,12 @@ export function AddBudgetDialog({
         <DialogHeader>
           <DialogTitle>Budget hinzufügen</DialogTitle>
         </DialogHeader>
-        <div className="flex max-h-72 flex-col gap-1.5 overflow-y-auto">
-          {available.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => setCategoryId(c.id)}
-              className={cn(
-                "flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors",
-                categoryId === c.id
-                  ? "border-primary bg-primary/10 ring-2 ring-primary/20"
-                  : "hover:bg-muted",
-              )}
-            >
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted">
-                {c.icon ?? "🏷️"}
-              </span>
-              <span className="truncate">{c.parent_name ? `${c.parent_name} / ${c.name}` : c.name}</span>
-            </button>
-          ))}
-          {available.length === 0 && (
-            <p className="text-sm text-muted-foreground">Alle Ausgabe-Kategorien haben bereits ein Budget.</p>
-          )}
-        </div>
+        <Input
+          placeholder="Name des Budgets"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <CategoryMultiSelect categories={available} selected={selected} onToggle={toggle} />
         <div className="relative">
           <Input
             type="number"
@@ -59,12 +66,7 @@ export function AddBudgetDialog({
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && categoryId != null && Number(amount) > 0) {
-                void onCreate(categoryId, Number(amount));
-                setCategoryId(null);
-                setAmount("");
-                onOpenChange(false);
-              }
+              if (e.key === "Enter" && canSubmit) submit();
             }}
             className="pr-8"
           />
@@ -73,16 +75,7 @@ export function AddBudgetDialog({
           </span>
         </div>
         <DialogFooter>
-          <Button
-            disabled={categoryId == null || !(Number(amount) > 0)}
-            onClick={() => {
-              if (categoryId == null) return;
-              void onCreate(categoryId, Number(amount));
-              setCategoryId(null);
-              setAmount("");
-              onOpenChange(false);
-            }}
-          >
+          <Button disabled={!canSubmit} onClick={submit}>
             Hinzufügen
           </Button>
         </DialogFooter>

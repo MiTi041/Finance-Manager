@@ -18,7 +18,8 @@ export function BudgetCard({
   onDelete: (id: number) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const ratio = budget.monthly_amount > 0 ? budget.spent / budget.monthly_amount : budget.spent > 0 ? 1 : 0;
+  const ratio =
+    budget.monthly_amount > 0 ? budget.spent / budget.monthly_amount : budget.spent > 0 ? 1 : 0;
   const color = ratio > 1 ? "bg-red-500" : ratio >= 0.7 ? "bg-amber-500" : "bg-emerald-500";
   const status =
     ratio > 1
@@ -30,13 +31,10 @@ export function BudgetCard({
   return (
     <Card>
       <CardContent className="flex flex-col gap-3 p-4">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-lg">
-              {budget.icon ?? "🏷️"}
-            </span>
-            <span className="truncate text-sm font-medium">{budget.name}</span>
-          </div>
+        <div className="flex items-start justify-between gap-4">
+          <span className="min-w-0 mt-[10px] truncate text-sm font-medium" title={budget.name}>
+            {budget.name}
+          </span>
           <div className="flex shrink-0 items-center gap-1">
             <span
               className={cn(
@@ -83,6 +81,23 @@ export function BudgetCard({
           </div>
         </div>
 
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5 mb-2">
+          {budget.categories.slice(0, 3).map((c) => (
+            <span
+              key={c.name}
+              className="inline-flex max-w-40 items-center gap-2 rounded-full bg-muted px-2 py-1 text-xs font-medium"
+            >
+              <span>{c.icon ?? "🏷️"}</span>
+              <span className="truncate">{c.name}</span>
+            </span>
+          ))}
+          {budget.categories.length > 3 && (
+            <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+              +{budget.categories.length - 3}
+            </span>
+          )}
+        </div>
+
         <p className="text-sm font-semibold tabular-nums">
           {formatAmount(budget.spent)} <span className="font-normal text-muted-foreground">/</span>{" "}
           {formatAmount(budget.monthly_amount)}
@@ -90,7 +105,7 @@ export function BudgetCard({
 
         <div className="flex flex-col gap-1">
           <Progress value={ratio * 100} indicatorClassName={color} className="h-2.5 w-full" />
-          <p className={cn("text-xs font-medium", color.replace("bg-", "text-"))}>
+          <p className={"text-xs font-medium text-muted-foreground"}>
             {Math.round(ratio * 100)} % vom Budget genutzt
           </p>
         </div>

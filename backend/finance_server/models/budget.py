@@ -4,9 +4,12 @@ from pydantic import BaseModel
 
 
 class BudgetCreateRequest(BaseModel):
-    category_id: int
+    name: str
+    category_ids: list[int]
     monthly_amount: float
 
 
 class BudgetUpdateRequest(BaseModel):
-    monthly_amount: float
+    name: str | None = None
+    category_ids: list[int] | None = None
+    monthly_amount: float | None = None

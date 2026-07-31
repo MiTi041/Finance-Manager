@@ -3,9 +3,9 @@ import { emitReferenceChange } from "./events";
 
 export type Budget = {
   id: number;
-  category_id: number;
+  category_ids: number[];
   name: string;
-  icon: string | null;
+  categories: { name: string; icon: string | null }[];
   monthly_amount: number;
   spent: number;
   remaining: number;
@@ -18,24 +18,33 @@ export async function fetchBudgets(month: string): Promise<Budget[]> {
   return data.budgets ?? [];
 }
 
-type BudgetStub = Pick<Budget, "id" | "category_id" | "monthly_amount">;
+type BudgetStub = Pick<Budget, "id" | "name" | "category_ids" | "monthly_amount">;
 
-export async function createBudget(category_id: number, monthly_amount: number): Promise<BudgetStub> {
+export async function createBudget(
+  name: string,
+  category_ids: number[],
+  monthly_amount: number,
+): Promise<BudgetStub> {
   const response = await fetch(`${getApiBaseUrl()}/db/budgets`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ category_id, monthly_amount }),
+    body: JSON.stringify({ name, category_ids, monthly_amount }),
   });
   const result = await parseJsonResponse(response);
   await emitReferenceChange();
   return result;
 }
 
-export async function updateBudget(budgetId: number, monthly_amount: number): Promise<BudgetStub> {
+export async function updateBudget(
+  budgetId: number,
+  name: string,
+  category_ids: number[],
+  monthly_amount: number,
+): Promise<BudgetStub> {
   const response = await fetch(`${getApiBaseUrl()}/db/budgets/${budgetId}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ monthly_amount }),
+    body: JSON.stringify({ name, category_ids, monthly_amount }),
   });
   const result = await parseJsonResponse(response);
   await emitReferenceChange();

@@ -358,13 +358,38 @@ def create_budgets_table(connection: sqlite3.Connection) -> None:
     connection.execute("""
         CREATE TABLE IF NOT EXISTS budgets (
             id             INTEGER PRIMARY KEY AUTOINCREMENT,
-            category_id    INTEGER NOT NULL UNIQUE,
+            name           TEXT NOT NULL DEFAULT '',
+            category_ids   TEXT NOT NULL,
             monthly_amount REAL NOT NULL CHECK(monthly_amount >= 0),
             created_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (category_id) REFERENCES kategorien(id) ON DELETE CASCADE
+            updated_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    _ensure_table_columns(
+        connection,
+        "budgets",
+        {"name": "TEXT NOT NULL DEFAULT ''"},
+    )
+    existing = {row[1] for row in connection.execute("PRAGMA table_info(budgets)")}
+    if "category_id" in existing:
+        connection.execute("ALTER TABLE budgets RENAME TO budgets_old")
+        connection.execute("""
+            CREATE TABLE budgets (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                name           TEXT NOT NULL DEFAULT '',
+                category_ids   TEXT NOT NULL,
+                monthly_amount REAL NOT NULL CHECK(monthly_amount >= 0),
+                created_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        connection.execute("""
+            INSERT INTO budgets (id, category_ids, monthly_amount, created_at, updated_at)
+            SELECT id, '[' || category_id || ']', monthly_amount,
+                   COALESCE(created_at, CURRENT_TIMESTAMP), COALESCE(updated_at, CURRENT_TIMESTAMP)
+            FROM budgets_old
+        """)
+        connection.execute("DROP TABLE budgets_old")
 
 
 def create_allocation_runs_table(connection: sqlite3.Connection) -> None:

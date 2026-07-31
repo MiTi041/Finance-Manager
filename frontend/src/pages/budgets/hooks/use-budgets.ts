@@ -33,22 +33,19 @@ export function useBudgets() {
 
   useEffect(() => {
     void load();
-    const onRefresh = () => void load();
-    window.addEventListener("finance-data-refresh", onRefresh);
-    return () => window.removeEventListener("finance-data-refresh", onRefresh);
   }, [load]);
 
   const create = useCallback(
-    async (categoryId: number, amount: number) => {
-      await createBudgetApi(categoryId, amount);
+    async (name: string, categoryIds: number[], amount: number) => {
+      await createBudgetApi(name, categoryIds, amount);
       await load();
     },
     [load],
   );
 
   const update = useCallback(
-    async (id: number, amount: number) => {
-      await updateBudgetApi(id, amount);
+    async (id: number, name: string, categoryIds: number[], amount: number) => {
+      await updateBudgetApi(id, name, categoryIds, amount);
       await load();
     },
     [load],

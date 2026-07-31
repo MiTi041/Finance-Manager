@@ -11,7 +11,7 @@ import { useBudgets } from "./hooks/use-budgets";
 import { BudgetCard } from "./components/budget-card";
 import { AddBudgetDialog } from "./components/add-budget-dialog";
 import { EditBudgetDialog } from "./components/edit-budget-dialog";
-import { currentMonth, shiftMonth } from "./utils";
+import { currentMonth, formatMonthLabel, shiftMonth } from "./utils";
 
 export default function BudgetsPage() {
   const { month, setMonth, budgets, categories, loading, error, create, update, remove } =
@@ -28,9 +28,9 @@ export default function BudgetsPage() {
     [budgets],
   );
 
-  const handleCreate = async (categoryId: number, amount: number) => {
+  const handleCreate = async (name: string, categoryIds: number[], amount: number) => {
     try {
-      await create(categoryId, amount);
+      await create(name, categoryIds, amount);
       toast.success("Budget angelegt");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Fehler");
@@ -46,9 +46,9 @@ export default function BudgetsPage() {
     }
   };
 
-  const handleSaveEdit = async (id: number, amount: number) => {
+  const handleSaveEdit = async (id: number, name: string, categoryIds: number[], amount: number) => {
     try {
-      await update(id, amount);
+      await update(id, name, categoryIds, amount);
       toast.success("Budget aktualisiert");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Fehler");
@@ -65,32 +65,49 @@ export default function BudgetsPage() {
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 py-6">
       <Card className="border-none bg-muted/40 shadow-none">
-        <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+        <CardContent className="flex flex-row justify-between gap-4 p-4 items-center sm:gap-4 sm:p-5">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="size-7" onClick={() => setMonth((m) => shiftMonth(m, -1))} aria-label="Vorheriger Monat">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              onClick={() => setMonth((m) => shiftMonth(m, -1))}
+              aria-label="Vorheriger Monat"
+            >
               <ChevronLeft className="size-4" />
             </Button>
-            <span className="min-w-24 text-center font-medium tabular-nums">{month}</span>
-            <Button variant="ghost" size="icon" className="size-7" onClick={() => setMonth((m) => shiftMonth(m, 1))} aria-label="Nächster Monat">
+            <span className="min-w-28 text-center font-medium tabular-nums">
+              {formatMonthLabel(month)}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              onClick={() => setMonth((m) => shiftMonth(m, 1))}
+              aria-label="Nächster Monat"
+              disabled={month === currentMonth()}
+            >
               <ChevronRight className="size-4" />
             </Button>
             {month !== currentMonth() && (
-              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setMonth(currentMonth())}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setMonth(currentMonth())}
+              >
                 Heute
               </Button>
             )}
           </div>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-            {statBlocks.map(({ label, value, Icon }, i) => (
-              <div key={label} className={cn("flex items-center gap-2", i > 0 && "border-l border-border pl-4")}>
-                <Icon className="size-4 text-muted-foreground" />
-                <div>
-                  <p className="text-xs text-muted-foreground">{label}</p>
-                  <p className="font-semibold tabular-nums">{formatAmount(value)}</p>
-                </div>
-              </div>
-            ))}
-            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setAddOpen(true)}>
+
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setAddOpen(true)}
+            >
               <Plus /> Budget hinzufügen
             </Button>
           </div>
@@ -120,13 +137,21 @@ export default function BudgetsPage() {
         open={addOpen}
         onOpenChange={setAddOpen}
         categories={categories}
-        existingCategoryIds={new Set(budgets.map((b) => b.category_id))}
+        existingCategoryIds={new Set(budgets.flatMap((b) => b.category_ids))}
         onCreate={handleCreate}
       />
 
       <EditBudgetDialog
         open={editingBudget != null}
         budget={editingBudget}
+        categories={categories}
+        existingCategoryIds={
+          new Set(
+            budgets
+              .filter((b) => b.id !== editingBudget?.id)
+              .flatMap((b) => b.category_ids),
+          )
+        }
         onOpenChange={(open) => {
           if (!open) setEditingBudget(null);
         }}
