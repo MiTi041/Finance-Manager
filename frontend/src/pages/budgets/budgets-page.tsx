@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Loader2, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, PiggyBank, Plus, Receipt, Trash2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { fetchBudgets, createBudget, updateBudget, deleteBudget, type Budget } from "@/lib/budgets";
 import { fetchCategories } from "@/lib/categories/api";
@@ -48,29 +48,61 @@ function BudgetRow({
 
   return (
     <Card>
-      <CardContent className="flex items-center gap-4 p-4">
-        <span className="text-2xl">{budget.icon ?? "🏷️"}</span>
+      <CardContent className="flex items-start gap-3 p-4">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted text-xl">
+          {budget.icon ?? "🏷️"}
+        </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
             <p className="truncate font-medium">{budget.name}</p>
             <div className="flex shrink-0 items-center gap-1">
-              <Input
-                type="number"
-                aria-label={`Budget für ${budget.name}`}
-                value={draft ?? budget.monthly_amount}
-                onChange={(e) => setDraft(e.target.value)}
-                onBlur={commit}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") commit();
-                }}
-                className="h-7 w-24 text-right text-sm tabular-nums"
-              />
-              <Button variant="ghost" size="icon" className="size-7" onClick={() => onDelete(budget.id)} aria-label={`Budget für ${budget.name} löschen`}>
+              {draft == null ? (
+                <button
+                  type="button"
+                  onClick={() => setDraft(String(budget.monthly_amount))}
+                  aria-label={`Budget für ${budget.name} ändern`}
+                  className="cursor-pointer rounded-md px-2 py-0.5 text-sm font-semibold tabular-nums transition-colors hover:bg-muted"
+                >
+                  {formatAmount(budget.monthly_amount)}
+                </button>
+              ) : (
+                <Input
+                  type="number"
+                  min={0}
+                  autoFocus
+                  aria-label={`Budget für ${budget.name}`}
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onBlur={commit}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") commit();
+                    if (e.key === "Escape") setDraft(null);
+                  }}
+                  className="h-7 w-24 text-right text-sm tabular-nums"
+                />
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7"
+                onClick={() => onDelete(budget.id)}
+                aria-label={`Budget für ${budget.name} löschen`}
+              >
                 <Trash2 className="size-4" />
               </Button>
             </div>
           </div>
-          <Progress value={ratio * 100} indicatorClassName={color} className="mt-2" />
+          <div className="mt-2 flex items-center gap-2">
+            <Progress value={ratio * 100} indicatorClassName={color} className="h-2.5 flex-1" />
+            <span
+              className={cn(
+                "w-10 shrink-0 text-right text-xs font-medium tabular-nums",
+                color.replace("bg-", "text-"),
+              )}
+            >
+              {Math.round(ratio * 100)} %
+            </span>
+          </div>
           <p className="mt-1 text-xs text-muted-foreground">
             {formatAmount(budget.spent)} ausgegeben ·{" "}
             <span className={budget.remaining < 0 ? "text-red-600 dark:text-red-400" : ""}>
@@ -106,18 +138,22 @@ function AddBudgetDialog({
         <DialogHeader>
           <DialogTitle>Budget hinzufügen</DialogTitle>
         </DialogHeader>
-        <div className="flex max-h-72 flex-col gap-2 overflow-y-auto">
+        <div className="flex max-h-72 flex-col gap-1.5 overflow-y-auto">
           {available.map((c) => (
             <button
               key={c.id}
               type="button"
               onClick={() => setCategoryId(c.id)}
               className={cn(
-                "flex items-center gap-2 rounded-md border px-3 py-2 text-left text-sm transition-colors",
-                categoryId === c.id ? "border-primary bg-primary/10" : "hover:bg-muted",
+                "flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors",
+                categoryId === c.id
+                  ? "border-primary bg-primary/10 ring-2 ring-primary/20"
+                  : "hover:bg-muted",
               )}
             >
-              <span>{c.icon ?? "🏷️"}</span>
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted">
+                {c.icon ?? "🏷️"}
+              </span>
               <span className="truncate">{c.parent_name ? `${c.parent_name} / ${c.name}` : c.name}</span>
             </button>
           ))}
@@ -125,21 +161,27 @@ function AddBudgetDialog({
             <p className="text-sm text-muted-foreground">Alle Ausgabe-Kategorien haben bereits ein Budget.</p>
           )}
         </div>
-        <Input
-          type="number"
-          min={0}
-          placeholder="Monatsbudget in €"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && categoryId != null && Number(amount) > 0) {
-              void onCreate(categoryId, Number(amount));
-              setCategoryId(null);
-              setAmount("");
-              onOpenChange(false);
-            }
-          }}
-        />
+        <div className="relative">
+          <Input
+            type="number"
+            min={0}
+            placeholder="Monatsbudget"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && categoryId != null && Number(amount) > 0) {
+                void onCreate(categoryId, Number(amount));
+                setCategoryId(null);
+                setAmount("");
+                onOpenChange(false);
+              }
+            }}
+            className="pr-8"
+          />
+          <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">
+            €
+          </span>
+        </div>
         <DialogFooter>
           <Button
             disabled={categoryId == null || !(Number(amount) > 0)}
@@ -232,6 +274,12 @@ export default function BudgetsPage() {
     [load],
   );
 
+  const statBlocks: { label: string; value: number; Icon: typeof Wallet }[] = [
+    { label: "Budget", value: totals.budget, Icon: Wallet },
+    { label: "Ausgegeben", value: totals.spent, Icon: Receipt },
+    { label: "Übrig", value: totals.remaining, Icon: PiggyBank },
+  ];
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 py-6">
       <Card className="border-none bg-muted/40 shadow-none">
@@ -244,20 +292,22 @@ export default function BudgetsPage() {
             <Button variant="ghost" size="icon" className="size-7" onClick={() => setMonth((m) => shiftMonth(m, 1))} aria-label="Nächster Monat">
               <ChevronRight className="size-4" />
             </Button>
+            {month !== currentMonth() && (
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setMonth(currentMonth())}>
+                Heute
+              </Button>
+            )}
           </div>
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs sm:text-sm">
-            <div>
-              <p className="text-muted-foreground">Budget</p>
-              <p className="font-semibold tabular-nums">{formatAmount(totals.budget)}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Ausgegeben</p>
-              <p className="font-semibold tabular-nums">{formatAmount(totals.spent)}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Übrig</p>
-              <p className="font-semibold tabular-nums">{formatAmount(totals.remaining)}</p>
-            </div>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+            {statBlocks.map(({ label, value, Icon }, i) => (
+              <div key={label} className={cn("flex items-center gap-2", i > 0 && "border-l border-border pl-4")}>
+                <Icon className="size-4 text-muted-foreground" />
+                <div>
+                  <p className="text-xs text-muted-foreground">{label}</p>
+                  <p className="font-semibold tabular-nums">{formatAmount(value)}</p>
+                </div>
+              </div>
+            ))}
             <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setAddOpen(true)}>
               <Plus /> Budget hinzufügen
             </Button>
