@@ -75,7 +75,7 @@ def get_pending_ops(last_pushed_id: int = 0, limit: int = 100) -> list[dict[str,
 VALID_SYNC_TABLES = {
     "kategorien", "umsaetze", "zahlungspartner", "empfaengerkonten",
     "subscription_identities", "ibans",
-    "allocation_buckets", "allocation_bafoeg_config", "savings_plans",
+    "allocation_buckets", "allocation_bafoeg_config", "savings_plans", "budgets",
 }
 
 VALID_SYNC_COLUMNS: dict[str, set[str]] = {
@@ -108,6 +108,7 @@ VALID_SYNC_COLUMNS: dict[str, set[str]] = {
     "allocation_buckets": {"id", "bucket_type", "percentage", "recipient_account_id", "sender_iban", "is_active", "sort_order", "created_at", "updated_at"},
     "allocation_bafoeg_config": {"id", "total_debt", "monthly_rate", "interest_rate", "payout_date", "created_at", "updated_at"},
     "savings_plans": {"id", "name", "tag", "target_amount", "target_date", "target_recipient_name", "target_recipient_iban", "target_recipient_bic", "is_visible", "sender_iban", "created_at", "updated_at"},
+    "budgets": {"id", "category_id", "monthly_amount", "created_at", "updated_at"},
 }
 
 

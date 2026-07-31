@@ -354,6 +354,19 @@ def create_savings_plans_table(connection: sqlite3.Connection) -> None:
         )
     """)
 
+def create_budgets_table(connection: sqlite3.Connection) -> None:
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS budgets (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            category_id    INTEGER NOT NULL UNIQUE,
+            monthly_amount REAL NOT NULL CHECK(monthly_amount >= 0),
+            created_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (category_id) REFERENCES kategorien(id) ON DELETE CASCADE
+        )
+    """)
+
+
 def create_allocation_runs_table(connection: sqlite3.Connection) -> None:
     connection.execute("""
         CREATE TABLE IF NOT EXISTS allocation_runs (
@@ -520,6 +533,7 @@ def initialize_database(connection: sqlite3.Connection) -> None:
     )
     create_allocation_runs_table(connection)
     create_allocation_run_buckets_table(connection)
+    create_budgets_table(connection)
 
     row_count = connection.execute("SELECT COUNT(*) FROM allocation_buckets").fetchone()[0]
     if row_count == 0:
