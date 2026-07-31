@@ -1,5 +1,5 @@
 import * as React from "react";
-import { FileText, Gauge, Repeat, ScanSearch, Wallet } from "lucide-react";
+import { FileText, Gauge, Repeat, ScanSearch, Target, Wallet } from "lucide-react";
 
 import { normalizeIban } from "@/lib/iban";
 import { buildAccountOptions, resolveAccountSelection } from "@/lib/utils/accounts";
@@ -17,37 +17,7 @@ import { UpdateBanner } from "@/components/update-banner";
 import { readActiveAccountIban, writeActiveAccountIban } from "@/lib/bank/active-storage";
 import { BankSelector } from "./bank-selector";
 import { SidebarFooterContent } from "./sidebar-footer-content";
-
-const navData = {
-  navMain: [
-    {
-      title: "Dashboard",
-      url: "/dashboard",
-      icon: Gauge,
-    },
-    {
-      title: "Transaktionen",
-      url: "/transactions",
-      icon: FileText,
-    },
-    {
-      title: "Abonnements",
-      url: "/subscriptions",
-      icon: Repeat,
-    },
-    {
-      title: "Analyse",
-      url: "/analytics",
-      icon: ScanSearch,
-    },
-    {
-      title: "Finanzplan",
-      url: "/finance-plan",
-      icon: Wallet,
-    },
-
-  ],
-};
+import { fetchBudgets } from "@/lib/budgets";
 
 function parseLatestTimestamp(value: unknown): Date | null {
   if (!value || typeof value !== "string") {
@@ -70,6 +40,30 @@ function parseLatestTimestamp(value: unknown): Date | null {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const [overBudgetCount, setOverBudgetCount] = React.useState(0);
+
+  const refreshOverBudget = React.useCallback(async () => {
+    try {
+      const d = new Date();
+      const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const rows = await fetchBudgets(month);
+      setOverBudgetCount(rows.filter((b) => b.is_over).length);
+    } catch {
+      setOverBudgetCount(0);
+    }
+  }, []);
+
+  const navData = {
+    navMain: [
+      { title: "Dashboard", url: "/dashboard", icon: Gauge },
+      { title: "Transaktionen", url: "/transactions", icon: FileText },
+      { title: "Abonnements", url: "/subscriptions", icon: Repeat },
+      { title: "Analyse", url: "/analytics", icon: ScanSearch },
+      { title: "Finanzplan", url: "/finance-plan", icon: Wallet },
+      { title: "Budgets", url: "/budgets", icon: Target, badge: overBudgetCount },
+    ],
+  };
+
   const [cacheAgeText, setCacheAgeText] = React.useState<string>("Kein Cache");
   const [isSyncing, setIsSyncing] = React.useState(false);
   const [syncStatusText, setSyncStatusText] = React.useState<string>("");
@@ -172,6 +166,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   React.useEffect(() => {
     void updateCacheAge();
+    void refreshOverBudget();
     void fetchBankCredentials()
       .then((banks) => {
         setLinkedBanks(banks);
@@ -186,6 +181,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }, 30000);
     const handleRefresh = () => {
       void updateCacheAge();
+      void refreshOverBudget();
     };
 
     const onSyncStatusChange = (event: Event) => {
@@ -225,7 +221,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       window.removeEventListener(FINTS_SYNC_STATUS_EVENT, onSyncStatusChange);
       window.removeEventListener("finance-bank-credentials-changed", onBankCredentialsChanged);
     };
-  }, [updateCacheAge]);
+  }, [updateCacheAge, refreshOverBudget]);
 
   const refreshFinanceData = () => {
     if (isSyncing) return;

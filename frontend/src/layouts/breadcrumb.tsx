@@ -104,6 +104,7 @@ function DynamicBreadcrumbs() {
     subscriptions: "Abonnements",
     analytics: "Analyse",
     "finance-plan": "Finanzplan",
+    budgets: "Budgets",
   };
 
   return (

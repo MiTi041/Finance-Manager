@@ -14,6 +14,7 @@ const SettingsPage = lazy(() => import("@/pages/settings/settings-page"));
 const SubscriptionsPage = lazy(() => import("@/pages/subscriptions/subscriptions-page"));
 const AnalyticsPage = lazy(() => import("@/pages/analytics/analytics-page"));
 const AllocationPage = lazy(() => import("@/pages/allocation/allocation-page"));
+const BudgetsPage = lazy(() => import("@/pages/budgets/budgets-page"));
 
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8112/api";
@@ -58,6 +59,7 @@ export default function App() {
               <Route path="/subscriptions" element={<ErrorBoundary pageName="Abonnements"><SubscriptionsPage /></ErrorBoundary>} />
               <Route path="/analytics" element={<ErrorBoundary pageName="Analysen"><AnalyticsPage /></ErrorBoundary>} />
               <Route path="/finance-plan" element={<ErrorBoundary pageName="Finanzplan"><AllocationPage /></ErrorBoundary>} />
+              <Route path="/budgets" element={<ErrorBoundary pageName="Budgets"><BudgetsPage /></ErrorBoundary>} />
             </Route>
             <Route path="*" element={<NotFoundPage />} />
           </Routes>

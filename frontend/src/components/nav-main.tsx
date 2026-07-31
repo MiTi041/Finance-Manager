@@ -25,6 +25,7 @@ export function NavMain({
     url: string;
     icon?: LucideIcon;
     isActive?: boolean;
+    badge?: number;
     items?: {
       title: string;
       url: string;
@@ -55,11 +56,21 @@ export function NavMain({
                     <div className="flex items-center gap-2 cursor-default">
                       {item.icon && <item.icon />}
                       <span>{item.title}</span>
+                      {item.badge != null && item.badge > 0 && (
+                        <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-semibold text-white">
+                          {item.badge}
+                        </span>
+                      )}
                     </div>
                   ) : (
                     <Link to={item.url}>
                       {item.icon && <item.icon />}
                       <span>{item.title}</span>
+                      {item.badge != null && item.badge > 0 && (
+                        <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-semibold text-white">
+                          {item.badge}
+                        </span>
+                      )}
                     </Link>
                   )}
                 </SidebarMenuButton>
