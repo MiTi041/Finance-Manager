@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Loader2, PiggyBank, Plus, Receipt, Trash2, Wallet } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  MoreVertical,
+  Pencil,
+  PiggyBank,
+  Plus,
+  Receipt,
+  Trash2,
+  Wallet,
+} from "lucide-react";
 import { toast } from "sonner";
 import { fetchBudgets, createBudget, updateBudget, deleteBudget, type Budget } from "@/lib/budgets";
 import { fetchCategories } from "@/lib/categories/api";
@@ -11,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 
 function currentMonth(): string {
@@ -26,88 +38,88 @@ function shiftMonth(month: string, delta: number): string {
 
 function BudgetRow({
   budget,
-  onUpdate,
+  onEdit,
   onDelete,
 }: {
   budget: Budget;
-  onUpdate: (id: number, amount: number) => void;
+  onEdit: (budget: Budget) => void;
   onDelete: (id: number) => void;
 }) {
-  const [draft, setDraft] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const ratio = budget.monthly_amount > 0 ? budget.spent / budget.monthly_amount : budget.spent > 0 ? 1 : 0;
   const color = ratio > 1 ? "bg-red-500" : ratio >= 0.7 ? "bg-amber-500" : "bg-emerald-500";
-
-  const commit = () => {
-    if (draft == null) return;
-    const value = Number(draft.replace(",", "."));
-    if (Number.isFinite(value) && value >= 0 && value !== budget.monthly_amount) {
-      void onUpdate(budget.id, value);
-    }
-    setDraft(null);
-  };
+  const status =
+    ratio > 1
+      ? { label: "Überzogen", cls: "bg-red-500/10 text-red-600 dark:text-red-400" }
+      : ratio >= 0.7
+        ? { label: "Fast erreicht", cls: "bg-amber-500/10 text-amber-600 dark:text-amber-400" }
+        : { label: "Im Plan", cls: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" };
 
   return (
     <Card>
-      <CardContent className="flex items-start gap-3 p-4">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted text-xl">
-          {budget.icon ?? "🏷️"}
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-2">
-            <p className="truncate font-medium">{budget.name}</p>
-            <div className="flex shrink-0 items-center gap-1">
-              {draft == null ? (
-                <button
-                  type="button"
-                  onClick={() => setDraft(String(budget.monthly_amount))}
-                  aria-label={`Budget für ${budget.name} ändern`}
-                  className="cursor-pointer rounded-md px-2 py-0.5 text-sm font-semibold tabular-nums transition-colors hover:bg-muted"
-                >
-                  {formatAmount(budget.monthly_amount)}
-                </button>
-              ) : (
-                <Input
-                  type="number"
-                  min={0}
-                  autoFocus
-                  aria-label={`Budget für ${budget.name}`}
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  onBlur={commit}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") commit();
-                    if (e.key === "Escape") setDraft(null);
-                  }}
-                  className="h-7 w-24 text-right text-sm tabular-nums"
-                />
-              )}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7"
-                onClick={() => onDelete(budget.id)}
-                aria-label={`Budget für ${budget.name} löschen`}
-              >
-                <Trash2 className="size-4" />
-              </Button>
-            </div>
+      <CardContent className="flex flex-col gap-3 p-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-lg">
+              {budget.icon ?? "🏷️"}
+            </span>
+            <span className="truncate text-sm font-medium">{budget.name}</span>
           </div>
-          <div className="mt-2 flex items-center gap-2">
-            <Progress value={ratio * 100} indicatorClassName={color} className="h-2.5 flex-1" />
+          <div className="flex shrink-0 items-center gap-1">
             <span
               className={cn(
-                "w-10 shrink-0 text-right text-xs font-medium tabular-nums",
-                color.replace("bg-", "text-"),
+                "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+                status.cls,
               )}
             >
-              {Math.round(ratio * 100)} %
+              {status.label}
             </span>
+            <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 cursor-pointer text-muted-foreground hover:text-foreground"
+                  aria-label={`Optionen für ${budget.name}`}
+                >
+                  <MoreVertical className="size-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-44 p-1">
+                <Button
+                  variant="ghost"
+                  className="w-full cursor-pointer justify-start gap-2 px-2 py-1.5 text-sm"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onEdit(budget);
+                  }}
+                >
+                  <Pencil className="size-4" /> Bearbeiten
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full cursor-pointer justify-start gap-2 px-2 py-1.5 text-sm text-destructive hover:bg-destructive/10"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onDelete(budget.id);
+                  }}
+                >
+                  <Trash2 className="size-4" /> Löschen
+                </Button>
+              </PopoverContent>
+            </Popover>
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {formatAmount(budget.spent)} ausgegeben ·{" "}
-            <span className={budget.remaining < 0 ? "text-red-600 dark:text-red-400" : ""}>
-              {formatAmount(budget.remaining)} übrig
-            </span>
+        </div>
+
+        <p className="text-sm font-semibold tabular-nums">
+          {formatAmount(budget.spent)} <span className="font-normal text-muted-foreground">/</span>{" "}
+          {formatAmount(budget.monthly_amount)}
+        </p>
+
+        <div className="flex flex-col gap-1">
+          <Progress value={ratio * 100} indicatorClassName={color} className="h-2.5 w-full" />
+          <p className={cn("text-xs font-medium", color.replace("bg-", "text-"))}>
+            {Math.round(ratio * 100)} % vom Budget genutzt
           </p>
         </div>
       </CardContent>
@@ -209,6 +221,10 @@ export default function BudgetsPage() {
   const [error, setError] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
 
+  const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
+  const [editAmount, setEditAmount] = useState("");
+  const [editing, setEditing] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -249,18 +265,6 @@ export default function BudgetsPage() {
     [load],
   );
 
-  const handleUpdate = useCallback(
-    async (id: number, amount: number) => {
-      try {
-        await updateBudget(id, amount);
-        await load();
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Fehler");
-      }
-    },
-    [load],
-  );
-
   const handleDelete = useCallback(
     async (id: number) => {
       try {
@@ -274,11 +278,35 @@ export default function BudgetsPage() {
     [load],
   );
 
+  const openEdit = (budget: Budget) => {
+    setEditingBudget(budget);
+    setEditAmount(String(budget.monthly_amount));
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingBudget) return;
+    const value = Number(editAmount.replace(",", "."));
+    if (!Number.isFinite(value) || value < 0) return;
+    setEditing(true);
+    try {
+      await updateBudget(editingBudget.id, value);
+      setEditingBudget(null);
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Fehler");
+    } finally {
+      setEditing(false);
+    }
+  };
+
   const statBlocks: { label: string; value: number; Icon: typeof Wallet }[] = [
     { label: "Budget", value: totals.budget, Icon: Wallet },
     { label: "Ausgegeben", value: totals.spent, Icon: Receipt },
     { label: "Übrig", value: totals.remaining, Icon: PiggyBank },
   ];
+
+  const parsedEdit = Number(editAmount.replace(",", "."));
+  const editValid = Number.isFinite(parsedEdit) && parsedEdit >= 0;
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 py-6">
@@ -329,7 +357,7 @@ export default function BudgetsPage() {
       ) : (
         <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3">
           {budgets.map((b) => (
-            <BudgetRow key={b.id} budget={b} onUpdate={handleUpdate} onDelete={handleDelete} />
+            <BudgetRow key={b.id} budget={b} onEdit={openEdit} onDelete={handleDelete} />
           ))}
         </div>
       )}
@@ -341,6 +369,45 @@ export default function BudgetsPage() {
         existingCategoryIds={new Set(budgets.map((b) => b.category_id))}
         onCreate={handleCreate}
       />
+
+      <Dialog
+        open={editingBudget != null}
+        onOpenChange={(open) => {
+          if (!open && !editing) setEditingBudget(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Budget bearbeiten</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">{editingBudget?.name}</p>
+          <div className="relative">
+            <Input
+              type="number"
+              min={0}
+              autoFocus
+              value={editAmount}
+              onChange={(e) => setEditAmount(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && editValid) void handleSaveEdit();
+              }}
+              className="pr-8"
+            />
+            <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">
+              €
+            </span>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEditingBudget(null)} disabled={editing}>
+              Abbrechen
+            </Button>
+            <Button onClick={() => void handleSaveEdit()} disabled={editing || !editValid}>
+              {editing && <Loader2 className="size-4 animate-spin" />}
+              Speichern
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
