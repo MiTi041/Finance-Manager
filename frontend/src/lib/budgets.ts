@@ -18,7 +18,9 @@ export async function fetchBudgets(month: string): Promise<Budget[]> {
   return data.budgets ?? [];
 }
 
-export async function createBudget(category_id: number, monthly_amount: number): Promise<Budget> {
+type BudgetStub = Pick<Budget, "id" | "category_id" | "monthly_amount">;
+
+export async function createBudget(category_id: number, monthly_amount: number): Promise<BudgetStub> {
   const response = await fetch(`${getApiBaseUrl()}/db/budgets`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -29,7 +31,7 @@ export async function createBudget(category_id: number, monthly_amount: number):
   return result;
 }
 
-export async function updateBudget(budgetId: number, monthly_amount: number): Promise<Budget> {
+export async function updateBudget(budgetId: number, monthly_amount: number): Promise<BudgetStub> {
   const response = await fetch(`${getApiBaseUrl()}/db/budgets/${budgetId}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },

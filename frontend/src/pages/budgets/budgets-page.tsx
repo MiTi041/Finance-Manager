@@ -35,7 +35,7 @@ function BudgetRow({
 }) {
   const [draft, setDraft] = useState<string | null>(null);
   const ratio = budget.monthly_amount > 0 ? budget.spent / budget.monthly_amount : budget.spent > 0 ? 1 : 0;
-  const color = ratio >= 1 ? "bg-red-500" : ratio >= 0.7 ? "bg-amber-500" : "bg-emerald-500";
+  const color = ratio > 1 ? "bg-red-500" : ratio >= 0.7 ? "bg-amber-500" : "bg-emerald-500";
 
   const commit = () => {
     if (draft == null) return;
