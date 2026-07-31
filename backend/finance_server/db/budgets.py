@@ -38,15 +38,17 @@ def _fetch_spent(conn: Any, category_id: int, month: str) -> float:
 
 def _serialize_budget(row: Any, spent: float) -> dict[str, Any]:
     monthly = float(row["monthly_amount"])
+    spent_r = round(spent, 2)
+    monthly_r = round(monthly, 2)
     return {
         "id": row["id"],
         "category_id": row["category_id"],
         "name": row["name"],
         "icon": row["icon"],
-        "monthly_amount": round(monthly, 2),
-        "spent": round(spent, 2),
-        "remaining": round(monthly - spent, 2),
-        "is_over": spent > monthly,
+        "monthly_amount": monthly_r,
+        "spent": spent_r,
+        "remaining": round(monthly_r - spent_r, 2),
+        "is_over": spent_r > monthly_r,
     }
 
 
