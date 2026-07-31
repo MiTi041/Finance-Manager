@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CheckCircle2 } from "lucide-react";
+import { ArrowRightToLine, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { HelpButton } from "@/components/ui/help-button";
 import { PayoutSlider } from "../payout-slider";
@@ -55,6 +55,7 @@ export function BucketFooter(props: Props) {
       <div className="flex flex-col gap-2">
         {bafoegTopUp > 0 ? (
           <Button size="sm" className="w-full" disabled={transferring} onClick={() => onTransfer(bucketRunId)}>
+            <ArrowRightToLine className="size-4" />
             {transferring ? "Wird gesendet…" : `${formatAmount(bafoegTopUp)} jetzt überweisen`}
           </Button>
         ) : bafoegPaid && !bafoegFullyPaid ? (
@@ -86,6 +87,7 @@ export function BucketFooter(props: Props) {
               disabled={transferring}
               onClick={() => onTransfer(bucketRunId, sliderValues[bucketRunId] ?? bafoegOutstanding)}
             >
+              <ArrowRightToLine className="size-4" />
               {transferring
                 ? "Wird gesendet…"
                 : `${formatAmount(sliderValues[bucketRunId] ?? bafoegOutstanding)} jetzt überweisen`}
@@ -115,6 +117,7 @@ export function BucketFooter(props: Props) {
 
   return (
     <Button size="sm" disabled={transferring} onClick={() => onTransfer(bucketRunId)} className="w-full">
+      <ArrowRightToLine className="size-4" />
       {transferring ? "Wird gesendet…" : `${formatAmount(topUp)} jetzt überweisen`}
     </Button>
   );

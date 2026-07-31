@@ -38,7 +38,7 @@ const bucketIcons: Record<string, React.ReactNode> = {
 };
 
 const bucketTags: Record<string, string> = {
-  bafoeg: "tag.bafoegrueckzahlung",
+  bafoeg: "tag.bafoegschulden",
   emergency: "tag.notfallfonds",
   invest: "tag.investieren",
   donation: "tag.spenden",
@@ -53,13 +53,14 @@ type Props = {
   config: AllocationBucket;
   accent: { icon: string; bar: string; badge: string; barMuted: string };
   recipientAccounts: { id: number; account_name: string; recipient_name: string; iban: string }[];
-  bankAccounts: { iban: string; name: string }[];
+  bankAccounts: { iban: string; name: string; bankKey: string }[];
+  canTransferMap: Map<string, boolean>;
   onUpdateConfig: (bucketId: number, updates: Partial<AllocationBucket>) => Promise<void>;
   onRefresh?: () => void;
 };
 
 export function BucketSettingsPopover(props: Props) {
-  const { bucket, config, accent, recipientAccounts, bankAccounts, onUpdateConfig, onRefresh } = props;
+  const { bucket, config, accent, recipientAccounts, bankAccounts, canTransferMap, onUpdateConfig, onRefresh } = props;
 
   const [localPct, setLocalPct] = useState(String(config.percentage));
   useEffect(() => setLocalPct(String(config.percentage)), [config.percentage]);
@@ -396,18 +397,34 @@ export function BucketSettingsPopover(props: Props) {
                   height={15}
                   value={
                     config.recipient_account_id != null
-                      ? String(config.recipient_account_id)
-                      : "none"
+                      ? `empf:${config.recipient_account_id}`
+                      : config.recipient_iban != null
+                        ? `bank:${config.recipient_iban}`
+                        : "none"
                   }
                   onValueChange={(v) => {
-                    onUpdateConfig(bucket.bucket_id, {
-                      recipient_account_id: v === "none" ? null : Number(v),
-                    });
+                    if (v === "none") {
+                      onUpdateConfig(bucket.bucket_id, { recipient_account_id: null, recipient_iban: null });
+                    } else if (v.startsWith("bank:")) {
+                      onUpdateConfig(bucket.bucket_id, { recipient_iban: v.slice(5), recipient_account_id: null });
+                    } else if (v.startsWith("empf:")) {
+                      onUpdateConfig(bucket.bucket_id, { recipient_account_id: Number(v.slice(5)), recipient_iban: null });
+                    }
                   }}
-                  options={recipientAccounts.map((r) => ({
-                    value: String(r.id),
-                    label: `${r.account_name} ${r.recipient_name} ${r.iban}`,
-                  }))}
+                  options={[
+                    ...recipientAccounts.map((r) => ({
+                      value: `empf:${r.id}`,
+                      label: `${r.account_name} ${r.recipient_name} ${r.iban}`,
+                      _type: "empf" as const,
+                    })),
+                    ...bankAccounts
+                      .filter((a) => a.iban !== config.sender_iban)
+                      .map((a) => ({
+                        value: `bank:${a.iban}`,
+                        label: `${a.name} ${a.iban}`,
+                        _type: "bank" as const,
+                      })),
+                  ]}
                   placeholder="Kein Konto"
                   searchPlaceholder="Konto suchen…"
                   emptyText="Kein Empfängerkonto gefunden"
@@ -415,7 +432,21 @@ export function BucketSettingsPopover(props: Props) {
                   noneLabel="Kein Konto"
                   noneValue="none"
                   renderOption={(option) => {
-                    const r = recipientAccounts.find((x) => x.id === Number(option.value));
+                    const isBank = option.value.startsWith("bank:");
+                    if (isBank) {
+                      const a = bankAccounts.find((x) => x.iban === option.value.slice(5));
+                      if (!a) return <span>{option.label}</span>;
+                      return (
+                        <div className="flex flex-col gap-0.5 py-1">
+                          <span className="font-medium text-sm leading-tight">{a.name}</span>
+                          <span className="text-xs text-muted-foreground leading-tight">Eigenes Konto</span>
+                          <span className="font-mono text-xs text-muted-foreground/70 leading-tight">
+                            {formatIban(a.iban)}
+                          </span>
+                        </div>
+                      );
+                    }
+                    const r = recipientAccounts.find((x) => x.id === Number(option.value.slice(5)));
                     if (!r) return <span>{option.label}</span>;
                     return (
                       <div className="flex flex-col gap-0.5 py-1">
@@ -432,7 +463,20 @@ export function BucketSettingsPopover(props: Props) {
                     );
                   }}
                   renderSelected={(option) => {
-                    const r = recipientAccounts.find((x) => x.id === Number(option.value));
+                    const isBank = option.value.startsWith("bank:");
+                    if (isBank) {
+                      const a = bankAccounts.find((x) => x.iban === option.value.slice(5));
+                      if (!a) return <span>{option.label}</span>;
+                      return (
+                        <div className="flex flex-col items-start gap-0">
+                          <span className="text-sm leading-tight">{a.name}</span>
+                          <span className="font-mono text-[11px] text-muted-foreground leading-tight">
+                            {formatIban(a.iban)}
+                          </span>
+                        </div>
+                      );
+                    }
+                    const r = recipientAccounts.find((x) => x.id === Number(option.value.slice(5)));
                     if (!r) return <span>{option.label}</span>;
                     return (
                       <div className="flex flex-col items-start gap-0">
@@ -458,10 +502,12 @@ export function BucketSettingsPopover(props: Props) {
                 onValueChange={(v) => {
                   onUpdateConfig(bucket.bucket_id, { sender_iban: v || null });
                 }}
-                options={bankAccounts.map((a) => ({
-                  value: a.iban,
-                  label: `${a.name} ${a.iban}`,
-                }))}
+                options={bankAccounts
+                  .filter((a) => canTransferMap.get(a.bankKey) !== false && a.iban !== config.recipient_iban)
+                  .map((a) => ({
+                    value: a.iban,
+                    label: `${a.name} ${a.iban}`,
+                  }))}
                 placeholder="Konto auswählen"
                 searchPlaceholder="Konto suchen…"
                 emptyText="Kein Konto gefunden"

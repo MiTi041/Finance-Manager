@@ -226,6 +226,7 @@ class AllocationService:
             if bucket["bucket_type"] == "spending":
                 exclude_tags = [
                     "tag.bafoegrueckzahlung",
+                    "tag.bafoegruecklagenschulden",
                     "tag.notfallfonds",
                     "tag.investieren",
                     "tag.spenden",
@@ -265,6 +266,7 @@ class AllocationService:
         return {
             "month": run["month"],
             "net_income": run["net_income"],
+            "income_sources": self._detect_income_breakdown(run["month"])["sources"],
             "total_allocated": allocated,
             "remaining": round(run["net_income"] - allocated, 2),
             "status": run["status"],
@@ -279,6 +281,9 @@ class AllocationService:
         }
 
     def _detect_income(self, month: str) -> float:
+        return self._detect_income_breakdown(month)["total"]
+
+    def _detect_income_breakdown(self, month: str) -> dict[str, Any]:
         """Recurring income detection matching finance_local (3-month lookback, group by counterparty+purpose, 3+ occurrences, ~30d cadence)."""
         start_parts = month.split("-")
         m = int(start_parts[1]) - 3
@@ -301,16 +306,19 @@ class AllocationService:
                 (lookback_start, month_end),
             ).fetchall()
 
-        groups: dict[str, list[tuple[float, str]]] = {}
+        groups: dict[str, list[tuple[float, str, str, str]]] = {}
         for row in rows:
-            name = (row["applicant_name"] or "").strip().lower()
-            purpose = (row["purpose"] or "").strip().lower()
-            purpose_clean = re.sub(r"[^a-zäöüß]", "", purpose)
+            name = (row["applicant_name"] or "").strip()
+            purpose = (row["purpose"] or "").strip()
+            purpose_clean = re.sub(r"[^a-zäöüß]", "", purpose.lower())
             if not name or not purpose_clean:
                 continue
-            groups.setdefault(f"{name} | {purpose_clean}", []).append((row["amount"], row["date"]))
+            groups.setdefault(f"{name.lower()} | {purpose_clean}", []).append(
+                (row["amount"], row["date"], name, purpose)
+            )
 
         total = 0.0
+        sources: list[dict[str, Any]] = []
         for txs in groups.values():
             if len(txs) < 3:
                 continue
@@ -324,8 +332,18 @@ class AllocationService:
                     break
             if recurring:
                 total += txs[-1][0]
+                _, _, name, purpose = txs[-1]
+                sources.append({
+                    "name": name,
+                    "purpose": purpose,
+                    "amount": round(txs[-1][0], 2),
+                    "count": len(txs),
+                    "transactions": [
+                        {"date": t[1], "amount": round(t[0], 2)} for t in txs
+                    ],
+                })
 
-        return round(total, 2)
+        return {"total": round(total, 2), "sources": sources}
 
     def _check_sender_balance(self, sender_iban: str | None, amount: float) -> None:
         if not sender_iban:
@@ -349,7 +367,7 @@ class AllocationService:
     def transfer_run_bucket(self, run_bucket_id: int, custom_amount: float | None = None) -> dict[str, Any]:
         with get_connection() as connection:
             row = connection.execute(
-                """SELECT arb.*, ab.bucket_type, ab.recipient_account_id, ab.sender_iban
+                """SELECT arb.*, ab.bucket_type, ab.recipient_account_id, ab.recipient_iban, ab.sender_iban
                    FROM allocation_run_buckets arb
                    JOIN allocation_buckets ab ON ab.id = arb.bucket_id
                    WHERE arb.id = ?""",
@@ -382,18 +400,33 @@ class AllocationService:
                 raise HTTPException(status_code=400, detail="Kein Spendenkonto konfiguriert")
             recipient = dict(accounts[run_bucket_id % len(accounts)])
         else:
-            recipient_account_id = rb.get("recipient_account_id")
-            if not recipient_account_id:
-                raise HTTPException(status_code=400, detail="Kein Empfängerkonto konfiguriert")
+            recipient_iban = rb.get("recipient_iban")
+            if recipient_iban:
+                with get_connection() as connection:
+                    bank_row = connection.execute(
+                        "SELECT iban, account_name FROM bank_accounts WHERE UPPER(iban) = UPPER(?)",
+                        (recipient_iban,),
+                    ).fetchone()
+                if not bank_row:
+                    raise HTTPException(status_code=400, detail="Empfänger-Bankkonto nicht gefunden")
+                recipient = {
+                    "iban": bank_row["iban"],
+                    "recipient_name": bank_row["account_name"] or bank_row["iban"],
+                    "bic": None,
+                }
+            else:
+                recipient_account_id = rb.get("recipient_account_id")
+                if not recipient_account_id:
+                    raise HTTPException(status_code=400, detail="Kein Empfängerkonto konfiguriert")
 
-            with get_connection() as connection:
-                recipient_row = connection.execute(
-                    "SELECT * FROM empfaengerkonten WHERE id = ?",
-                    (recipient_account_id,),
-                ).fetchone()
-            if not recipient_row:
-                raise HTTPException(status_code=400, detail="Empfängerkonto nicht gefunden")
-            recipient = dict(recipient_row)
+                with get_connection() as connection:
+                    recipient_row = connection.execute(
+                        "SELECT * FROM empfaengerkonten WHERE id = ?",
+                        (recipient_account_id,),
+                    ).fetchone()
+                if not recipient_row:
+                    raise HTTPException(status_code=400, detail="Empfängerkonto nicht gefunden")
+                recipient = dict(recipient_row)
 
         return {
             "run_bucket_id": run_bucket_id,

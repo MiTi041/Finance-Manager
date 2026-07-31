@@ -34,6 +34,31 @@ class TestDetectIncome:
             result = service._detect_income("2026-07")
         assert result == 3500.0
 
+    def test_breakdown_returns_used_transactions(self):
+        service = AllocationService()
+        rows = [
+            _row("Employer GmbH", "Gehalt Januar", 3400.0, "2026-04-01"),
+            _row("Employer GmbH", "Gehalt Januar", 3400.0, "2026-05-01"),
+            _row("Employer GmbH", "Gehalt Januar", 3500.0, "2026-06-01"),
+            _row("Gewerbe", "Einzelzahlung", 100.0, "2026-04-10"),
+        ]
+        with patch("finance_server.services.allocation_service.get_connection") as mock_conn:
+            cursor = Mock()
+            cursor.fetchall.return_value = rows
+            mock_conn.return_value.__enter__.return_value.execute.return_value = cursor
+            breakdown = service._detect_income_breakdown("2026-07")
+        assert breakdown["total"] == 3500.0
+        assert len(breakdown["sources"]) == 1
+        source = breakdown["sources"][0]
+        assert source["name"] == "Employer GmbH"
+        assert source["amount"] == 3500.0
+        assert source["count"] == 3
+        assert [t["date"] for t in source["transactions"]] == [
+            "2026-04-01",
+            "2026-05-01",
+            "2026-06-01",
+        ]
+
     def test_returns_zero_when_no_recurring_pattern(self):
         service = AllocationService()
         with patch("finance_server.services.allocation_service.get_connection") as mock_conn:
@@ -73,6 +98,8 @@ class TestBuildRunResponse:
             patch("finance_server.services.allocation_service.db.get_run_buckets") as mock_run_buckets,
             patch("finance_server.services.allocation_service.db.get_active_buckets_sum_percentage", return_value=40.0),
             patch("finance_server.services.allocation_service.AllocationService._detect_income", return_value=3000.0),
+            patch("finance_server.services.allocation_service.AllocationService._detect_income_breakdown",
+                  return_value={"total": 3000.0, "sources": []}),
             patch("finance_server.services.allocation_service.get_connection") as mock_conn,
         ):
             mock_conn.return_value.__enter__.return_value = self._make_conn_mock()
@@ -108,6 +135,8 @@ class TestBuildRunResponse:
             patch("finance_server.services.allocation_service.db.get_run_buckets") as mock_run_buckets,
             patch("finance_server.services.allocation_service.db.get_active_buckets_sum_percentage", return_value=70.0),
             patch("finance_server.services.allocation_service.AllocationService._detect_income", return_value=2000.0),
+            patch("finance_server.services.allocation_service.AllocationService._detect_income_breakdown",
+                  return_value={"total": 2000.0, "sources": []}),
             patch("finance_server.services.allocation_service.get_connection") as mock_conn,
         ):
             mock_conn.return_value.__enter__.return_value = self._make_conn_mock()

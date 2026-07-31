@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import {
+  ArrowRightToLine,
   Car,
   CheckCircle2,
   Eye,
@@ -52,7 +53,8 @@ type Props = {
   onRefresh: () => void;
   onTransfer: (plan: SavingsPlan, customAmount?: number) => void;
   recipientAccounts: RecipientAccountRecord[];
-  bankAccounts: { iban: string; name: string }[];
+  bankAccounts: { iban: string; name: string; bankKey: string }[];
+  canTransferMap: Map<string, boolean>;
   autoHiddenPlanIds: number[];
 };
 
@@ -126,6 +128,7 @@ function PlanFormFields({
   onChange,
   recipientAccounts,
   bankAccounts,
+  canTransferMap,
   existingTotal,
   availableForSavings,
   savedAmount = 0,
@@ -133,7 +136,8 @@ function PlanFormFields({
   values: FormValues;
   onChange: (v: FormValues) => void;
   recipientAccounts: RecipientAccountRecord[];
-  bankAccounts: { iban: string; name: string }[];
+  bankAccounts: { iban: string; name: string; bankKey: string }[];
+  canTransferMap: Map<string, boolean>;
   existingTotal: number;
   availableForSavings: number;
   savedAmount?: number;
@@ -155,13 +159,18 @@ function PlanFormFields({
   const set = <K extends keyof FormValues>(key: K, value: FormValues[K]) =>
     onChange({ ...values, [key]: value });
 
-  const selectedRecipientId =
-    recipientAccounts.find(
+  const selectedRecipientValue = (() => {
+    const fromEmpf = recipientAccounts.find(
       (r) =>
         r.recipient_name === values.recipientName &&
         r.iban === values.recipientIban &&
         (r.bic ?? "") === values.recipientBic,
-    )?.id ?? null;
+    );
+    if (fromEmpf) return `empf:${fromEmpf.id}`;
+    const fromBank = bankAccounts.find((a) => a.iban === values.recipientIban);
+    if (fromBank) return `bank:${fromBank.iban}`;
+    return "manual";
+  })();
 
   return (
     <div className="space-y-5">
@@ -254,23 +263,43 @@ function PlanFormFields({
           <Label>Empfängerkonto übernehmen</Label>
           <SearchableSelect
             height={15}
-            value={selectedRecipientId != null ? String(selectedRecipientId) : "manual"}
+            value={selectedRecipientValue}
             onValueChange={(v) => {
               if (v === "manual") return;
-              const r = recipientAccounts.find((a) => a.id === Number(v));
-              if (r) {
-                onChange({
-                  ...values,
-                  recipientName: r.recipient_name,
-                  recipientIban: r.iban,
-                  recipientBic: r.bic ?? "",
-                });
+              if (v.startsWith("bank:")) {
+                const a = bankAccounts.find((x) => x.iban === v.slice(5));
+                if (a) {
+                  onChange({
+                    ...values,
+                    recipientName: a.name,
+                    recipientIban: a.iban,
+                    recipientBic: "",
+                  });
+                }
+              } else if (v.startsWith("empf:")) {
+                const r = recipientAccounts.find((a) => a.id === Number(v.slice(5)));
+                if (r) {
+                  onChange({
+                    ...values,
+                    recipientName: r.recipient_name,
+                    recipientIban: r.iban,
+                    recipientBic: r.bic ?? "",
+                  });
+                }
               }
             }}
-            options={recipientAccounts.map((r) => ({
-              value: String(r.id),
-              label: `${r.account_name} ${r.recipient_name} ${r.iban}`,
-            }))}
+            options={[
+              ...recipientAccounts.map((r) => ({
+                value: `empf:${r.id}`,
+                label: `${r.account_name} ${r.recipient_name} ${r.iban}`,
+                _type: "empf" as const,
+              })),
+              ...bankAccounts.map((a) => ({
+                value: `bank:${a.iban}`,
+                label: `${a.name} ${a.iban}`,
+                _type: "bank" as const,
+              })),
+            ]}
             placeholder="Kein Eintrag (manuelle Eingabe)"
             searchPlaceholder="Konto suchen…"
             emptyText="Kein Empfängerkonto gefunden"
@@ -278,7 +307,21 @@ function PlanFormFields({
             noneLabel="Kein Eintrag (manuelle Eingabe)"
             noneValue="manual"
             renderOption={(option) => {
-              const a = recipientAccounts.find((x) => x.id === Number(option.value));
+              const isBank = option.value.startsWith("bank:");
+              if (isBank) {
+                const a = bankAccounts.find((x) => x.iban === option.value.slice(5));
+                if (!a) return <span>{option.label}</span>;
+                return (
+                  <div className="flex flex-col gap-0.5 py-1">
+                    <span className="font-medium text-sm leading-tight">{a.name}</span>
+                    <span className="text-xs text-muted-foreground leading-tight">Eigenes Konto</span>
+                    <span className="font-mono text-xs text-muted-foreground/70 leading-tight">
+                      {formatIban(a.iban)}
+                    </span>
+                  </div>
+                );
+              }
+              const a = recipientAccounts.find((x) => x.id === Number(option.value.slice(5)));
               if (!a) return <span>{option.label}</span>;
               return (
                 <div className="flex flex-col gap-0.5 py-1">
@@ -293,7 +336,20 @@ function PlanFormFields({
               );
             }}
             renderSelected={(option) => {
-              const a = recipientAccounts.find((x) => x.id === Number(option.value));
+              const isBank = option.value.startsWith("bank:");
+              if (isBank) {
+                const a = bankAccounts.find((x) => x.iban === option.value.slice(5));
+                if (!a) return <span>{option.label}</span>;
+                return (
+                  <div className="flex flex-col items-start gap-0">
+                    <span className="text-sm leading-tight">{a.name}</span>
+                    <span className="font-mono text-[11px] text-muted-foreground leading-tight">
+                      {formatIban(a.iban)}
+                    </span>
+                  </div>
+                );
+              }
+              const a = recipientAccounts.find((x) => x.id === Number(option.value.slice(5)));
               if (!a) return <span>{option.label}</span>;
               return (
                 <div className="flex flex-col items-start gap-0">
@@ -355,10 +411,12 @@ function PlanFormFields({
           height={15}
           value={values.senderIban}
           onValueChange={(v) => set("senderIban", v)}
-          options={bankAccounts.map((a) => ({
-            value: a.iban,
-            label: `${a.name} ${a.iban}`,
-          }))}
+          options={bankAccounts
+            .filter((a) => canTransferMap.get(a.bankKey) !== false && a.iban !== values.recipientIban)
+            .map((a) => ({
+              value: a.iban,
+              label: `${a.name} ${a.iban}`,
+            }))}
           placeholder="Konto auswählen"
           searchPlaceholder="Konto suchen…"
           emptyText="Kein Konto gefunden"
@@ -404,6 +462,7 @@ export function SavingsPlansCard({
   onTransfer,
   recipientAccounts,
   bankAccounts,
+  canTransferMap,
   autoHiddenPlanIds,
 }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
@@ -564,6 +623,7 @@ export function SavingsPlansCard({
                 onChange={setCreateValues}
                 recipientAccounts={recipientAccounts}
                 bankAccounts={bankAccounts}
+                canTransferMap={canTransferMap}
                 existingTotal={savingsTotal}
                 availableForSavings={availableForSavings}
               />
@@ -913,19 +973,21 @@ export function SavingsPlansCard({
                         className="w-full"
                         onClick={() => onTransfer(plan, sliderValues[plan.id] ?? topUp)}
                       >
+                        <ArrowRightToLine className="size-4" />
                         {`${formatAmount(sliderValues[plan.id] ?? topUp)} jetzt zahlen`}
                       </Button>
                     </>
                   ) : (
                     <Button
-                      type="button"
-                      size="sm"
-                      disabled={!hasPaymentData}
-                      className="w-full"
-                      onClick={() => onTransfer(plan)}
-                    >
-                      {`${formatAmount(topUp)} jetzt zahlen`}
-                    </Button>
+                        type="button"
+                        size="sm"
+                        disabled={!hasPaymentData}
+                        className="w-full"
+                        onClick={() => onTransfer(plan)}
+                      >
+                        <ArrowRightToLine className="size-4" />
+                        {`${formatAmount(topUp)} jetzt zahlen`}
+                      </Button>
                   )}
                 </div>
                 {isDeleting && (
@@ -954,6 +1016,7 @@ export function SavingsPlansCard({
             onChange={setEditValues}
             recipientAccounts={recipientAccounts}
             bankAccounts={bankAccounts}
+            canTransferMap={canTransferMap}
             existingTotal={
               editingPlan && autoHiddenPlanIds.includes(editingPlan.id)
                 ? savingsTotal

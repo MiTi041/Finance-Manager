@@ -6,6 +6,7 @@ export type AllocationBucket = {
   bucket_type: "bafoeg" | "emergency" | "invest" | "donation" | "spending";
   percentage: number;
   recipient_account_id: number | null;
+  recipient_iban?: string | null;
   sender_iban: string | null;
   is_active: boolean;
   sort_order: number;
@@ -61,9 +62,23 @@ export type SavingsPlan = {
   month_entnahmen: number;
 };
 
+export type IncomeTransaction = {
+  date: string;
+  amount: number;
+};
+
+export type IncomeSource = {
+  name: string;
+  purpose: string;
+  amount: number;
+  count: number;
+  transactions: IncomeTransaction[];
+};
+
 export type AllocationStatus = {
   month: string;
   net_income: number;
+  income_sources?: IncomeSource[];
   total_allocated: number;
   remaining: number;
   status: string;
@@ -215,6 +230,26 @@ export async function berechneBafoegRate(payload: {
     body: JSON.stringify(payload),
   });
   return parseJsonResponse(response);
+}
+
+export type AllocationSettings = {
+  bafoeg_enabled: boolean;
+};
+
+export async function fetchAllocationSettings(): Promise<AllocationSettings> {
+  const response = await fetch(`${getApiBaseUrl()}/allocation/settings`);
+  return parseJsonResponse(response);
+}
+
+export async function updateAllocationSettings(payload: Partial<AllocationSettings>): Promise<AllocationSettings> {
+  const response = await fetch(`${getApiBaseUrl()}/allocation/settings`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const result = await parseJsonResponse(response);
+  await emitReferenceChange();
+  return result;
 }
 
 export async function fetchDonationAnalytics(): Promise<DonationAnalytics> {

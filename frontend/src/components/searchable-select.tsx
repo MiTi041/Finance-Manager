@@ -88,9 +88,14 @@ export function SearchableSelect({
         </Button>
       </PopoverTrigger>
       <PopoverContent className={cn("p-0", contentClassName)} align="start" sideOffset={4}>
-        <Command>
+        <Command className="overflow-visible">
           <CommandInput placeholder={searchPlaceholder} />
-          <CommandList>
+          <CommandList
+            className="max-h-80"
+            onWheel={(e) => {
+              const el = e.currentTarget;
+              el.scrollTop += e.deltaY;
+            }}>
             <CommandEmpty>{emptyText}</CommandEmpty>
             <CommandGroup>
               {showNoneOption && (

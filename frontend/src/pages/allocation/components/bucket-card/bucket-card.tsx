@@ -1,4 +1,4 @@
-import { PiggyBank, ShieldCheck, TrendingUp, Heart, Wallet } from "lucide-react";
+import { PiggyBank, ShieldCheck, TrendingUp, Heart, Wallet, TriangleAlert } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { HelpButton } from "@/components/ui/help-button";
 import { BucketSettingsPopover } from "./bucket-settings-popover";
@@ -6,6 +6,8 @@ import { BucketProgress } from "./bucket-progress";
 import { BucketDetails } from "./bucket-details";
 import { BucketFooter } from "./bucket-footer";
 import type { AllocationBucket, AllocationRunBucket } from "@/lib/allocation";
+import { formatAmount } from "@/lib/utils/format";
+import type { SpendingSubscriptionState } from "@/lib/subscription-budget";
 
 export const bucketLabels: Record<string, string> = {
   bafoeg: "Bafög-Rücklage",
@@ -74,13 +76,15 @@ type Props = {
   config: AllocationBucket;
   hasRecipient: boolean;
   recipientAccounts: { id: number; account_name: string; recipient_name: string; iban: string }[];
-  bankAccounts: { iban: string; name: string }[];
+  bankAccounts: { iban: string; name: string; bankKey: string }[];
+  canTransferMap: Map<string, boolean>;
   bafoegActive: boolean;
   onTransfer: (runBucketId: number, amount?: number) => void;
   onUpdateConfig: (bucketId: number, updates: Partial<AllocationBucket>) => Promise<void>;
   onAnalyse: () => void;
   onRefresh?: () => void;
   transferring: boolean;
+  subscriptionState: SpendingSubscriptionState | null;
 };
 
 export function BucketCard({
@@ -89,12 +93,14 @@ export function BucketCard({
   hasRecipient,
   recipientAccounts,
   bankAccounts,
+  canTransferMap,
   bafoegActive,
   onTransfer,
   onUpdateConfig,
   onAnalyse,
   onRefresh,
   transferring,
+  subscriptionState,
 }: Props) {
   const progress =
     bucket.target_amount > 0
@@ -161,6 +167,7 @@ export function BucketCard({
               accent={accent}
               recipientAccounts={recipientAccounts}
               bankAccounts={bankAccounts}
+              canTransferMap={canTransferMap}
               onUpdateConfig={onUpdateConfig}
               onRefresh={onRefresh}
             />
@@ -192,6 +199,29 @@ export function BucketCard({
           progress={progress}
           onAnalyse={onAnalyse}
         />
+
+        {isInfoOnly && subscriptionState && subscriptionState.load > 0 && (
+          <div className="space-y-1 rounded-lg border border-slate-500/20 bg-muted/30 px-2.5 py-2 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Abonnements</span>
+              <span className="font-medium tabular-nums">
+                {formatAmount(subscriptionState.load)}/Monat
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Budget Restliche Ausgaben</span>
+              <span className="font-medium tabular-nums">
+                {formatAmount(bucket.target_amount)}
+              </span>
+            </div>
+            {subscriptionState.shortfall > 0 && (
+              <p className="flex items-center gap-1 pt-0.5 font-medium text-red-500">
+                <TriangleAlert className="size-3.5 shrink-0" />
+                Abonnements übersteigen das Budget um {formatAmount(subscriptionState.shortfall)}
+              </p>
+            )}
+          </div>
+        )}
 
         <BucketDetails
           hasDetails={hasDetails}

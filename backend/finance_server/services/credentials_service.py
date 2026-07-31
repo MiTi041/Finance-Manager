@@ -158,6 +158,7 @@ class CredentialsService:
                     "blz": bank.blz,
                     "fints_url": bank.fints_url,
                     "bank_logo": bank.bank_logo,
+                    "can_transfer": bank.can_transfer,
                 }
                 for bank in list_bank_definitions()
             ]

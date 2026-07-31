@@ -8,6 +8,7 @@ class AllocationBucket(BaseModel):
     bucket_type: str
     percentage: float
     recipient_account_id: int | None = None
+    recipient_iban: str | None = None
     sender_iban: str | None = None
     is_active: bool = True
     sort_order: int = 0
@@ -16,6 +17,7 @@ class AllocationBucket(BaseModel):
 class AllocationBucketUpdate(BaseModel):
     percentage: float | None = Field(default=None, ge=0, le=100)
     recipient_account_id: int | None = None
+    recipient_iban: str | None = None
     sender_iban: str | None = None
     is_active: bool | None = None
     target_amount: float | None = None

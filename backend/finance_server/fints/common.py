@@ -9,7 +9,10 @@ from typing import Any
 
 from finance_server.core.config import settings
 
-logging.getLogger("fints").setLevel(logging.ERROR)
+_fints_logger = logging.getLogger("fints")
+_fints_logger.setLevel(logging.INFO)
+if not _fints_logger.handlers:
+    _fints_logger.addHandler(logging.StreamHandler())
 
 if getattr(sys, "frozen", False):
     BASE_DIR = Path(sys._MEIPASS)

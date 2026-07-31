@@ -502,6 +502,7 @@ def initialize_database(connection: sqlite3.Connection) -> None:
         {
             "target_amount": "REAL",
             "target_months": "REAL",
+            "recipient_iban": "TEXT",
         },
     )
     create_savings_plans_table(connection)

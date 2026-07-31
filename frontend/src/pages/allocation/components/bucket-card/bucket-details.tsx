@@ -3,7 +3,7 @@ import { ChevronDown, HashIcon } from "lucide-react";
 import { formatAmount } from "@/lib/utils/format";
 
 const bucketTags: Record<string, string> = {
-  bafoeg: "tag.bafoegrueckzahlung",
+  bafoeg: "tag.bafoegschulden",
   emergency: "tag.notfallfonds",
   invest: "tag.investieren",
   donation: "tag.spenden",

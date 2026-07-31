@@ -2,6 +2,22 @@ import { useRef, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { formatAmount } from "@/lib/utils/format";
 
+const parseEuros = (s: string): number | null => {
+  const cleaned = s.replace(/\./g, "").replace(",", ".");
+  if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
+  const value = parseFloat(cleaned);
+  return Number.isFinite(value) ? value : null;
+};
+
+const sanitizeEuros = (s: string): string => {
+  const scrubbed = s.replace(/[^\d,.]/g, "");
+  const sepIndex = scrubbed.search(/[,.]/);
+  if (sepIndex === -1) return scrubbed;
+  const intPart = scrubbed.slice(0, sepIndex);
+  const decPart = scrubbed.slice(sepIndex + 1).replace(/[,.]/g, "").slice(0, 2);
+  return `${intPart},${decPart}`;
+};
+
 export function PayoutSlider({
   value,
   max,
@@ -20,7 +36,18 @@ export function PayoutSlider({
   const trackRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
   const [focused, setFocused] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [outOfRange, setOutOfRange] = useState(false);
   const active = dragging || focused;
+
+  const handleInputChange = (raw: string) => {
+    const sanitized = sanitizeEuros(raw);
+    setEditing(sanitized);
+    const parsed = parseEuros(sanitized);
+    const valid = parsed != null && parsed >= 0 && parsed <= max;
+    setOutOfRange(sanitized.length > 0 && !valid);
+    if (valid && parsed != null) onChange(parsed);
+  };
   const pct = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0;
   const anchorPct =
     anchorValue != null && max > 0 ? Math.min(100, Math.max(0, (anchorValue / max) * 100)) : null;
@@ -50,7 +77,7 @@ export function PayoutSlider({
     if (!track || max <= 0) return;
     const rect = track.getBoundingClientRect();
     const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-    onChange(resolveValue(Math.round(ratio * max)));
+    onChange(resolveValue(Math.min(max, Math.round(ratio * max))));
   };
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -92,8 +119,39 @@ export function PayoutSlider({
     <div className="space-y-2.5">
       <div className="flex items-baseline justify-between">
         <span className="text-xs text-muted-foreground">Betrag anpassen</span>
-        <span className="text-sm font-semibold tabular-nums">{formatAmount(value)}</span>
+        <span className="relative">
+          <input
+            type="text"
+            inputMode="decimal"
+            aria-label="Betrag"
+            aria-invalid={outOfRange}
+            value={editing ?? formatAmount(value).replace(/\s*€.*$/, "")}
+            onChange={(e) => handleInputChange(e.target.value)}
+            onFocus={(e) => {
+              setEditing(value.toFixed(2).replace(".", ","));
+              setOutOfRange(false);
+              e.target.select();
+            }}
+            onBlur={() => {
+              setEditing(null);
+              setOutOfRange(false);
+            }}
+            className={`w-28 pr-6 text-right text-sm font-semibold tabular-nums rounded-md border px-1.5 py-0.5 outline-none transition-colors ${
+              outOfRange
+                ? "border-orange-500 bg-orange-500/5 text-orange-600 focus:ring-2 focus:ring-orange-500/40"
+                : "border-input bg-muted/40 text-foreground hover:bg-muted/70 focus:border-ring focus:bg-background focus:ring-2 focus:ring-ring/40"
+            }`}
+          />
+          <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-muted-foreground">
+            €
+          </span>
+        </span>
       </div>
+      {outOfRange && (
+        <p className="text-right text-[11px] font-medium text-orange-500">
+          Betrag muss zwischen 0 und {formatAmount(max)} liegen
+        </p>
+      )}
 
       <div className="space-y-1">
         <div
@@ -162,7 +220,7 @@ export function PayoutSlider({
 
       <div className="flex items-center gap-1.5">
         {presets.map((p) => {
-          const presetValue = Math.round(max * p);
+          const presetValue = Math.min(max, Math.round(max * p));
           const isActive = !atAnchor && Math.abs(value - presetValue) < 1;
           return (
             <button

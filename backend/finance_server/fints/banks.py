@@ -10,6 +10,7 @@ class BankDefinition:
     blz: str
     fints_url: str
     bank_logo: str
+    can_transfer: bool
 
 BANKS: tuple[BankDefinition, ...] = (
     BankDefinition(
@@ -18,6 +19,7 @@ BANKS: tuple[BankDefinition, ...] = (
         blz="50010517",
         fints_url="https://fints.ing.de/fints/",
         bank_logo="images/bank-logos/ing-diba.png",
+        can_transfer=False,
     ),
     BankDefinition(
         key="sparkasse-lemgo",
@@ -25,6 +27,7 @@ BANKS: tuple[BankDefinition, ...] = (
         blz="48250110",
         fints_url="https://banking-wl5.s-fints-pt-wl.de/fints30",
         bank_logo="images/bank-logos/sparkasse-lemgo.png",
+        can_transfer=True,
     ),
 )
 

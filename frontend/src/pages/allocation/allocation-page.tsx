@@ -6,25 +6,32 @@ import { BucketCard } from "./components/bucket-card";
 import { SavingsPlansCard } from "./components/savings-plans-card";
 import { TransferDialog } from "./components/transfer-dialog";
 import { DonationAnalysisDialog } from "./components/donation-analysis-dialog";
+import { IncomeBreakdownDialog } from "./components/income-breakdown-dialog";
 import {
   fetchRecipientAccountsReferenceData,
   type RecipientAccountRecord,
 } from "@/lib/recipient-accounts";
-import { fetchBankCredentials, type StoredBankCredentials } from "@/lib/bank/credentials";
-import { updateAllocationBucket, type AllocationBucket, type SavingsPlan } from "@/lib/allocation";
+import { fetchBankCredentials, fetchAvailableBanks, type StoredBankCredentials } from "@/lib/bank/credentials";
+import { fetchAllocationSettings, updateAllocationBucket, type AllocationBucket, type SavingsPlan } from "@/lib/allocation";
 import { formatAmount } from "@/lib/utils/format";
 import { EmptyState } from "@/components/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useSubscriptions } from "@/pages/subscriptions/hooks/use-subscriptions";
+import {
+  computeSpendingSubscriptionState,
+  type SpendingSubscriptionState,
+} from "@/lib/subscription-budget";
 
-function extractBankAccounts(banks: StoredBankCredentials[]): { iban: string; name: string }[] {
-  const accounts: { iban: string; name: string }[] = [];
+function extractBankAccounts(banks: StoredBankCredentials[]): { iban: string; name: string; bankKey: string }[] {
+  const accounts: { iban: string; name: string; bankKey: string }[] = [];
   for (const bank of banks) {
     for (const acc of bank.accounts ?? []) {
       if (acc.iban)
         accounts.push({
           iban: acc.iban as string,
           name: (acc.account_name as string) ?? (acc.iban as string),
+          bankKey: bank.bank_key,
         });
     }
   }
@@ -35,7 +42,8 @@ export default function AllocationPage() {
   const { status, loading, error, load, recalculate, transfer, transferring, transferSavings } =
     useAllocation();
   const [recipientAccounts, setRecipientAccounts] = useState<RecipientAccountRecord[]>([]);
-  const [bankAccounts, setBankAccounts] = useState<{ iban: string; name: string }[]>([]);
+  const [bankAccounts, setBankAccounts] = useState<{ iban: string; name: string; bankKey: string }[]>([]);
+  const [canTransferMap, setCanTransferMap] = useState<Map<string, boolean>>(new Map());
   const runBucketIdRef = useRef<number>(0);
   const runBucketAmountRef = useRef<number>(0);
   const savingsPlanIdRef = useRef<number>(0);
@@ -58,14 +66,21 @@ export default function AllocationPage() {
     purpose: "",
   });
   const [donationAnalysisOpen, setDonationAnalysisOpen] = useState(false);
+  const [incomeDialogOpen, setIncomeDialogOpen] = useState(false);
+  const [bafoegEnabled, setBafoegEnabled] = useState(false);
+  const { subscriptions } = useSubscriptions();
 
   const loadReferenceData = useCallback(async () => {
-    const [recipientsData, banks] = await Promise.all([
+    const [recipientsData, banks, settings, availableBanks] = await Promise.all([
       fetchRecipientAccountsReferenceData(),
       fetchBankCredentials(),
+      fetchAllocationSettings(),
+      fetchAvailableBanks(),
     ]);
     setRecipientAccounts(recipientsData.recipient_accounts ?? []);
     setBankAccounts(extractBankAccounts(banks));
+    setBafoegEnabled(settings.bafoeg_enabled);
+    setCanTransferMap(new Map(availableBanks.map((b) => [b.key, b.can_transfer])));
   }, []);
 
   useEffect(() => {
@@ -79,6 +94,11 @@ export default function AllocationPage() {
   const donationAccounts = useMemo(
     () => recipientAccounts.filter((r) => r.is_donation_account),
     [recipientAccounts],
+  );
+
+  const senderBankAccounts = useMemo(
+    () => bankAccounts.filter((a) => canTransferMap.get(a.bankKey) !== false),
+    [bankAccounts, canTransferMap],
   );
 
   const handleTransfer = useCallback(
@@ -99,6 +119,12 @@ export default function AllocationPage() {
         accountName = acc.account_name;
         recipientName = acc.recipient_name;
         recipientIban = acc.iban;
+      } else if (cfg.recipient_iban) {
+        const bankAcc = bankAccounts.find((a) => a.iban === cfg.recipient_iban);
+        if (!bankAcc) return;
+        accountName = bankAcc.name;
+        recipientName = bankAcc.name;
+        recipientIban = bankAcc.iban;
       } else {
         if (!cfg.recipient_account_id) return;
         const recipient = recipientAccounts.find((r) => r.id === cfg.recipient_account_id);
@@ -176,18 +202,19 @@ export default function AllocationPage() {
       const tagClean = tag.startsWith("tag.") ? tag : `tag.${tag}`;
       const purpose = `Sparplan ${plan.name}${tagClean ? ` ${tagClean}` : ""}`;
 
-      const acc = recipientAccounts.find((r) => r.iban === plan.target_recipient_iban);
+      const recipientAcc = recipientAccounts.find((r) => r.iban === plan.target_recipient_iban);
+      const bankAcc = bankAccounts.find((a) => a.iban === plan.target_recipient_iban);
       setTransferState({
         open: true,
         runBucketId: 0,
         amount,
-        accountName: acc?.account_name ?? plan.target_recipient_name,
+        accountName: recipientAcc?.account_name ?? bankAcc?.name ?? plan.target_recipient_name,
         recipientName: plan.target_recipient_name,
         recipientIban: plan.target_recipient_iban,
         purpose,
       });
     },
-    [recipientAccounts],
+    [recipientAccounts, bankAccounts],
   );
 
   const handleUpdateConfig = useCallback(
@@ -212,6 +239,11 @@ export default function AllocationPage() {
 
   if (!status) return null;
 
+  const spendingBucket = status.buckets.find((b) => b.bucket_type === "spending");
+  const subscriptionState: SpendingSubscriptionState | null =
+    spendingBucket && subscriptions.length > 0
+      ? computeSpendingSubscriptionState(subscriptions, spendingBucket.target_amount)
+      : null;
   const diff = status.net_income - status.total_allocated - status.remaining;
   const balanced = status.net_income > 0 && status.total_allocated > 0 && Math.abs(diff) < 0.01;
   const visibleBuckets = status.buckets.filter((bucket) => {
@@ -219,7 +251,7 @@ export default function AllocationPage() {
     if (!config) return false;
     if (
       bucket.bucket_type === "bafoeg" &&
-      import.meta.env.VITE_SHOW_BAFOEG_BUCKET?.toLowerCase() !== "true"
+      !bafoegEnabled
     )
       return false;
     return true;
@@ -250,7 +282,17 @@ export default function AllocationPage() {
           </div>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs sm:text-sm">
             <div>
-              <p className="text-muted-foreground">Netto</p>
+              <div className="flex items-center gap-1">
+                <p className="text-muted-foreground">Netto</p>
+                <button
+                  type="button"
+                  aria-label="Details zur Netto-Berechnung anzeigen"
+                  onClick={() => setIncomeDialogOpen(true)}
+                  className="inline-flex size-4 cursor-pointer items-center justify-center rounded-full bg-muted/60 text-[10px] font-bold text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground/80 select-none"
+                >
+                  ?
+                </button>
+              </div>
               <p className="font-semibold tabular-nums">{formatAmount(status.net_income)}</p>
             </div>
             <div>
@@ -300,15 +342,17 @@ export default function AllocationPage() {
                   iban: r.iban,
                 }))}
                 bankAccounts={bankAccounts}
+                canTransferMap={canTransferMap}
                 bafoegActive={
                   status.config.some((c) => c.bucket_type === "bafoeg" && c.is_active) &&
-                  import.meta.env.VITE_SHOW_BAFOEG_BUCKET?.toLowerCase() === "true"
+                  bafoegEnabled
                 }
                 onTransfer={handleTransfer}
                 onUpdateConfig={handleUpdateConfig}
                 onAnalyse={() => setDonationAnalysisOpen(true)}
                 onRefresh={load}
                 transferring={transferring === bucket.id}
+                subscriptionState={subscriptionState}
               />
             );
           })}
@@ -324,6 +368,7 @@ export default function AllocationPage() {
         onTransfer={handleSavingsPlanTransfer}
         recipientAccounts={recipientAccounts}
         bankAccounts={bankAccounts}
+        canTransferMap={canTransferMap}
         autoHiddenPlanIds={status.auto_hidden_plan_ids}
       />
 
@@ -339,6 +384,12 @@ export default function AllocationPage() {
       />
 
       <DonationAnalysisDialog open={donationAnalysisOpen} onOpenChange={setDonationAnalysisOpen} />
+
+      <IncomeBreakdownDialog
+        open={incomeDialogOpen}
+        onOpenChange={setIncomeDialogOpen}
+        sources={status.income_sources ?? []}
+      />
     </div>
   );
 }
