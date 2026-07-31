@@ -5,9 +5,11 @@ import { cn } from "@/lib/utils";
 function Progress({
   value,
   className,
+  indicatorClassName,
 }: {
   value: number;
   className?: string;
+  indicatorClassName?: string;
 }) {
   return (
     <div
@@ -18,7 +20,7 @@ function Progress({
       )}
     >
       <motion.div
-        className="h-full w-full rounded-full bg-primary"
+        className={cn("h-full w-full rounded-full bg-primary", indicatorClassName)}
         initial={{ width: 0 }}
         animate={{ width: `${Math.min(value, 100)}%` }}
         transition={{ duration: 0.5, ease: "easeOut" }}
