@@ -367,6 +367,21 @@ class TestSavingsPlanBudget:
         )
         assert result["savings_total"] == 100.0
 
+    def test_completed_plans_do_not_deplete_bucket_budget(self):
+        plans = [
+            {"id": 1, "name": "Aktiv", "tag": "a", "created_at": "2026-01-01", "is_visible": True, "auto_hidden": False},
+            {"id": 2, "name": "Fertig", "tag": "b", "created_at": "2026-02-01", "is_visible": True, "auto_hidden": False},
+        ]
+        buckets = [
+            {"id": 10, "bucket_type": "invest", "percentage": 50.0, "is_active": True},
+        ]
+        _, _, mock_create_bucket = self._run_with_enrich(
+            "2026-07", 2000.0, plans, self._enrich_completed({2}, rates={1: 100.0, 2: 200.0}), buckets
+        )
+
+        calls = [call.args[2] for call in mock_create_bucket.call_args_list]
+        assert calls == [950.0]
+
     def _run_with_enrich(self, month, net_income, plans, enrich_side_effect, buckets=None):
         service = AllocationService()
         run_data = {"id": 1, "month": month, "net_income": net_income, "total_allocated": 0.0, "status": "pending"}
