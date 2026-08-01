@@ -294,7 +294,7 @@ class TestUpdateSettings:
 class TestSavingsPlanBudget:
     def _enrich(self, rates):
         def fake_enrich(plan, month):
-            return {**plan, "monthly_rate": rates.get(plan["id"], 0.0)}
+            return {**plan, "monthly_rate": rates.get(plan["id"], 0.0), "is_completed": False}
         return fake_enrich
 
     def _run(self, month, net_income, plans, rates, buckets=None):
@@ -350,6 +350,41 @@ class TestSavingsPlanBudget:
         calls = [call.args[2] for call in mock_create_bucket.call_args_list]
         assert calls == [0.0, 0.0]
 
+    def _enrich_completed(self, completed_ids):
+        def fake_enrich(plan, month):
+            enriched = {**plan, "monthly_rate": 100.0}
+            enriched["is_completed"] = plan["id"] in completed_ids
+            return enriched
+        return fake_enrich
+
+    def test_completed_plans_excluded_from_savings_total(self):
+        plans = [
+            {"id": 1, "name": "Aktiv", "tag": "a", "created_at": "2026-01-01", "is_visible": True, "auto_hidden": False},
+            {"id": 2, "name": "Fertig", "tag": "b", "created_at": "2026-02-01", "is_visible": True, "auto_hidden": False},
+        ]
+        result, _, _ = self._run_with_enrich("2026-07", 2000.0, plans, self._enrich_completed({2}))
+        assert result["savings_total"] == 100.0
+
+    def _run_with_enrich(self, month, net_income, plans, enrich_side_effect, buckets=None):
+        service = AllocationService()
+        run_data = {"id": 1, "month": month, "net_income": net_income, "total_allocated": 0.0, "status": "pending"}
+        with (
+            patch("finance_server.services.allocation_service.db.list_buckets", return_value=buckets or []),
+            patch("finance_server.services.allocation_service.db.get_run_for_month", side_effect=[None, run_data]),
+            patch("finance_server.services.allocation_service.db.create_run", return_value=1),
+            patch("finance_server.services.allocation_service.db.create_run_bucket") as mock_create_bucket,
+            patch("finance_server.services.allocation_service.db.get_run_buckets", return_value=[]),
+            patch("finance_server.services.allocation_service.get_setting", return_value="false"),
+            patch("finance_server.services.allocation_service.list_plans", return_value=plans),
+            patch("finance_server.services.allocation_service.update_plan") as mock_update,
+            patch("finance_server.services.allocation_service.AllocationService._enrich_savings_plan", side_effect=enrich_side_effect),
+            patch("finance_server.services.allocation_service.AllocationService._detect_income", return_value=net_income),
+            patch("finance_server.services.allocation_service.AllocationService._detect_income_breakdown",
+                  return_value={"total": net_income, "sources": []}),
+            patch("finance_server.services.allocation_service.get_income_payout_days", return_value=[28]),
+        ):
+            return service.get_or_create_run(month), mock_update, mock_create_bucket
+
 
 class TestEnrichSavingsPlan:
     def _plan(self, created_at: str) -> dict[str, Any]:
@@ -364,11 +399,11 @@ class TestEnrichSavingsPlan:
             "created_at": created_at,
         }
 
-    def _enrich(self, created_at: str, month: str, count: int) -> dict[str, Any]:
+    def _enrich(self, created_at: str, month: str, count: int, saved: float = 0.0) -> dict[str, Any]:
         service = AllocationService()
         with ExitStack() as stack:
             stack.enter_context(patch("finance_server.services.allocation_service.get_income_payout_days", return_value=[28]))
-            stack.enter_context(patch("finance_server.services.allocation_service.get_saved_breakdown", return_value={"saldo": 0.0}))
+            stack.enter_context(patch("finance_server.services.allocation_service.get_saved_breakdown", return_value={"saldo": saved}))
             stack.enter_context(patch("finance_server.services.allocation_service.get_month_breakdown", return_value={"saldo": 0.0}))
             stack.enter_context(patch("finance_server.services.allocation_service.count_income_events_until", return_value=count))
             return service._enrich_savings_plan(self._plan(created_at), month)
@@ -404,6 +439,26 @@ class TestEnrichSavingsPlan:
         assert result["income_events_left"] == 2
         assert result["future_income_events"] == 1
         assert result["required_monthly_rate"] == 500.0
+
+    def test_completed_when_target_reached(self):
+        result = self._enrich("2026-07-05T10:00:00+00:00", "2026-08", count=1, saved=1000.0)
+        assert result["is_completed"] is True
+        assert result["required_monthly_rate"] == 0.0
+
+    def test_not_completed_below_target(self):
+        result = self._enrich("2026-07-05T10:00:00+00:00", "2026-08", count=1, saved=999.0)
+        assert result["is_completed"] is False
+
+    def test_never_completed_without_target(self):
+        plan = self._plan("2026-07-05T10:00:00+00:00")
+        plan["target_amount"] = None
+        service = AllocationService()
+        with ExitStack() as stack:
+            stack.enter_context(patch("finance_server.services.allocation_service.get_income_payout_days", return_value=[28]))
+            stack.enter_context(patch("finance_server.services.allocation_service.get_saved_breakdown", return_value={"saldo": 1000.0}))
+            stack.enter_context(patch("finance_server.services.allocation_service.get_month_breakdown", return_value={"saldo": 0.0}))
+            result = service._enrich_savings_plan(plan, "2026-08")
+        assert result["is_completed"] is False
 
 
 class TestCountIncomeEventsUntil:

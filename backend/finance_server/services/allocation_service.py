@@ -135,7 +135,8 @@ class AllocationService:
         # the remaining buckets simply get nothing that month.
         available_for_savings = effective - donation_target
         all_plans = sorted(list_plans(), key=lambda p: p["created_at"])
-        savings_total = sum(self._enrich_savings_plan(p, month)["monthly_rate"] for p in all_plans)
+        enriched_plans = [self._enrich_savings_plan(p, month) for p in all_plans]
+        savings_total = sum(p["monthly_rate"] for p in enriched_plans if not p["is_completed"])
 
         # Remaining after donation and savings plans → invest, emergency.
         # Clamp so buckets never receive negative targets.
@@ -282,7 +283,9 @@ class AllocationService:
                 bucket["available"] = round(max(0.0, bucket["target_amount"] - bucket["spent"]), 2)
         plans = list_plans()
         savings_plans = [self._enrich_savings_plan(p, run["month"]) for p in plans]
-        savings_total = sum(p["monthly_rate"] for p in savings_plans if p["is_visible"])
+        savings_total = sum(
+            p["monthly_rate"] for p in savings_plans if p["is_visible"] and not p["is_completed"]
+        )
         total_bucket_sum = round(sum(b["target_amount"] for b in buckets if b["bucket_type"] != "spending"), 2)
         allocated = round(total_bucket_sum + savings_total, 2)
 
@@ -575,6 +578,7 @@ class AllocationService:
 
         required_rate = None
         income_events_left = None
+        future = 0
         if target_amount and target_date:
             saved_before_this = max(0.0, saved_amount - this_month)
             remaining = max(0.0, target_amount_f - saved_before_this)
@@ -588,6 +592,7 @@ class AllocationService:
             required_rate = None if not target_amount else 0.0
 
         return {
+            "is_completed": target_amount_f > 0 and saved_amount >= target_amount_f,
             **plan,
             "monthly_rate": required_rate if required_rate is not None else 0.0,
             "saved_amount": saved_amount,
