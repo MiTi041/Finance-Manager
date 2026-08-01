@@ -6,11 +6,7 @@ import { useNavigate } from "react-router-dom";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command,
   CommandEmpty,
@@ -71,16 +67,11 @@ export function CategoryCombobox({
           ref={triggerRef}
           onKeyDown={onKeyDown}
           height={height}
-          className={cn(
-            "w-full justify-between font-normal text-xs shadow-none",
-            className,
-          )}
+          className={cn("w-full justify-between font-normal text-xs shadow-none", className)}
         >
           {displayLabel ? (
             <span className="truncate">
-              {selected?.icon && (
-                <span className="mr-1.5">{selected.icon}</span>
-              )}
+              {selected?.icon && <span className="mr-1.5">{selected.icon}</span>}
               {displayLabel}
             </span>
           ) : (
@@ -126,18 +117,11 @@ export function CategoryCombobox({
                       className="flex items-center gap-1.5"
                       style={{ paddingLeft: `${option.depth * 16}px` }}
                     >
-                      {option.depth > 0 && (
-                        <div className="h-4 w-px shrink-0 bg-border/40" />
-                      )}
+                      {option.depth > 0 && <div className="h-4 w-px shrink-0 bg-border/40" />}
                       {option.depth === 0 && option.icon && (
                         <span className="shrink-0">{option.icon}</span>
                       )}
-                      <span
-                        className={cn(
-                          "truncate",
-                          option.depth === 0 && "font-medium",
-                        )}
-                      >
+                      <span className={cn("truncate", option.depth === 0 && "font-medium")}>
                         {option.label.replace(/\u00A0/g, "").trim()}
                       </span>
                     </div>
@@ -154,9 +138,8 @@ export function CategoryCombobox({
           </CommandList>
           <CommandSeparator />
           <div className="px-2 py-1.5">
-            <Button
-              className="flex w-full items-center justify-start gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground bg-transparent hover:bg-muted transition-colors"
-              height={8}
+            <button
+              className="flex w-full items-center justify-start gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground bg-transparent h-8 hover:bg-muted transition-colors"
               onClick={() => {
                 setOpen(false);
                 navigate("/settings?tab=categories");
@@ -164,7 +147,7 @@ export function CategoryCombobox({
             >
               <Pencil className="h-3.5 w-3.5 shrink-0" />
               Kategorien bearbeiten
-            </Button>
+            </button>
           </div>
         </Command>
       </PopoverContent>

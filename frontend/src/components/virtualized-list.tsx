@@ -490,6 +490,7 @@ function VirtualizedListInner<T>(
                           key={option.value}
                           type="button"
                           onClick={() => handleSortToggle(option.value)}
+                          variant="ghost"
                           className={cn(
                             "inline-flex items-center gap-1.5 w-min rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
                             isActive
@@ -620,7 +621,9 @@ function VirtualizedListInner<T>(
             ) : (
               <span className="text-xs text-muted-foreground whitespace-nowrap">
                 {totalCount !== undefined ? (
-                  <><span className="font-medium text-foreground">{totalCount}</span> Zeilen</>
+                  <>
+                    <span className="font-medium text-foreground">{totalCount}</span> Zeilen
+                  </>
                 ) : visibleItems.length !== items.length ? (
                   <>
                     <span className="font-medium text-foreground">{visibleItems.length}</span>
@@ -629,7 +632,9 @@ function VirtualizedListInner<T>(
                     {" Zeilen"}
                   </>
                 ) : (
-                  <><span className="font-medium text-foreground">{items.length}</span> Zeilen</>
+                  <>
+                    <span className="font-medium text-foreground">{items.length}</span> Zeilen
+                  </>
                 )}
               </span>
             )}

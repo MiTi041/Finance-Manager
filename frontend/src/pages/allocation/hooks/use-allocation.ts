@@ -35,24 +35,20 @@ export function useAllocation(month?: string) {
   }, [month]);
 
   const transfer = useCallback(async (runBucketId: number, tan?: string, amount?: number) => {
+    if (amount != null && amount <= 0) throw new Error("Betrag muss positiv sein");
     setTransferring(runBucketId);
     try {
       await executeTransfer(runBucketId, tan, amount);
       await load();
-    } catch (e) {
-      throw e;
     } finally {
       setTransferring(null);
     }
   }, [load]);
 
   const transferSavings = useCallback(async (planId: number, tan?: string, amount?: number) => {
-    try {
-      await executeSavingsPlanTransfer(planId, tan, amount);
-      await load();
-    } catch (e) {
-      throw e;
-    }
+    if (amount != null && amount <= 0) throw new Error("Betrag muss positiv sein");
+    await executeSavingsPlanTransfer(planId, tan, amount);
+    await load();
   }, [load]);
 
   return { status, loading, error, load, recalculate, transfer, transferring, transferSavings };

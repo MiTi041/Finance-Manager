@@ -331,12 +331,14 @@ export default function AllocationPage() {
               (bucket.bucket_type === "donation" && donationAvailable) ||
               (!!config.recipient_account_id &&
                 recipientAccounts.some((r) => r.id === config.recipient_account_id));
+            const hasSender = !!config.sender_iban;
             return (
               <BucketCard
                 key={bucket.id}
                 bucket={bucket}
                 config={config}
                 hasRecipient={hasRecipient}
+                hasSender={hasSender}
                 recipientAccounts={recipientAccounts.map((r) => ({
                   id: r.id,
                   account_name: r.account_name,

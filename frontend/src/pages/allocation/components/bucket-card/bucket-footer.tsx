@@ -9,6 +9,7 @@ type Props = {
   bucketType: string;
   isInfoOnly: boolean;
   hasRecipient: boolean;
+  hasSender: boolean;
   accent: { icon: string; bar: string; badge: string; barMuted: string };
   transferring: boolean;
   bucketRunId: number;
@@ -25,7 +26,7 @@ type Props = {
 
 export function BucketFooter(props: Props) {
   const {
-    bucketType, isInfoOnly, hasRecipient, accent, transferring, bucketRunId,
+    bucketType, isInfoOnly, hasRecipient, hasSender, accent, transferring, bucketRunId,
     isPaid, topUp,
     bafoegFullyPaid, bafoegTopUp, bafoegPaid, bafoegOutstanding, onTransfer,
   } = props;
@@ -47,6 +48,14 @@ export function BucketFooter(props: Props) {
       return (
         <div className="flex w-full items-center justify-center rounded-md border border-dashed border-muted-foreground/30 bg-muted/30 px-3 py-2 text-center text-xs text-muted-foreground break-words">
           Kein Empfängerkonto ausgewählt. Bitte in den Einstellungen hinzufügen
+        </div>
+      );
+    }
+
+    if (!hasSender) {
+      return (
+        <div className="flex w-full items-center justify-center rounded-md border border-dashed border-muted-foreground/30 bg-muted/30 px-3 py-2 text-center text-xs text-muted-foreground break-words">
+          Kein Absenderkonto ausgewählt. Bitte in den Einstellungen hinzufügen
         </div>
       );
     }
@@ -84,7 +93,7 @@ export function BucketFooter(props: Props) {
               size="sm"
               variant="destructive"
               className="w-full"
-              disabled={transferring}
+              disabled={transferring || (sliderValues[bucketRunId] ?? bafoegOutstanding) <= 0}
               onClick={() => onTransfer(bucketRunId, sliderValues[bucketRunId] ?? bafoegOutstanding)}
             >
               <ArrowRightToLine className="size-4" />
@@ -115,8 +124,16 @@ export function BucketFooter(props: Props) {
     );
   }
 
+  if (!hasSender) {
+    return (
+      <div className="flex w-full items-center justify-center rounded-md border border-dashed border-muted-foreground/30 bg-muted/30 px-3 py-2 text-center text-xs text-muted-foreground break-words">
+        Kein Absenderkonto ausgewählt. Bitte in den Einstellungen hinzufügen
+      </div>
+    );
+  }
+
   return (
-    <Button size="sm" disabled={transferring} onClick={() => onTransfer(bucketRunId)} className="w-full">
+    <Button size="sm" disabled={transferring || topUp <= 0} onClick={() => onTransfer(bucketRunId)} className="w-full">
       <ArrowRightToLine className="size-4" />
       {transferring ? "Wird gesendet…" : `${formatAmount(topUp)} jetzt überweisen`}
     </Button>

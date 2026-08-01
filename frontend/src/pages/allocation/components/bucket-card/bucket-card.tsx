@@ -75,6 +75,7 @@ type Props = {
   bucket: AllocationRunBucket;
   config: AllocationBucket;
   hasRecipient: boolean;
+  hasSender: boolean;
   recipientAccounts: { id: number; account_name: string; recipient_name: string; iban: string }[];
   bankAccounts: { iban: string; name: string; bankKey: string }[];
   canTransferMap: Map<string, boolean>;
@@ -91,6 +92,7 @@ export function BucketCard({
   bucket,
   config,
   hasRecipient,
+  hasSender,
   recipientAccounts,
   bankAccounts,
   canTransferMap,
@@ -239,6 +241,7 @@ export function BucketCard({
           bucketType={bucket.bucket_type}
           isInfoOnly={isInfoOnly}
           hasRecipient={hasRecipient}
+          hasSender={hasSender}
           accent={accent}
           transferring={transferring}
           bucketRunId={bucket.id}

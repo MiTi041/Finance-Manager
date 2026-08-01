@@ -141,8 +141,7 @@ export function BucketProgress(props: Props) {
           )}
           <div className="h-full flex-1 rounded-full bg-muted" />
         </div>
-      ) : (bucket.bucket_type === "emergency" || bucket.bucket_type === "invest") &&
-        bucket.saved_einzahlungen != null ? (
+      ) : bucket.bucket_type === "emergency" && bucket.saved_einzahlungen != null ? (
         <div className="flex h-2 w-full gap-1">
           {segBeforeMonthPct > 0 && (
             <Tooltip>
@@ -200,19 +199,24 @@ export function BucketProgress(props: Props) {
           )}
           <div className="h-full flex-1 rounded-full bg-muted" />
         </div>
-      ) : (
-        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-          <div
-            className={`h-full rounded-full transition-all duration-500 ease-out ${accent.bar}`}
-            style={
-              {
-                width: `${hasEmergencyGoal && bucket.goal_amount ? Math.min(100, Math.round(((bucket.saved_total ?? 0) / bucket.goal_amount) * 100)) : progress}%`,
-                minWidth: "8px",
-              } as React.CSSProperties
-            }
-          />
-        </div>
-      )}
+      ) : (() => {
+        const barPct = hasEmergencyGoal && bucket.goal_amount
+          ? Math.min(100, Math.round(((bucket.saved_total ?? 0) / bucket.goal_amount) * 100))
+          : progress;
+        return (
+          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ease-out ${accent.bar}`}
+              style={
+                {
+                  width: `${barPct}%`,
+                  minWidth: barPct > 0 ? "8px" : undefined,
+                } as React.CSSProperties
+              }
+            />
+          </div>
+        );
+      })()}
 
       {!isInfoOnly && (
         <div className="flex items-center justify-between text-xs text-muted-foreground">

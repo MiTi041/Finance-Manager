@@ -14,6 +14,49 @@ from finance_server.services.allocation_service import AllocationService
 def _row(applicant_name: str, purpose: str, amount: float, date: str) -> dict[str, Any]:
     return {"applicant_name": applicant_name, "purpose": purpose, "amount": amount, "date": date}
 
+class TestTransferRunBucketGuard:
+    def _service(self, row: dict[str, Any]):
+        service = AllocationService()
+        with patch("finance_server.services.allocation_service.get_connection") as mock_conn:
+            cursor = Mock()
+            cursor.fetchone.return_value = row
+            mock_conn.return_value.__enter__.return_value.execute.return_value = cursor
+            return service.transfer_run_bucket(row["id"])
+
+    def test_rejects_zero_remaining(self):
+        from fastapi import HTTPException
+        row = {
+            "id": 1,
+            "target_amount": 100.0,
+            "transferred": 100.0,
+            "is_completed": 0,
+            "bucket_type": "emergency",
+            "recipient_account_id": 1,
+        }
+        with pytest.raises(HTTPException) as exc:
+            self._service(row)
+        assert exc.value.status_code == 400
+
+    def test_rejects_negative_custom_amount(self):
+        from fastapi import HTTPException
+        row = {
+            "id": 2,
+            "target_amount": 100.0,
+            "transferred": 0.0,
+            "is_completed": 0,
+            "bucket_type": "emergency",
+            "recipient_account_id": 1,
+        }
+        service = AllocationService()
+        with patch("finance_server.services.allocation_service.get_connection") as mock_conn:
+            cursor = Mock()
+            cursor.fetchone.return_value = row
+            mock_conn.return_value.__enter__.return_value.execute.return_value = cursor
+            with pytest.raises(HTTPException) as exc:
+                service.transfer_run_bucket(row["id"], custom_amount=-5)
+        assert exc.value.status_code == 400
+
+
 class TestDetectIncome:
     def test_returns_zero_when_no_transactions(self):
         service = AllocationService()

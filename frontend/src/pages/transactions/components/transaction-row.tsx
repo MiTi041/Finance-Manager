@@ -1,66 +1,26 @@
-import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
-import {
-  AlertCircle,
-  Check,
-  CircleAlert,
-  ExternalLink,
-  Loader2,
-  Pencil,
-  Plus,
-  Repeat,
-  Search,
-  Sparkles,
-  Trash2,
-  TriangleAlert,
-  Undo2,
-  X,
-} from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
+import { type KeyboardEvent, useEffect, useRef, useState } from "react";
+import { AlertCircle, Trash2 } from "lucide-react";
 
-import { BankLogo, BrandIcon } from "@/components/bank-logo";
-import { getServerBaseUrl } from "@/lib/bank/zahlungspartner-logo";
 import { Button } from "@/components/ui/button";
-import { CategoryCombobox } from "@/components/category-combobox";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { HelpButton } from "@/components/ui/help-button";
-import { SearchableSelect } from "@/components/searchable-select";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-
 import { type SelectedBankOption } from "@/lib/bank/selected";
 import { type Transaction, type TransactionSplit } from "@/types/transaction";
-
-import { formatAmount, formatDate } from "@/lib/utils/format";
-import { type TransactionCategoryOption, UNASSIGNED_CATEGORY_VALUE } from "@/lib/utils/categories";
+import { type TransactionCategoryOption } from "@/lib/utils/categories";
 import { type ZahlungspartnerRecord } from "@/lib/zahlungspartner";
-import { updateRefundLink } from "@/lib/transactions";
-import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { extractHashtags, extractTagsFromPurpose, isTypingHashtag } from "../utils/tags";
 
-type SubscriptionOverride = {
-  name: string;
-  logoUrl?: string;
-  datenbankName?: string;
-  logoWhiteBackground?: boolean;
-  logoPadding?: boolean;
-  isCompany?: boolean;
-};
+import { CategorySection } from "./category-section";
+import { CollapsedRow } from "./collapsed-row";
+import { NoteSection } from "./note-section";
+import { PurposeSection } from "./purpose-section";
+import { RefundSectionIncoming, RefundSectionOutgoing } from "./refund-section";
+import { ZahlungspartnerSection } from "./zahlungspartner-section";
+import { useNote } from "../hooks/use-note";
+import { useSplits } from "../hooks/use-splits";
+import {
+  type SubscriptionOverride,
+  useTransactionDerivations,
+} from "../hooks/use-transaction-derivations";
 
 type TransactionRowProps = {
   transaction: Transaction;
@@ -127,133 +87,14 @@ export function TransactionRow({
   allTransactions,
   onRefundLinkChange,
 }: TransactionRowProps) {
-  const [noteDraft, setNoteDraft] = useState(transaction.texte.anmerkung);
-  const [splitDrafts, setSplitDrafts] = useState<TransactionSplit[] | null>(
-    transaction.technisch.splits ? transaction.technisch.splits.map((s) => ({ ...s })) : null,
-  );
-  const [selectedZahlungspartnerId, setSelectedZahlungspartnerId] = useState("");
-  const [newZahlungspartnerName, setNewZahlungspartnerName] = useState("");
-  const [savingNote, setSavingNote] = useState(false);
-  const [savingSplits, setSavingSplits] = useState(false);
-  const [isInTagMode, setIsInTagMode] = useState(false);
-  const [savingIbanMapping, setSavingIbanMapping] = useState(false);
+  const derivations = useTransactionDerivations(transaction, allTransactions, subscriptionOverride);
+  const note = useNote(transaction, isExpanded, onSaveNote, onNoteDraftChange);
+  const splits = useSplits(transaction, isExpanded, onSaveSplits);
+
   const [confirmCloseDialogOpen, setConfirmCloseDialogOpen] = useState(false);
   const pendingToggleAction = useRef<(() => void) | null>(null);
 
-  const predictedSimilarityPercent = Math.round((predictedSimilarity ?? 0) * 100);
-
-  const isRefund =
-    transaction.betrag.wert > 0 && transaction.technisch.refundRefTransactionId != null;
-
-  const linkedRefundTotal = useMemo(() => {
-    if (transaction.betrag.wert >= 0) return 0;
-    return allTransactions
-      .filter((t) => t.technisch.refundRefTransactionId === transaction.id)
-      .reduce((sum, t) => sum + Math.abs(t.betrag.wert), 0);
-  }, [transaction, allTransactions]);
-
-  const linkedOriginalAmount = useMemo(() => {
-    if (!transaction.technisch.refundRefTransactionId) return 0;
-    const original = allTransactions.find(
-      (t) => t.id === transaction.technisch.refundRefTransactionId,
-    );
-    return original ? Math.abs(original.betrag.wert) : 0;
-  }, [transaction, allTransactions]);
-
-  const refundRemaining = useMemo(() => {
-    return Math.max(0, transaction.betrag.wert - linkedOriginalAmount);
-  }, [transaction.betrag.wert, linkedOriginalAmount]);
-
-  const hasRefunds = linkedRefundTotal > 0;
-
-  const displayAmount = useMemo(() => {
-    if (isRefund) return refundRemaining;
-    if (hasRefunds) return Math.min(0, transaction.betrag.wert + linkedRefundTotal);
-    return transaction.betrag.wert;
-  }, [transaction, linkedOriginalAmount, linkedRefundTotal, isRefund, hasRefunds]);
-  const showRefundSection =
-    transaction.betrag.wert > 0 ||
-    (transaction.betrag.wert < 0 &&
-      allTransactions.some((t) => t.technisch.refundRefTransactionId === transaction.id));
-
-  const purpose = transaction.texte.verwendungszweck || "";
-  const additionalPurpose = transaction.texte.zusatzVerwendungszweck || "";
-  const deviateApplicant = transaction.zahlungspartner.abweichenderAuftraggeberName || "";
-
-  const partnerLogoSrc = transaction.zahlungspartner.logoUrl || undefined;
-  const overrideLogoSrc = subscriptionOverride?.logoUrl
-    ? subscriptionOverride.logoUrl.startsWith("/")
-      ? `${getServerBaseUrl()}${subscriptionOverride.logoUrl}`
-      : subscriptionOverride.logoUrl
-    : undefined;
-  const isEntgeltabschluss =
-    transaction.texte.buchungstext &&
-    (transaction.texte.buchungstext.toLowerCase() === "entgeltabschluss" ||
-      transaction.texte.buchungstext.toLowerCase() === "abschluss") &&
-    transaction.konto.blz === "48250110";
-  const displayName = isEntgeltabschluss
-    ? "Entgeltabschluss"
-    : subscriptionOverride?.datenbankName ||
-      subscriptionOverride?.name ||
-      transaction.zahlungspartner.datenbankName ||
-      transaction.zahlungspartner.name ||
-      "–";
-  const overridePartnerName =
-    subscriptionOverride && transaction.zahlungspartner.name !== displayName
-      ? transaction.zahlungspartner.datenbankName || transaction.zahlungspartner.name
-      : null;
-  const filteredCategoryOptions = categoryOptions;
-
-  const isSaving = savingNote || savingSplits;
-  const trimmedSavedNote = transaction.texte.anmerkung.trim();
-  const trimmedNoteDraft = noteDraft.trim();
-  const noteChanged = trimmedNoteDraft !== trimmedSavedNote;
-
-  const noteTags = useMemo(() => extractHashtags(noteDraft), [noteDraft]);
-  const purposeTags = useMemo(
-    () =>
-      extractTagsFromPurpose(
-        [transaction.texte.verwendungszweck, transaction.texte.zusatzVerwendungszweck]
-          .filter(Boolean)
-          .join(" "),
-      ),
-    [transaction.texte.verwendungszweck, transaction.texte.zusatzVerwendungszweck],
-  );
-  const allTags = useMemo(
-    () => [...new Set([...purposeTags, ...noteTags])],
-    [purposeTags, noteTags],
-  );
-
-  // Collapsed row purpose: show primary purpose, fall back to additional
-  const collapsedPurpose = purpose || additionalPurpose;
-
-  useEffect(() => {
-    setNoteDraft(transaction.texte.anmerkung);
-  }, [transaction.id, transaction.texte.anmerkung]);
-
-  useEffect(() => {
-    if (!isExpanded) {
-      setNoteDraft(transaction.texte.anmerkung);
-      setSplitDrafts(null);
-    } else {
-      setSplitDrafts(
-        transaction.technisch.splits ? transaction.technisch.splits.map((s) => ({ ...s })) : null,
-      );
-    }
-  }, [isExpanded, transaction.texte.anmerkung, transaction.technisch.splits]);
-
-  useEffect(() => {
-    setSelectedZahlungspartnerId("");
-    setNewZahlungspartnerName("");
-  }, [transaction.id, unknownIban]);
-
-  useEffect(() => {
-    setIsInTagMode(isTypingHashtag(noteDraft));
-  }, [noteDraft]);
-
-  useEffect(() => {
-    onNoteDraftChange?.(noteDraft);
-  }, [noteDraft, onNoteDraftChange]);
+  const isSaving = note.savingNote || splits.savingSplits;
 
   useEffect(() => {
     if (!isExpanded || currentCategoryId != null || predictedCategoryId == null) return;
@@ -271,7 +112,7 @@ export function TransactionRow({
   }, [isExpanded, currentCategoryId, predictedCategoryId, transaction.id, onSaveCategory]);
 
   const handleRequestClose = (closeAction: () => void) => {
-    if (noteChanged || splitsChanged) {
+    if (note.noteChanged || splits.splitsChanged) {
       pendingToggleAction.current = closeAction;
       setConfirmCloseDialogOpen(true);
     } else {
@@ -280,386 +121,58 @@ export function TransactionRow({
   };
 
   const handleDiscardAndClose = () => {
-    setNoteDraft(transaction.texte.anmerkung);
-    setSplitDrafts(
-      transaction.technisch.splits ? transaction.technisch.splits.map((s) => ({ ...s })) : null,
-    );
+    note.resetNote();
+    splits.resetSplits();
     pendingToggleAction.current?.();
     pendingToggleAction.current = null;
     setConfirmCloseDialogOpen(false);
   };
 
   const handleSaveAndClose = async () => {
-    if (!noteChanged && !splitsChanged) {
+    if (!note.noteChanged && !splits.splitsChanged) {
       handleDiscardAndClose();
       return;
     }
-    setSavingNote(noteChanged);
-    setSavingSplits(splitsChanged);
+    note.setSavingNote(note.noteChanged);
+    splits.setSavingSplits(splits.splitsChanged);
     try {
-      if (noteChanged) {
-        await onSaveNote(transaction.id, trimmedNoteDraft || null);
+      if (note.noteChanged) {
+        await onSaveNote(transaction.id, note.trimmedNoteDraft || null);
       }
-      if (splitsChanged) {
-        onSaveSplits(transaction.id, splitDrafts);
+      if (splits.splitsChanged) {
+        onSaveSplits(transaction.id, splits.splitDrafts);
       }
     } catch {
       // ignore – user can still discard or cancel
     } finally {
-      setSavingNote(false);
-      setSavingSplits(false);
+      note.setSavingNote(false);
+      splits.setSavingSplits(false);
     }
     handleDiscardAndClose();
   };
 
-  const saveNote = async () => {
-    if (!noteChanged || savingNote) return;
-    setSavingNote(true);
-    try {
-      await onSaveNote(transaction.id, trimmedNoteDraft || null);
-    } finally {
-      setSavingNote(false);
-    }
-  };
-
-  const linkUnknownIban = async () => {
-    if (!unknownIban || !selectedZahlungspartnerId || savingIbanMapping) return;
-    setSavingIbanMapping(true);
-    try {
-      await onLinkIbanToZahlungspartner(unknownIban, Number(selectedZahlungspartnerId));
-    } finally {
-      setSavingIbanMapping(false);
-    }
-  };
-
-  const createOwnerForUnknownIban = async () => {
-    const name = newZahlungspartnerName.trim();
-    if (!unknownIban || !name || savingIbanMapping) return;
-    setSavingIbanMapping(true);
-    try {
-      await onCreateZahlungspartnerForIban(unknownIban, name);
-    } finally {
-      setSavingIbanMapping(false);
-    }
-  };
-
-  const hasSplits = splitDrafts != null && splitDrafts.length > 0;
-  const sign = transaction.betrag.wert < 0 ? -1 : 1;
-  const absTotal = Math.abs(transaction.betrag.wert);
-  const splitAbsSum = hasSplits ? splitDrafts.reduce((sum, s) => sum + Math.abs(s.betrag), 0) : 0;
-  const splitMatchesTotal = Math.round(splitAbsSum * 100) === Math.round(absTotal * 100);
-
-  const initFirstSplit = () => {
-    const half = Math.round((absTotal / 2) * 100) / 100;
-    const rest = Math.round((absTotal - half) * 100) / 100;
-    setSplitDrafts([
-      { betrag: half * sign, kategorieId: null },
-      { betrag: rest * sign, kategorieId: null },
-    ]);
-  };
-
-  const handleAddSplit = () => {
-    setSplitDrafts((prev) => {
-      if (!prev) return prev;
-      const extra = Math.round((absTotal / (prev.length + 1)) * 100) / 100;
-      const redistributed = Array.from({ length: prev.length + 1 }, () => ({
-        betrag: extra * sign,
-        kategorieId: null as number | null,
-      }));
-      const diff = Math.round((absTotal - extra * redistributed.length) * 100) / 100;
-      if (diff !== 0) {
-        redistributed[redistributed.length - 1].betrag =
-          Math.round((redistributed[redistributed.length - 1].betrag + diff * sign) * 100) / 100;
-      }
-      return redistributed;
-    });
-  };
-
-  const handleRemoveSplit = (index: number) => {
-    if (!splitDrafts) return;
-    if (splitDrafts.length <= 2) {
-      handleRemoveAllSplits();
-      return;
-    }
-    setSplitDrafts((prev) => {
-      if (!prev) return prev;
-      const next = prev.filter((_, i) => i !== index);
-      const remainingAbsSum = next.reduce((s, x) => s + Math.abs(x.betrag), 0);
-      const diff = Math.round((absTotal - remainingAbsSum) * 100) / 100;
-      if (diff !== 0) {
-        next[next.length - 1].betrag =
-          Math.round((Math.abs(next[next.length - 1].betrag) + diff) * sign * 100) / 100;
-      }
-      return next;
-    });
-  };
-
-  const handleSplitAmountChange = (index: number, value: number) => {
-    setSplitDrafts((prev) => {
-      if (!prev) return prev;
-      const next = prev.map((s) => ({ ...s }));
-      next[index].betrag = value * sign;
-      return next;
-    });
-  };
-
-  const handleSplitCategoryChange = (index: number, categoryId: number | null) => {
-    setSplitDrafts((prev) => {
-      if (!prev) return prev;
-      const next = prev.map((s) => ({ ...s }));
-      next[index].kategorieId = categoryId;
-      return next;
-    });
-  };
-
-  const handleRemoveAllSplits = () => {
-    setSplitDrafts(null);
-    onSaveSplits(transaction.id, null);
-  };
-
-  const splitsChanged =
-    JSON.stringify(splitDrafts) !== JSON.stringify(transaction.technisch.splits);
-
-  const getINGBankBLZ = () => {
-    return "50010517";
-  };
-
   return (
     <div className="w-full">
-      {/* ── Collapsed row ── */}
-      <div
-        className={cn(
-          "flex w-full items-center border-b border-muted/60 bg-background text-left transition-colors hover:bg-muted/40",
-          transaction.technisch.bankDeleted && "bg-red-400/5 hover:bg-red-400/10",
-        )}
-      >
-        <label className="flex cursor-pointer items-center p-2 pl-5 py-7">
-          <Checkbox
-            checked={isSelected}
-            onCheckedChange={(checked) => onSelectChange(transaction.id, checked === true)}
-            onClick={(event) => event.stopPropagation()}
-            onKeyDown={(event) => event.stopPropagation()}
-            aria-label="Transaktion auswählen"
-          />
-        </label>
-        <button
-          type="button"
-          aria-expanded={isExpanded}
-          onClick={() =>
-            isExpanded
-              ? handleRequestClose(() => onToggleRow(transaction.id))
-              : onToggleRow(transaction.id)
-          }
-          onKeyDown={(event) => {
-            if (isExpanded && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
-              handleRequestClose(() => onRowKeyDown(event, transaction.id));
-            } else {
-              onRowKeyDown(event, transaction.id);
-            }
-          }}
-          className="flex w-full cursor-pointer items-center gap-4 px-4 py-3"
-        >
-          {!selectedBank ? (
-            <div className="flex items-center gap-2">
-              {accountBank ? (
-                <BankLogo
-                  src={accountBank.bankLogo || undefined}
-                  alt={accountBank.accountName || accountBank.bankName || "Bank"}
-                  sizeClassName="size-12 shrink-0 p-1"
-                  backgroundClassName="bg-muted/70"
-                />
-              ) : transaction.technisch.bankDeleted ? (
-                <div className="flex size-12 shrink-0 items-center justify-center rounded-lg border bg-red-500/15 text-red-600 dark:text-red-400 text-[10px] font-semibold">
-                  <TriangleAlert size={16} />
-                </div>
-              ) : (
-                <div className="flex size-12 shrink-0 items-center justify-center rounded-lg border bg-muted text-[10px] font-semibold text-muted-foreground">
-                  {transaction.konto.iban?.slice(0, 2) ?? "—"}
-                </div>
-              )}
-              <span className="ml-2 h-6 w-px shrink-0 bg-border/70" />
-            </div>
-          ) : null}
+      <CollapsedRow
+        transaction={transaction}
+        allTransactions={allTransactions}
+        subscriptionOverride={subscriptionOverride}
+        isExpanded={isExpanded}
+        isSelected={isSelected}
+        selectedBank={selectedBank}
+        accountBank={accountBank}
+        isUnassigned={isUnassigned}
+        isSubscriptionTransaction={isSubscriptionTransaction}
+        subscriptionLink={subscriptionLink}
+        unknownIban={unknownIban}
+        onToggleRow={onToggleRow}
+        onRequestClose={handleRequestClose}
+        onRowKeyDown={onRowKeyDown}
+        onSelectChange={onSelectChange}
+      />
 
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              {isEntgeltabschluss ? (
-                <BrandIcon
-                  src="images/bank-logos/sparkasse-lemgo.png"
-                  alt="Sparkasse"
-                  sizeClassName="size-12 shrink-0 p-1"
-                  kind="company"
-                  backgroundClassName="bg-muted/70"
-                />
-              ) : (
-                <BrandIcon
-                  src={overrideLogoSrc || partnerLogoSrc}
-                  alt={
-                    subscriptionOverride?.datenbankName ||
-                    subscriptionOverride?.name ||
-                    transaction.zahlungspartner.datenbankName ||
-                    transaction.zahlungspartner.name ||
-                    "Bank"
-                  }
-                  sizeClassName="size-12 shrink-0"
-                  backgroundClassName={
-                    (subscriptionOverride?.logoWhiteBackground ??
-                    transaction.zahlungspartner.logoWhiteBackground)
-                      ? "bg-white"
-                      : "bg-zinc-900"
-                  }
-                  kind={
-                    (subscriptionOverride?.isCompany ?? transaction.zahlungspartner.isCompany)
-                      ? "company"
-                      : "person"
-                  }
-                  imgNoPadding={
-                    !(subscriptionOverride?.logoPadding ?? transaction.zahlungspartner.logoPadding)
-                  }
-                />
-              )}
-
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline gap-2">
-                  <p className="truncate text-sm font-medium text-foreground flex gap-2 items-end">
-                    {displayName}
-                    {overridePartnerName ? (
-                      <span className="text-xs text-muted-foreground">{overridePartnerName}</span>
-                    ) : displayName !== transaction.zahlungspartner.name ? (
-                      <span className="text-xs text-muted-foreground">
-                        {transaction.zahlungspartner.name}
-                      </span>
-                    ) : null}
-                    {deviateApplicant !== transaction.zahlungspartner.name && deviateApplicant ? (
-                      <span className="text-xs text-muted-foreground"> {deviateApplicant}</span>
-                    ) : null}
-                  </p>
-
-                  {!selectedBank && accountBank ? (
-                    <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
-                      · {accountBank.accountName}
-                    </span>
-                  ) : null}
-                  {/* Unknown IBAN badge */}
-                  {unknownIban ? (
-                    <span className="hidden shrink-0 rounded-full bg-amber-500/15 px-1.5 py-px text-[10px] font-medium text-amber-600 sm:inline dark:text-amber-400">
-                      Unbekannte IBAN
-                    </span>
-                  ) : null}
-                </div>
-                <div className="mt-0.5 flex items-center gap-2 overflow-ellipsis">
-                  <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                    {formatDate(transaction.daten.buchungsdatum)}
-                  </span>
-                  {collapsedPurpose ? (
-                    <>
-                      <span className="shrink-0 text-xs text-muted-foreground/40">·</span>
-                      <span className="min-w-0 max-w-[500px] truncate text-xs text-muted-foreground">
-                        {collapsedPurpose}
-                      </span>
-                    </>
-                  ) : null}
-                  {trimmedSavedNote ? (
-                    <>
-                      <span className="shrink-0 text-xs text-muted-foreground/40">·</span>
-                      <span className="min-w-0 max-w-[280px] truncate text-xs text-muted-foreground">
-                        Anmerkung: {trimmedSavedNote}
-                      </span>
-                    </>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex shrink-0 items-center gap-3">
-            {isUnassigned && !transaction.technisch.splits ? (
-              <span
-                className="size-2 shrink-0 rounded-full bg-orange-500"
-                title="Unkategorisiert"
-              />
-            ) : null}
-            {transaction.technisch.splits ? (
-              <span className="inline-flex items-center rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
-                Gesplittet
-              </span>
-            ) : null}
-            {isSubscriptionTransaction ? (
-              subscriptionLink ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Link
-                      to={`/subscriptions?name=${encodeURIComponent(subscriptionLink.counterpartyName)}&amount=${subscriptionLink.amount}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="inline-flex items-center gap-1 rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-800/60 transition-colors"
-                    >
-                      <Repeat className="size-3" />
-                      Abonnement
-                      <ExternalLink className="size-2.5 opacity-60" />
-                    </Link>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">Abonnement-Details anzeigen</TooltipContent>
-                </Tooltip>
-              ) : (
-                <span className="inline-flex items-center gap-1 rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
-                  <Repeat className="size-3" />
-                  Abonnement
-                </span>
-              )
-            ) : null}
-            <span className="flex items-center gap-1.5">
-              {(isRefund || hasRefunds) && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400 tabular-nums">
-                      <Undo2 className="size-3" />
-                      {formatAmount(
-                        isRefund ? transaction.betrag.wert : linkedRefundTotal,
-                        transaction.betrag.waehrung,
-                      )}
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">Rückerstattungsbetrag</TooltipContent>
-                </Tooltip>
-              )}
-              <span
-                className={
-                  displayAmount < 0
-                    ? "text-sm font-semibold tabular-nums text-destructive"
-                    : "text-sm font-semibold tabular-nums text-green-600"
-                }
-              >
-                {formatAmount(displayAmount, transaction.betrag.waehrung)}
-              </span>
-            </span>
-            <span
-              className={
-                isExpanded
-                  ? "text-muted-foreground/40 transition-transform duration-200 rotate-180"
-                  : "text-muted-foreground/40 transition-transform duration-200"
-              }
-            >
-              <svg
-                viewBox="0 0 24 24"
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="m6 9 6 6 6-6" />
-              </svg>
-            </span>
-          </div>
-        </button>
-      </div>
-
-      {/* ── Expanded panel ── */}
       {isExpanded ? (
         <div className={cn("border-b border-muted/60 bg-muted/20 text-sm")}>
-          {/* Top 3-column detail grid */}
           <div className="flex flex-col w-full">
             {transaction.technisch.bankDeleted && (
               <div className="flex items-center gap-2 border-b border-red-200 bg-red-50 px-4 py-1.5 text-xs font-medium text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-400">
@@ -668,630 +181,42 @@ export function TransactionRow({
               </div>
             )}
             <div className="grid grid-cols-1 divide-y divide-border/60 border-b border-muted sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-              {/* Zahlungspartner */}
-              <div className="flex flex-col gap-0 divide-y divide-border/60">
-                <div className="space-y-3 px-5 py-4">
-                  <p className="mb-3 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
-                    Zahlungspartner
-                  </p>
-
-                  <p className="font-medium leading-tight text-foreground flex flex-col gap-0 items-start">
-                    {transaction.zahlungspartner.name ||
-                      (isEntgeltabschluss && "Entgeldabschluss") ||
-                      "–"}
-                    {deviateApplicant !== transaction.zahlungspartner.name && deviateApplicant ? (
-                      <span className="text-xs text-muted-foreground">{deviateApplicant}</span>
-                    ) : null}
-                  </p>
-                  {subscriptionOverride ? (
-                    <div className="mt-3 flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50/50 px-3 py-2 dark:border-blue-800 dark:bg-blue-950/30">
-                      <BrandIcon
-                        src={overrideLogoSrc}
-                        alt={subscriptionOverride.name}
-                        sizeClassName="size-8 shrink-0"
-                        backgroundClassName={
-                          subscriptionOverride.logoWhiteBackground ? "bg-white" : "bg-zinc-900"
-                        }
-                        kind={subscriptionOverride.isCompany ? "company" : "person"}
-                        imgNoPadding={!subscriptionOverride.logoPadding}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-medium text-foreground">
-                          {subscriptionOverride.name}
-                        </p>
-                        <div className="flex items-center gap-1">
-                          <p className="text-[10px] text-muted-foreground">via Abonnement</p>
-                          <HelpButton className="!size-3 !text-[8px]">
-                            <p>
-                              Diese Transaktion ist einem Abonnement zugeordnet. Der hier
-                              hinterlegte Name überschreibt den ursprünglichen Empfängernamen der
-                              Bank und wird stattdessen in der Übersicht angezeigt.
-                            </p>
-                          </HelpButton>
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {!transaction.zahlungspartner.iban &&
-                    transaction.konto.blz == getINGBankBLZ() && (
-                      <div className="rounded-md bg-orange-500/10 border border-orange-500/30 p-2 flex items-center gap-3">
-                        <CircleAlert className="size-4 shrink-0 text-orange-500" />
-                        <p className="text-xs text-orange-500">
-                          ING Diba überliefert keine IBAN für eingehende Transaktionen
-                        </p>
-                      </div>
-                    )}
-
-                  <div className="flex flex-col items-start gap-0 pt-1">
-                    {partnerBank ? (
-                      <p className="text-xs text-muted-foreground">
-                        {partnerBank.accountName || "–"}
-                      </p>
-                    ) : null}
-                    <div className="flex items-center gap-2 pt-1">
-                      {partnerBank ? (
-                        <BankLogo
-                          src={partnerBank.bankLogo || undefined}
-                          alt={partnerBank.accountName || partnerBank.bankName || "Bank"}
-                          sizeClassName="size-12 shrink-0 p-1"
-                          kind="company"
-                        />
-                      ) : null}
-                      <div className="space-y-1">
-                        {transaction.zahlungspartner.iban ? (
-                          <p className="font-mono text-xs text-muted-foreground">
-                            {transaction.zahlungspartner.iban}
-                          </p>
-                        ) : null}
-                        {transaction.zahlungspartner.bic ? (
-                          <p className="font-mono text-xs text-muted-foreground">
-                            {transaction.zahlungspartner.bic}
-                          </p>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                {transaction.zahlungspartner.iban && (
-                  <div className="space-y-3 px-5 py-4">
-                    {ownerId ? (
-                      <>
-                        <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
-                          Zahlungspartner
-                        </p>
-                        <Link
-                          to={`/settings?tab=zahlungspartner&ownerId=${ownerId}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                          }}
-                        >
-                          <div className="flex items-center gap-2 p-2 rounded-md bg-muted/70 rounded-lg hover:bg-muted/40 transition-colors justify-between">
-                            <div className="flex items-center gap-4">
-                              <BrandIcon
-                                src={partnerLogoSrc}
-                                alt={
-                                  transaction.zahlungspartner.datenbankName ||
-                                  transaction.zahlungspartner.name ||
-                                  "Bank"
-                                }
-                                sizeClassName="size-12 shrink-0"
-                                backgroundClassName={
-                                  transaction.zahlungspartner.logoWhiteBackground
-                                    ? "bg-white"
-                                    : "bg-zinc-900"
-                                }
-                                kind={transaction.zahlungspartner.isCompany ? "company" : "person"}
-                                className="rounded-[5px]"
-                                imgNoPadding={!transaction.zahlungspartner.logoPadding}
-                              />
-
-                              {transaction.zahlungspartner.datenbankName ? (
-                                <p className="font-mono text-xs text-muted-foreground">
-                                  {transaction.zahlungspartner.datenbankName}
-                                </p>
-                              ) : null}
-                            </div>
-                            <Pencil className="size-4 mx-2 text-muted-foreground" />
-                          </div>
-                        </Link>
-                      </>
-                    ) : (
-                      !isEntgeltabschluss && (
-                        <>
-                          <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
-                            Unbekannte IBAN
-                            <HelpButton className="!size-3 !text-[8px]">
-                              <p>
-                                Die IBAN dieses Zahlungspartners ist noch keinem Eintrag zugeordnet.
-                                Ordne sie einem bestehenden Zahlungspartner zu oder lege einen neuen
-                                an, damit die Transaktion korrekt in Analysen und Übersichten
-                                erscheint.
-                              </p>
-                            </HelpButton>
-                          </p>
-                          <div className="flex flex-col gap-4 ">
-                            {/* Link to existing owner */}
-                            <div className="flex flex-col gap-2">
-                              <p className="text-xs text-muted-foreground">
-                                Bestehenden Zahlungspartner verknüpfen
-                              </p>
-                              <div className="flex gap-2 flex-wrap items-center">
-                                <SearchableSelect
-                                  value={selectedZahlungspartnerId}
-                                  onValueChange={setSelectedZahlungspartnerId}
-                                  options={zahlungspartnerOptions.map((owner) => ({
-                                    value: String(owner.id),
-                                    label: owner.name,
-                                  }))}
-                                  placeholder="Zahlungspartner wählen …"
-                                  searchPlaceholder="Zahlungspartner suchen …"
-                                  emptyText="Kein Zahlungspartner gefunden"
-                                  triggerClassName="flex-1 text-xs shadow-none h-8"
-                                />
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  disabled={!selectedZahlungspartnerId || savingIbanMapping}
-                                  onClick={() => void linkUnknownIban()}
-                                >
-                                  {savingIbanMapping && selectedZahlungspartnerId ? (
-                                    <Loader2 className="size-3.5 animate-spin" />
-                                  ) : (
-                                    <Check className="size-3.5" />
-                                  )}
-                                  Verknüpfen
-                                </Button>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-3 pt-2">
-                              <div className="h-px flex-1 bg-border/60" />
-                              <span className="hidden shrink-0 self-start text-xs text-muted-foreground/40 sm:inline">
-                                Oder
-                              </span>
-                              <div className="h-px flex-1 bg-border/60" />
-                            </div>
-
-                            {/* Create new owner */}
-                            <div className="space-y-2">
-                              <p className="text-xs text-muted-foreground">
-                                Neuen Zahlungspartner anlegen
-                              </p>
-                              <div className="flex gap-2 flex-wrap items-center">
-                                <Input
-                                  value={newZahlungspartnerName}
-                                  onChange={(event) =>
-                                    setNewZahlungspartnerName(event.target.value)
-                                  }
-                                  onKeyDown={(event) => event.stopPropagation()}
-                                  placeholder="Name …"
-                                  className="h-8 min-w-30 flex-1 rounded-md border border-input bg-background px-3 text-xs text-foreground shadow-xs outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                                />
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  disabled={!newZahlungspartnerName.trim() || savingIbanMapping}
-                                  onClick={() => void createOwnerForUnknownIban()}
-                                >
-                                  {savingIbanMapping && newZahlungspartnerName.trim() ? (
-                                    <Loader2 className="size-3.5 animate-spin" />
-                                  ) : (
-                                    <Check className="size-3.5" />
-                                  )}
-                                  Anlegen
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        </>
-                      )
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Verwendungszweck */}
-              <div className="space-y-2 px-5 py-4">
-                <p className="mb-3 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
-                  Verwendungszweck
-                </p>
-
-                {purpose ? (
-                  <p className="whitespace-normal leading-relaxed text-foreground">{purpose}</p>
-                ) : null}
-
-                {additionalPurpose && additionalPurpose !== purpose ? (
-                  <div
-                    className={
-                      purpose ? "flex flex-col gap-0.5 border-t border-border/50 pt-2" : ""
-                    }
-                  >
-                    {purpose ? (
-                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/50">
-                        Zusatz
-                      </span>
-                    ) : null}
-                    <p className="whitespace-normal leading-relaxed text-foreground">
-                      {additionalPurpose}
-                    </p>
-                  </div>
-                ) : null}
-
-                {!purpose && !additionalPurpose ? <p className="text-muted-foreground">–</p> : null}
-
-                {transaction.texte.buchungstext ? (
-                  <p className="pt-1 font-mono text-xs text-muted-foreground">
-                    {transaction.texte.buchungstext}
-                  </p>
-                ) : null}
-                {transaction.daten.wertstellungsdatum &&
-                transaction.daten.wertstellungsdatum !== transaction.daten.buchungsdatum ? (
-                  <p className="pt-1 text-xs text-muted-foreground">
-                    Wertstellung: {formatDate(transaction.daten.wertstellungsdatum)}
-                  </p>
-                ) : null}
-              </div>
-
-              {/* Kategorie / Splits */}
-              <div className="space-y-3 px-5 py-4" onClick={(event) => event.stopPropagation()}>
-                <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
-                  {hasSplits ? "Splits" : "Kategorie"}
-                </p>
-
-                {hasSplits ? (
-                  <div className="space-y-1.5">
-                    {splitDrafts.map((split, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center gap-2 rounded-lg bg-muted/30 p-2.5 transition-colors hover:bg-muted/50"
-                      >
-                        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted-foreground/10 text-[10px] font-medium text-muted-foreground/60 tabular-nums">
-                          {index + 1}
-                        </span>
-                        <div className="relative w-24 shrink-0">
-                          <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground/40">
-                            €
-                          </span>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={Math.abs(split.betrag)}
-                            onChange={(e) => handleSplitAmountChange(index, Number(e.target.value))}
-                            onKeyDown={(e) => e.stopPropagation()}
-                            className="h-10 w-full rounded-md border border-input bg-background pl-6 pr-2 text-xs tabular-nums text-foreground shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                          />
-                        </div>
-                        <CategoryCombobox
-                          value={
-                            split.kategorieId == null
-                              ? UNASSIGNED_CATEGORY_VALUE
-                              : String(split.kategorieId)
-                          }
-                          onValueChange={(value) => {
-                            handleSplitCategoryChange(
-                              index,
-                              value === UNASSIGNED_CATEGORY_VALUE ? null : Number(value),
-                            );
-                          }}
-                          options={filteredCategoryOptions}
-                          showNoneOption
-                          noneValue={UNASSIGNED_CATEGORY_VALUE}
-                          placeholder="Kategorie"
-                          onKeyDown={(e) => e.stopPropagation()}
-                          className={
-                            split.kategorieId == null
-                              ? "h-10 flex-1 !border-orange-500/40 !bg-orange-500/10 hover:!bg-orange-700/10 text-xs text-orange-500 hover:!text-orange-500 shadow-none"
-                              : "h-10 flex-1 text-xs shadow-none"
-                          }
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveSplit(index)}
-                          className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/30 transition-colors hover:bg-destructive/10 hover:text-destructive"
-                        >
-                          <X className="size-3.5" />
-                        </button>
-                      </div>
-                    ))}
-
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1">
-                        <div
-                          className={cn(
-                            "h-1.5 rounded-full transition-colors",
-                            splitAbsSum === 0
-                              ? "bg-border/40"
-                              : splitMatchesTotal
-                                ? "bg-green-500/30"
-                                : "bg-destructive/30",
-                          )}
-                        >
-                          <div
-                            className={cn(
-                              "h-full rounded-full transition-all",
-                              splitAbsSum === 0
-                                ? "w-0"
-                                : splitMatchesTotal
-                                  ? "bg-green-500"
-                                  : "bg-destructive",
-                            )}
-                            style={{ width: `${Math.min((splitAbsSum / absTotal) * 100, 100)}%` }}
-                          />
-                        </div>
-                      </div>
-                      <span
-                        className={cn(
-                          "text-xs tabular-nums font-medium",
-                          splitMatchesTotal
-                            ? "text-green-600 dark:text-green-400"
-                            : "text-destructive",
-                        )}
-                      >
-                        {formatAmount(splitAbsSum, transaction.betrag.waehrung)}
-                        <span className="text-muted-foreground/40 mx-0.5">/</span>
-                        {formatAmount(absTotal, transaction.betrag.waehrung)}
-                        {splitMatchesTotal ? (
-                          <Check className="ml-1 inline size-3" />
-                        ) : (
-                          <span className="ml-1">✗</span>
-                        )}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 pt-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-7 gap-1 text-xs"
-                        onClick={handleAddSplit}
-                      >
-                        <Plus className="size-3" />
-                        Split
-                      </Button>
-                      {splitsChanged && splitMatchesTotal && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          className="h-7 ml-auto gap-1 text-xs"
-                          onClick={() => onSaveSplits(transaction.id, splitDrafts)}
-                        >
-                          <Check className="size-3" />
-                          Speichern
-                        </Button>
-                      )}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 gap-1 text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                        onClick={handleRemoveAllSplits}
-                      >
-                        <Trash2 className="size-3" />
-                        Splits entfernen
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <CategoryCombobox
-                      value={
-                        currentCategoryId === null || currentCategoryId === undefined
-                          ? UNASSIGNED_CATEGORY_VALUE
-                          : String(currentCategoryId)
-                      }
-                      onValueChange={(value) => {
-                        onSaveCategory(
-                          transaction.id,
-                          value === UNASSIGNED_CATEGORY_VALUE ? null : Number(value),
-                        );
-                      }}
-                      options={filteredCategoryOptions}
-                      showNoneOption
-                      noneValue={UNASSIGNED_CATEGORY_VALUE}
-                      placeholder="Kategorie wählen"
-                      triggerRef={categoryTriggerRef}
-                      onKeyDown={(event) => {
-                        onRowKeyDown(event, transaction.id);
-                      }}
-                      className={
-                        currentCategoryId === null || currentCategoryId === undefined
-                          ? "h-10 w-full !border-orange-500/40 !bg-orange-500/10 hover:!bg-orange-700/10 text-xs text-orange-500 hover:!text-orange-500 shadow-none"
-                          : "h-10 w-full text-xs shadow-none"
-                      }
-                    />
-
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-10 gap-1.5 border-dashed border-muted-foreground/30 text-xs text-muted-foreground hover:border-violet-400/50 hover:text-violet-600 dark:hover:border-violet-500/50 dark:hover:text-violet-400"
-                          onClick={initFirstSplit}
-                        >
-                          <svg
-                            viewBox="0 0 24 24"
-                            className="size-3.5"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <path d="M22 12h-8" />
-                            <path d="M14 6v12" />
-                            <path d="M3 12h6" />
-                            <path d="M9 8v8" />
-                            <path d="M18 8.5V15" />
-                          </svg>
-                          Aufteilen
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="max-w-[240px] text-xs">
-                        Teilt eine Buchung auf mehrere Kategorien auf – z. B. Lebensmittel und
-                        Drogerie bei einem Einkauf.
-                      </TooltipContent>
-                    </Tooltip>
-
-                    <style>{`
-                        .ai-icon-glow::after {
-                            content: ''; position: absolute; inset: -3px; border-radius: 12px;
-                            background: radial-gradient(circle, rgba(124,58,237,.2) 0%, transparent 70%);
-                            animation: ai-icon-pulse 3s ease-in-out infinite; z-index: -1;
-                        }
-                        @keyframes ai-icon-pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.4; transform:scale(.8); } }
-
-                        .ai-sparkle-icon {
-                            animation: ai-sparkle-bright 2s ease-in-out infinite;
-                        }
-                        @keyframes ai-sparkle-bright { 0%,100% { filter:brightness(1); } 50% { filter:brightness(1.4); } }
-
-                        .ai-pulse-dot { animation: ai-dot 2s ease-in-out infinite; }
-                        @keyframes ai-dot {
-                            0%,100% { opacity:1; box-shadow: 0 0 0 0 rgba(124,58,237,.4); }
-                            50% { opacity:.5; box-shadow: 0 0 0 4px rgba(124,58,237,0); }
-                        }
-                    `}</style>
-
-                    {currentCategoryId == null && predictedCategoryId != null && (
-                      <div className="relative rounded-[12px]">
-                        <div className="relative z-10 rounded-[11px] overflow-hidden border border-violet-500/15 bg-violet-500/[0.03] dark:bg-violet-500/[0.06]">
-                          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(124,58,237,0.08),transparent_70%)]" />
-
-                          <div className="flex items-center gap-2.5 px-3.5 pt-3 pb-2">
-                            <div className="ai-icon-glow relative flex size-8 shrink-0 items-center justify-center rounded-lg border border-violet-500/25 bg-gradient-to-br from-violet-500/18 to-blue-500/18">
-                              <Sparkles className="ai-sparkle-icon size-3.5 text-violet-600 dark:text-violet-400" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
-                                <span className="ai-pulse-dot inline-block size-[5px] rounded-full bg-violet-500" />
-                                KI-Vorschlag
-                              </p>
-                              {(() => {
-                                const predicted = filteredCategoryOptions.find(
-                                  (o) => o.value === String(predictedCategoryId),
-                                );
-                                return (
-                                  <p className="truncate text-lg font-medium">
-                                    {predicted?.icon ? (
-                                      <span className="mr-1.5">{predicted.icon}</span>
-                                    ) : null}
-                                    {predicted?.label.replace(/^\s+/, "") ?? "Unbekannt"}
-                                  </p>
-                                );
-                              })()}
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2 px-3.5 pb-2.5">
-                            <div className="h-[2.5px] flex-1 overflow-hidden rounded-full bg-violet-500/12">
-                              <div
-                                className="h-full rounded-full bg-gradient-to-r from-violet-500 via-indigo-500 to-blue-500 transition-all duration-700"
-                                style={{ width: `${predictedSimilarityPercent}%` }}
-                              />
-                            </div>
-                            <span className="text-[10px] text-muted-foreground">
-                              {predictedSimilarityPercent}%
-                            </span>
-                          </div>
-
-                          <div className="px-2.5 pb-2.5">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              className="h-[26px] w-full !rounded-[5px] border border-violet-500/30 bg-transparent text-[11.5px] font-medium hover:border-violet-500/55 hover:bg-violet-500/8 hover:text-violet-600 dark:hover:text-violet-400"
-                              onClick={() => onSaveCategory(transaction.id, predictedCategoryId)}
-                            >
-                              <Check className="mr-1 size-3" />
-                              Übernehmen
-                              <kbd className="ml-1.5 rounded-[3px] border border-current/20 px-1 py-[0.5px] text-[10px]">
-                                G
-                              </kbd>
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
+              <ZahlungspartnerSection
+                transaction={transaction}
+                allTransactions={allTransactions}
+                subscriptionOverride={subscriptionOverride}
+                partnerBank={partnerBank}
+                ownerId={ownerId}
+                unknownIban={unknownIban}
+                zahlungspartnerOptions={zahlungspartnerOptions}
+                onLinkIbanToZahlungspartner={onLinkIbanToZahlungspartner}
+                onCreateZahlungspartnerForIban={onCreateZahlungspartnerForIban}
+              />
+              <PurposeSection transaction={transaction} />
+              <CategorySection
+                transaction={transaction}
+                categoryOptions={categoryOptions}
+                currentCategoryId={currentCategoryId}
+                predictedCategoryId={predictedCategoryId}
+                predictedSimilarity={predictedSimilarity}
+                categoryTriggerRef={categoryTriggerRef}
+                onSaveCategory={onSaveCategory}
+                onRowKeyDown={onRowKeyDown}
+                splits={splits}
+              />
             </div>
           </div>
 
-          {/* ── Bottom actions row ── */}
           <div className="flex flex-col gap-0 divide-y divide-border/60">
             <div
               className={cn(
                 "grid grid-cols-1 divide-y divide-border/60",
-                showRefundSection && "sm:grid-cols-2 sm:divide-x sm:divide-y-0",
+                derivations.showRefundSection && "sm:grid-cols-2 sm:divide-x sm:divide-y-0",
               )}
             >
-              {/* Note */}
-              <div
-                className={cn("px-4 py-4", showRefundSection && "sm:border-r sm:border-border/60")}
-                onClick={(event) => event.stopPropagation()}
-              >
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
-                    Anmerkung
-                  </p>
+              <NoteSection note={note} showRefundSection={derivations.showRefundSection} />
 
-                  {isInTagMode && (
-                    <div className="text-[10px] flex items-center gap-1.5 text-xs text-violet-600 dark:text-violet-400">
-                      <span className="inline-block size-1.5 animate-pulse rounded-full bg-violet-500" />
-                      Hashtag eingabe erkannt
-                    </div>
-                  )}
-                </div>
-                <textarea
-                  value={noteDraft}
-                  onChange={(event) => setNoteDraft(event.target.value)}
-                  onKeyDown={(event) => event.stopPropagation()}
-                  placeholder="Anmerkung zu dieser Transaktion"
-                  className={cn(
-                    "h-18 w-full resize-none rounded-md border bg-background px-3 py-2 text-sm text-foreground shadow-xs outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50",
-                    isInTagMode
-                      ? "border-violet-400 focus-visible:border-violet-400 focus-visible:ring-violet-500/30"
-                      : "border-input focus-visible:border-ring",
-                  )}
-                />
-                <div className="flex items-start justify-between gap-3 mt-2">
-                  <div className="flex flex-col items-start gap-1.5">
-                    {allTags.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {allTags.map((tag) => (
-                          <span
-                            key={tag}
-                            className="inline-flex items-center rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-medium text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"
-                          >
-                            #{tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    disabled={!noteChanged || savingNote}
-                    onClick={() => void saveNote()}
-                  >
-                    {savingNote ? (
-                      <Loader2 className="size-3.5 animate-spin" />
-                    ) : (
-                      <Check className="size-3.5" />
-                    )}
-                    {savingNote ? "Speichere …" : "Anmerkung speichern"}
-                  </Button>
-                </div>
-              </div>
-
-              {/* Rückerstattung */}
-              {showRefundSection ? (
+              {derivations.showRefundSection ? (
                 <div className="px-5 py-4" onClick={(event) => event.stopPropagation()}>
                   {transaction.betrag.wert > 0 ? (
                     <RefundSectionIncoming
@@ -1310,7 +235,6 @@ export function TransactionRow({
               ) : null}
             </div>
 
-            {/* Delete */}
             <div className="flex justify-end px-4 py-2">
               <Button
                 type="button"
@@ -1344,264 +268,6 @@ export function TransactionRow({
           pendingToggleAction.current = null;
         }}
       />
-    </div>
-  );
-}
-
-function RefundSectionIncoming({
-  transaction,
-  allTransactions,
-  onRefundLinkChange,
-}: {
-  transaction: Transaction;
-  allTransactions: Transaction[];
-  onRefundLinkChange: () => void;
-}) {
-  const [linkingId, setLinkingId] = useState<number | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
-
-  const linkedTransaction = transaction.technisch.refundRefTransactionId
-    ? allTransactions.find((t) => t.id === transaction.technisch.refundRefTransactionId)
-    : null;
-
-  const outgoingList = useMemo(
-    () => allTransactions.filter((t) => t.betrag.wert < 0),
-    [allTransactions],
-  );
-
-  const handleLink = async (targetId: number) => {
-    setLinkingId(targetId);
-    try {
-      await updateRefundLink(transaction.id, targetId);
-      onRefundLinkChange();
-      setDialogOpen(false);
-    } finally {
-      setLinkingId(null);
-    }
-  };
-
-  const handleUnlink = async () => {
-    if (!transaction) return;
-    setLinkingId(transaction.id);
-    try {
-      await updateRefundLink(transaction.id, null);
-      onRefundLinkChange();
-    } finally {
-      setLinkingId(null);
-    }
-  };
-
-  return (
-    <div>
-      <p className="mb-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
-        Diese Gutschrift ist eine Rückerstattung für
-      </p>
-      {linkedTransaction ? (
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-muted/30 px-3 py-2.5">
-          <div className="flex items-center gap-3 min-w-0">
-            <BrandIcon
-              src={linkedTransaction.zahlungspartner.logoUrl || undefined}
-              alt={
-                linkedTransaction.zahlungspartner.datenbankName ||
-                linkedTransaction.zahlungspartner.name ||
-                "?"
-              }
-              sizeClassName="size-8 shrink-0"
-              backgroundClassName={
-                linkedTransaction.zahlungspartner.logoWhiteBackground ? "bg-white" : "bg-zinc-900"
-              }
-              kind={linkedTransaction.zahlungspartner.isCompany ? "company" : "person"}
-              imgNoPadding={!linkedTransaction.zahlungspartner.logoPadding}
-            />
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-foreground">
-                {linkedTransaction.zahlungspartner.datenbankName ||
-                  linkedTransaction.zahlungspartner.name ||
-                  "–"}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {formatDate(linkedTransaction.daten.buchungsdatum)}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="rounded-md bg-red-500/10 px-2 py-1 text-xs font-medium tabular-nums text-red-500">
-              {formatAmount(
-                Math.abs(linkedTransaction.betrag.wert),
-                linkedTransaction.betrag.waehrung,
-              )}
-            </span>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  disabled={linkingId !== null}
-                  onClick={() => void handleUnlink()}
-                  className="flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
-                >
-                  {linkingId === transaction.id ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <Trash2 className="size-3.5" />
-                  )}
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Verknüpfung entfernen</TooltipContent>
-            </Tooltip>
-          </div>
-        </div>
-      ) : (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setDialogOpen(true)}
-          className="flex w-full justify-start gap-2 shadow-none h-9 text-muted-foreground font-normal hover:text-foreground"
-        >
-          <Search className="size-3.5 shrink-0 opacity-50" />
-          <span>Ausgehende Zahlung auswählen …</span>
-        </Button>
-      )}
-
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="p-0 gap-0 max-w-lg" showCloseButton={false}>
-          <DialogHeader className="sr-only">
-            <DialogTitle>Ausgehende Zahlung auswählen</DialogTitle>
-            <DialogDescription>
-              Wähle die ursprüngliche Zahlung aus, auf die sich diese Rückerstattung bezieht
-            </DialogDescription>
-          </DialogHeader>
-          <Command>
-            <CommandInput placeholder="Nach Name, Betrag oder Datum suchen …" />
-            <CommandList>
-              <CommandEmpty>Keine ausgehende Zahlung gefunden</CommandEmpty>
-              <CommandGroup>
-                {outgoingList.map((t) => (
-                  <CommandItem
-                    key={t.id}
-                    value={`${t.id}-${t.zahlungspartner.name || ""} ${formatAmount(Math.abs(t.betrag.wert), t.betrag.waehrung)} ${formatDate(t.daten.buchungsdatum)}`}
-                    onSelect={() => void handleLink(t.id)}
-                    disabled={linkingId === t.id}
-                    className="cursor-pointer"
-                  >
-                    <BrandIcon
-                      src={t.zahlungspartner.logoUrl || undefined}
-                      alt={t.zahlungspartner.datenbankName || t.zahlungspartner.name || "?"}
-                      sizeClassName="size-9 shrink-0"
-                      backgroundClassName={
-                        t.zahlungspartner.logoWhiteBackground ? "bg-white" : "bg-zinc-900"
-                      }
-                      kind={t.zahlungspartner.isCompany ? "company" : "person"}
-                      imgNoPadding={!t.zahlungspartner.logoPadding}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-foreground">
-                        {t.zahlungspartner.datenbankName || t.zahlungspartner.name || "–"}
-                      </p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {formatDate(t.daten.buchungsdatum)}
-                      </p>
-                    </div>
-                    <span className="shrink-0 text-sm tabular-nums text-red-500">
-                      {formatAmount(Math.abs(t.betrag.wert), t.betrag.waehrung)}
-                    </span>
-                    {linkingId === t.id ? (
-                      <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
-                    ) : null}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
-
-function RefundSectionOutgoing({
-  transaction,
-  allTransactions,
-  onRefundLinkChange,
-}: {
-  transaction: Transaction;
-  allTransactions: Transaction[];
-  onRefundLinkChange: () => void;
-}) {
-  const [unlinkingId, setUnlinkingId] = useState<number | null>(null);
-
-  const refundTransactions = useMemo(() => {
-    return allTransactions.filter((t) => t.technisch.refundRefTransactionId === transaction.id);
-  }, [allTransactions, transaction.id]);
-
-  const handleUnlink = async (refundTransactionId: number) => {
-    setUnlinkingId(refundTransactionId);
-    try {
-      await updateRefundLink(refundTransactionId, null);
-      onRefundLinkChange();
-    } finally {
-      setUnlinkingId(null);
-    }
-  };
-
-  if (refundTransactions.length === 0) return null;
-
-  return (
-    <div>
-      <p className="mb-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
-        Rückerstattungen für diese Ausgabe
-      </p>
-      <div className="space-y-1.5">
-        {refundTransactions.map((refund) => (
-          <div
-            key={refund.id}
-            className="flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-muted/30 px-3 py-2.5"
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <BrandIcon
-                src={refund.zahlungspartner.logoUrl || undefined}
-                alt={refund.zahlungspartner.datenbankName || refund.zahlungspartner.name || "?"}
-                sizeClassName="size-8 shrink-0"
-                backgroundClassName={
-                  refund.zahlungspartner.logoWhiteBackground ? "bg-white" : "bg-zinc-900"
-                }
-                kind={refund.zahlungspartner.isCompany ? "company" : "person"}
-                imgNoPadding={!refund.zahlungspartner.logoPadding}
-              />
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-foreground">
-                  {refund.zahlungspartner.datenbankName || refund.zahlungspartner.name || "–"}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {formatDate(refund.daten.buchungsdatum)}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="rounded-md bg-green-500/10 px-2 py-1 text-xs font-medium tabular-nums text-green-500">
-                +{formatAmount(Math.abs(refund.betrag.wert), refund.betrag.waehrung)}
-              </span>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    disabled={unlinkingId !== null}
-                    onClick={() => void handleUnlink(refund.id)}
-                    className="flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
-                  >
-                    {unlinkingId === refund.id ? (
-                      <Loader2 className="size-3.5 animate-spin" />
-                    ) : (
-                      <Trash2 className="size-3.5" />
-                    )}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="top">Verknüpfung entfernen</TooltipContent>
-              </Tooltip>
-            </div>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }

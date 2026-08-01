@@ -68,14 +68,15 @@ export function ProductIdSetup({ onComplete }: { onComplete: () => void }) {
         <Button
           type="submit"
           disabled={saving || !value.trim()}
-          className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-6 text-sm font-medium text-accent ring-offset-background transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
+          className="inline-flex h-10 items-center justify-center rounded-md px-6 text-sm font-medium ring-offset-background transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
         >
           {saving ? "Wird gespeichert…" : "Speichern"}
         </Button>
         <Button
           type="button"
+          variant="outline"
           onClick={() => handleMailRegistration()}
-          className="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background text-foreground px-6 text-sm font-medium ring-offset-background transition-colors hover:bg-accent"
+          className="cursor-pointer inline-flex h-10 items-center justify-center rounded-md px-6 text-sm font-medium ring-offset-background transition-colors"
         >
           Registrierungsformular per E-Mail
         </Button>

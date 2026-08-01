@@ -413,13 +413,13 @@ class AllocationService:
 
         remaining = rb["target_amount"] - rb["transferred"]
         if custom_amount is not None:
-            if custom_amount <= 0:
-                raise HTTPException(status_code=400, detail="Betrag muss positiv sein")
             if rb["bucket_type"] != "bafoeg" and custom_amount > remaining:
                 raise HTTPException(status_code=400, detail="Betrag überschreitet den offenen Betrag")
             amount = custom_amount
         else:
             amount = remaining
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail="Betrag muss positiv sein")
         self._check_sender_balance(rb.get("sender_iban"), amount)
 
         if rb["bucket_type"] == "donation":
