@@ -764,6 +764,7 @@ export function SavingsPlansCard({
             const remainingToSave =
               targetAmount > 0 ? Math.max(0, targetAmount - savedTotal) : topUp;
             const planPaid = requiredRate != null && topUp <= 0;
+            const isCompleted = plan.is_completed;
 
             return (
               <div
@@ -990,7 +991,11 @@ export function SavingsPlansCard({
                 </p>
 
                 <div className="mt-auto space-y-3">
-                  {planPaid ? (
+                  {isCompleted ? (
+                    <div className="flex h-10 w-full items-center justify-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-700 dark:text-emerald-400">
+                      <CheckCircle2 className="size-4" /> Abgeschlossen
+                    </div>
+                  ) : planPaid ? (
                     <div className="flex h-10 w-full items-center justify-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-700 dark:text-emerald-400">
                       <CheckCircle2 className="size-4" /> Monatsziel erreicht
                     </div>

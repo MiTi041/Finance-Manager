@@ -53,6 +53,7 @@ export type SavingsPlan = {
   sender_iban: string | null;
   is_visible: boolean;
   auto_hidden: boolean;
+  is_completed: boolean;
   monthly_rate: number;
   saved_amount: number;
   this_month: number;
