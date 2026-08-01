@@ -11,8 +11,17 @@ import {
   fetchRecipientAccountsReferenceData,
   type RecipientAccountRecord,
 } from "@/lib/recipient-accounts";
-import { fetchBankCredentials, fetchAvailableBanks, type StoredBankCredentials } from "@/lib/bank/credentials";
-import { fetchAllocationSettings, updateAllocationBucket, type AllocationBucket, type SavingsPlan } from "@/lib/allocation";
+import {
+  fetchBankCredentials,
+  fetchAvailableBanks,
+  type StoredBankCredentials,
+} from "@/lib/bank/credentials";
+import {
+  fetchAllocationSettings,
+  updateAllocationBucket,
+  type AllocationBucket,
+  type SavingsPlan,
+} from "@/lib/allocation";
 import { formatAmount } from "@/lib/utils/format";
 import { EmptyState } from "@/components/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,7 +32,9 @@ import {
   type SpendingSubscriptionState,
 } from "@/lib/subscription-budget";
 
-function extractBankAccounts(banks: StoredBankCredentials[]): { iban: string; name: string; bankKey: string }[] {
+function extractBankAccounts(
+  banks: StoredBankCredentials[],
+): { iban: string; name: string; bankKey: string }[] {
   const accounts: { iban: string; name: string; bankKey: string }[] = [];
   for (const bank of banks) {
     for (const acc of bank.accounts ?? []) {
@@ -42,7 +53,9 @@ export default function AllocationPage() {
   const { status, loading, error, load, recalculate, transfer, transferring, transferSavings } =
     useAllocation();
   const [recipientAccounts, setRecipientAccounts] = useState<RecipientAccountRecord[]>([]);
-  const [bankAccounts, setBankAccounts] = useState<{ iban: string; name: string; bankKey: string }[]>([]);
+  const [bankAccounts, setBankAccounts] = useState<
+    { iban: string; name: string; bankKey: string }[]
+  >([]);
   const [canTransferMap, setCanTransferMap] = useState<Map<string, boolean>>(new Map());
   const runBucketIdRef = useRef<number>(0);
   const runBucketAmountRef = useRef<number>(0);
@@ -143,14 +156,23 @@ export default function AllocationPage() {
       const purpose =
         `Allokation ${bucket.bucket_type} ${bucketTags[bucket.bucket_type] ?? ""}`.trim();
 
+      const defaultAmount =
+        bucket.bucket_type === "bafoeg"
+          ? Math.max(
+              0,
+              (bucket.required_monthly_rate ?? bucket.target_amount) -
+                (bucket.month_einzahlungen ?? 0),
+            )
+          : bucket.target_amount - bucket.transferred;
+
       runBucketIdRef.current = runBucketId;
-      runBucketAmountRef.current = amount ?? bucket.target_amount - bucket.transferred;
+      runBucketAmountRef.current = amount ?? defaultAmount;
       savingsPlanIdRef.current = 0;
 
       setTransferState({
         open: true,
         runBucketId,
-        amount: amount ?? bucket.target_amount - bucket.transferred,
+        amount: amount ?? defaultAmount,
         accountName,
         recipientName,
         recipientIban,
@@ -245,15 +267,11 @@ export default function AllocationPage() {
       ? computeSpendingSubscriptionState(subscriptions, spendingBucket.target_amount)
       : null;
   const diff = status.remaining;
-  const balanced = status.net_income > 0 && status.total_allocated > 0 && Math.abs(diff) < 0.01;
+  const balanced = status.net_income > 0 && status.total_allocated > 0 && diff > 0.01;
   const visibleBuckets = status.buckets.filter((bucket) => {
     const config = status.config.find((c) => c.id === bucket.bucket_id);
     if (!config) return false;
-    if (
-      bucket.bucket_type === "bafoeg" &&
-      !bafoegEnabled
-    )
-      return false;
+    if (bucket.bucket_type === "bafoeg" && !bafoegEnabled) return false;
     return true;
   });
 

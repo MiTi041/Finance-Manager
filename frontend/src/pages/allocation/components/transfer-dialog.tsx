@@ -90,7 +90,7 @@ export function TransferDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent>
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Überweisung bestätigen</DialogTitle>
           <DialogDescription>
@@ -99,48 +99,52 @@ export function TransferDialog({
         </DialogHeader>
 
         <form
-          className="space-y-4"
+          className="min-w-0 space-y-4"
           onSubmit={(e) => {
             e.preventDefault();
             void handleConfirm();
           }}
         >
-          <div className="rounded-lg border bg-muted/30 p-4 text-center">
-            <p className="text-2xl font-semibold tabular-nums">{formatAmount(amount)}</p>
-            <p className="mt-1 text-sm text-muted-foreground">an {recipientName}</p>
+          <div className="min-w-0 rounded-lg border bg-muted/30 p-4 text-center">
+            <p className="break-words text-2xl font-semibold tabular-nums">
+              {formatAmount(amount)}
+            </p>
+            <p className="mt-1 truncate text-sm text-muted-foreground">an {recipientName}</p>
           </div>
 
-          <div className="space-y-2 rounded-lg border p-3">
+          <div className="min-w-0 space-y-2 rounded-lg border p-3">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs text-muted-foreground">Konto</span>
-              <span className="truncate text-sm font-medium">{accountName}</span>
+              <span className="shrink-0 text-xs text-muted-foreground">Konto</span>
+              <span className="min-w-0 truncate text-sm font-medium">{accountName}</span>
             </div>
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs text-muted-foreground">Empfänger</span>
-              <span className="truncate text-sm font-medium">{recipientName}</span>
+              <span className="shrink-0 text-xs text-muted-foreground">Empfänger</span>
+              <span className="min-w-0 truncate text-sm font-medium">{recipientName}</span>
             </div>
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs text-muted-foreground">IBAN</span>
-              <span className="truncate font-mono text-sm">{formatIban(recipientIban)}</span>
+              <span className="shrink-0 text-xs text-muted-foreground">IBAN</span>
+              <span className="min-w-0 truncate font-mono text-sm">
+                {formatIban(recipientIban)}
+              </span>
             </div>
             {purpose && (
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-muted-foreground">Verwendungszweck</span>
-                <span className="truncate text-sm font-medium">{purpose}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">Verwendungszweck</span>
+                <span className="min-w-0 truncate text-sm font-medium">{purpose}</span>
               </div>
             )}
           </div>
 
           {error && (
-            <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <div className="flex min-w-0 items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               <TriangleAlert className="mt-0.5 size-4 shrink-0" />
               <span className="min-w-0 break-words">{error}</span>
             </div>
           )}
 
           {tanChallenge && (
-            <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
-              <div className="flex items-start gap-2">
+            <div className="min-w-0 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+              <div className="flex min-w-0 items-start gap-2">
                 <Info className="mt-0.5 size-4 shrink-0" />
                 <div className="min-w-0 break-words">
                   <p className="font-medium">TAN erforderlich</p>
