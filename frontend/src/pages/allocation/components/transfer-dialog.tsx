@@ -134,7 +134,7 @@ export function TransferDialog({
           {error && (
             <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               <TriangleAlert className="mt-0.5 size-4 shrink-0" />
-              <span>{error}</span>
+              <span className="min-w-0 break-words">{error}</span>
             </div>
           )}
 
@@ -142,7 +142,7 @@ export function TransferDialog({
             <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
               <div className="flex items-start gap-2">
                 <Info className="mt-0.5 size-4 shrink-0" />
-                <div>
+                <div className="min-w-0 break-words">
                   <p className="font-medium">TAN erforderlich</p>
                   <p className="mt-0.5">{tanChallenge}</p>
                   {tanDecoupled && (

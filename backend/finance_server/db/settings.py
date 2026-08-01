@@ -34,3 +34,7 @@ def delete_setting(key: str) -> bool:
             "DELETE FROM app_settings WHERE key = ?", (key,)
         )
         return cursor.rowcount > 0
+
+
+def get_holiday_state() -> str:
+    return get_setting("holiday_state") or "nw"

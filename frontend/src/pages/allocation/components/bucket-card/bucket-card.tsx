@@ -232,7 +232,7 @@ export function BucketCard({
           bafoegOutstanding={bafoegOutstanding}
           requiredMonthlyRate={bucket.required_monthly_rate}
           monthEinzahlungen={bucket.month_einzahlungen}
-          incomeEventsLeft={bucket.income_events_left}
+          incomeEventsLeft={bucket.future_income_events}
         />
 
         <BucketFooter

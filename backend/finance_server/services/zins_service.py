@@ -4,6 +4,9 @@ from calendar import monthrange
 from datetime import date, timedelta
 from typing import Any
 
+from finance_server.core.feiertage import letzter_arbeitstag
+from finance_server.db.settings import get_holiday_state
+
 
 def aktuellen_taeglichen_zins(datum: date, zinsverlauf: list[dict[str, Any]]) -> float:
     aktueller_zins = 0.0
@@ -14,10 +17,6 @@ def aktuellen_taeglichen_zins(datum: date, zinsverlauf: list[dict[str, Any]]) ->
         else:
             break
     return aktueller_zins / 360
-
-
-def _letzter_monatstag(d: date) -> int:
-    return monthrange(d.year, d.month)[1]
 
 
 def berechne_endguthaben(
@@ -33,16 +32,28 @@ def berechne_endguthaben(
     gesamte_einzahlungen = startkapital
     offene_zinsen = anfangs_offene_zinsen
     aktuelles_datum = start_datum
+    payout_target: date | None = None
 
     while aktuelles_datum <= end_datum:
         if payout_days:
-            last = _letzter_monatstag(aktuelles_datum)
-            for pd in payout_days:
-                resolved = pd if pd > 0 else last
-                if aktuelles_datum.day == resolved:
-                    guthaben += monatliche_einzahlung
-                    gesamte_einzahlungen += monatliche_einzahlung
-                    break
+            if payout_target is None or (
+                aktuelles_datum.year != payout_target.year
+                or aktuelles_datum.month != payout_target.month
+            ):
+                candidates = [
+                    letzter_arbeitstag(
+                        get_holiday_state(), aktuelles_datum.year, aktuelles_datum.month
+                    )
+                    if pd <= 0
+                    else aktuelles_datum.replace(
+                        day=min(pd, monthrange(aktuelles_datum.year, aktuelles_datum.month)[1])
+                    )
+                    for pd in payout_days
+                ]
+                payout_target = max(candidates)
+            if aktuelles_datum == payout_target:
+                guthaben += monatliche_einzahlung
+                gesamte_einzahlungen += monatliche_einzahlung
         else:
             morgen = aktuelles_datum + timedelta(days=1)
             if morgen.day == 1:

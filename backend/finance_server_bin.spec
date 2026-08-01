@@ -1,11 +1,14 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from PyInstaller.utils.hooks import collect_data_files
+
+sepaxml_datas = collect_data_files('sepaxml')
 
 a = Analysis(
     ['run_server.py'],
     pathex=[],
     binaries=[],
-    datas=[('.env', '.'), ('finance_server/assets', 'finance_server/assets')],
+    datas=[('.env', '.'), ('finance_server/assets', 'finance_server/assets')] + sepaxml_datas,
     hiddenimports=['finance_server', 'finance_server.api', 'finance_server.api.transactions', 'finance_server.api.fints', 'finance_server.api.bank_credentials', 'finance_server.api.reference_data', 'finance_server.api.categories', 'finance_server.db', 'finance_server.db.connection', 'finance_server.db.credentials', 'finance_server.db.paths', 'finance_server.db.references', 'finance_server.db.schema', 'finance_server.db.transactions', 'finance_server.db.categories', 'finance_server.db.utils', 'finance_server.banks', 'finance_server.models', 'uvicorn', 'uvicorn.logging', 'uvicorn.loops', 'uvicorn.loops.auto', 'uvicorn.protocols', 'uvicorn.protocols.http', 'uvicorn.protocols.http.auto', 'uvicorn.protocols.websockets', 'uvicorn.protocols.websockets.auto', 'fastapi', 'pydantic', 'dotenv', 'cryptography', 'cryptography.fernet', 'cryptography.hazmat.primitives.ciphers.aead', 'cryptography.hazmat.primitives.kdf.pbkdf2', 'boto3', 'botocore', 'botocore.config', 'botocore.exceptions', 'fints', 'fints.client', 'fints.exceptions', 'fints.utils', 'fints.formals', 'bleach', 'sepaxml'],
     hookspath=[],
     hooksconfig={},

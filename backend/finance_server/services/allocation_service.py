@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import math
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import HTTPException
 
 from finance_server.core.database import get_connection
+from finance_server.core.feiertage import BUNDESLAENDER, holiday_dates
 from finance_server.db import allocation as db
 from finance_server.db.references import get_zahlungspartner_by_iban
 from finance_server.db.savings import (
@@ -17,7 +18,8 @@ from finance_server.db.savings import (
     get_income_payout_days, count_income_events_until,
     get_bafoeg_breakdown,
 )
-from finance_server.db.settings import get_setting, set_setting
+from finance_server.db.settings import get_setting, set_setting, get_holiday_state
+from finance_server.services.sync_logger import log_crud_event
 
 
 BUCKET_TAGS: dict[str, str] = {
@@ -55,15 +57,47 @@ class AllocationService:
     def get_settings(self) -> dict[str, Any]:
         return {
             "bafoeg_enabled": get_setting("bafoeg_enabled") == "true",
+            "holiday_state": get_holiday_state(),
+            "holiday_states": [{"code": code, "name": name} for code, name in BUNDESLAENDER.items()],
         }
 
     def update_settings(self, payload: dict[str, Any]) -> dict[str, Any]:
         if "bafoeg_enabled" in payload:
-            set_setting("bafoeg_enabled", "true" if payload["bafoeg_enabled"] else "false")
-            db.set_bucket_active_by_type("bafoeg", payload["bafoeg_enabled"])
+            was_enabled = get_setting("bafoeg_enabled") == "true"
+            if was_enabled != payload["bafoeg_enabled"]:
+                previous = get_setting("bafoeg_enabled")
+                value = "true" if payload["bafoeg_enabled"] else "false"
+                set_setting("bafoeg_enabled", value)
+                db.set_bucket_active_by_type("bafoeg", payload["bafoeg_enabled"])
+                # ponytail: runs aren't synced, so dropping the current month's run
+                # just makes the next /status fetch recreate it with the new setting
+                db.delete_run(datetime.now().strftime("%Y-%m"))
+                log_crud_event(
+                    "app_settings",
+                    None,
+                    "INSERT" if previous is None else "UPDATE",
+                    {
+                        "key": "bafoeg_enabled",
+                        "value": value,
+                        "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+                    },
+                )
+        if "holiday_state" in payload:
+            state = payload["holiday_state"]
+            if state not in BUNDESLAENDER:
+                raise HTTPException(status_code=400, detail=f"Unbekanntes Bundesland: {state}")
+            set_setting("holiday_state", state)
+            # payout-day detection depends on the holiday calendar → drop current run
+            db.delete_run(datetime.now().strftime("%Y-%m"))
         return self.get_settings()
 
     def get_or_create_run(self, month: str, force: bool = False) -> dict[str, Any]:
+        # ponytail: legacy clean-up — savings plans are never auto-hidden anymore,
+        # so re-show any that still carry the old flag.
+        for plan in list_plans():
+            if plan.get("auto_hidden"):
+                update_plan(plan["id"], {"is_visible": True, "auto_hidden": False})
+
         existing = db.get_run_for_month(month)
         if existing:
             if force:
@@ -87,7 +121,6 @@ class AllocationService:
 
         # Effective income = net_income minus pinned fixed amounts
         effective = net_income - bafoeg_amount
-        savings_total = self.get_savings_total(month)
         active = [b for b in all_buckets if b["is_active"] and b["bucket_type"] != "bafoeg"]
 
         # Donation from effective (before savings plans)
@@ -97,25 +130,16 @@ class AllocationService:
             donation_target = round(effective * donation_config["percentage"] / 100, 2)
             db.create_run_bucket(run_id, donation_config["id"], donation_target)
 
-        # Auto-hide newest savings plans if total exceeds available budget
+        # Savings plans are always counted, never auto-hidden: the user may
+        # fund them from existing balance. If their total exceeds the budget,
+        # the remaining buckets simply get nothing that month.
         available_for_savings = effective - donation_target
-        auto_hidden: list[int] = []
-        print(f"[auto-hide] savings_total={savings_total}, available_for_savings={available_for_savings}", flush=True)
-        if savings_total > available_for_savings:
-            all_plans = sorted(list_plans(), key=lambda p: p["created_at"])
-            visible = [p for p in all_plans if p.get("is_visible")]
-            total = sum(self._enrich_savings_plan(p, month)["monthly_rate"] for p in visible)
-            for p in reversed(visible):
-                if total <= available_for_savings:
-                    break
-                rate = self._enrich_savings_plan(p, month)["monthly_rate"]
-                update_plan(p["id"], {"is_visible": False, "auto_hidden": True})
-                total -= rate
-                auto_hidden.append(p["id"])
-            savings_total = total
+        all_plans = sorted(list_plans(), key=lambda p: p["created_at"])
+        savings_total = sum(self._enrich_savings_plan(p, month)["monthly_rate"] for p in all_plans)
 
-        # Remaining after donation and savings plans → invest, emergency
-        remaining = effective - donation_target - savings_total
+        # Remaining after donation and savings plans → invest, emergency.
+        # Clamp so buckets never receive negative targets.
+        remaining = max(0.0, effective - donation_target - savings_total)
         bucket_sum = 0.0
         for bucket in active:
             if bucket["bucket_type"] in ("donation", "spending"):
@@ -130,7 +154,7 @@ class AllocationService:
             db.create_run_bucket(run_id, spending_config["id"], round(remaining - bucket_sum, 2))
 
         run = db.get_run_for_month(month)
-        return self._build_run_response(run, auto_hidden)
+        return self._build_run_response(run)
 
     def _build_run_response(self, run: dict[str, Any], auto_hidden: list[int] | None = None) -> dict[str, Any]:
         buckets = db.get_run_buckets(run["id"])
@@ -198,18 +222,25 @@ class AllocationService:
                         if payout:
                             payout_date = datetime.strptime(payout, "%Y-%m-%d").date()
                             start_date = datetime.strptime(f"{run['month']}-01", "%Y-%m-%d").date()
+                            # ponytail: +1 income event (last month's salary already funds the
+                            # current rate) → amortize over one extra payout, starting a month earlier
+                            y, m = int(run["month"].split("-")[0]), int(run["month"].split("-")[1]) - 1
+                            if m <= 0:
+                                m += 12
+                                y -= 1
+                            rate_start = date(y, m, 1)
                             zinsverlauf = [
                                 {"datum": date(2025, 7, 6), "zinssatz": 0.02},
                                 {"datum": date(2026, 4, 29), "zinssatz": 0.02},
                                 {"datum": date(2027, 1, 1), "zinssatz": 0.025},
                             ]
-                            zinsverlauf.append({"datum": start_date, "zinssatz": bafoeg_cfg.get("interest_rate", 2.0) / 100})
+                            zinsverlauf.append({"datum": rate_start, "zinssatz": bafoeg_cfg.get("interest_rate", 2.0) / 100})
                             payout_days = get_income_payout_days(run["month"])
-                            bucket["income_events_left"] = count_income_events_until(
-                                payout, payout_days, f"{run['month']}-01"
-                            )
+                            future = count_income_events_until(payout, payout_days, f"{run['month']}-01", min_result=0)
+                            bucket["future_income_events"] = future
+                            bucket["income_events_left"] = max(1, future + 1)
                             outstanding = max(0, (breakdown["entnahmen"] or 0) - (breakdown.get("tilgungen", 0) or 0))
-                            req_rate = berechne_monatsrate(bucket["saved_total"] + outstanding, total_debt, zinsverlauf, start_date, payout_date, payout_days=payout_days)
+                            req_rate = berechne_monatsrate(bucket["saved_total"] + outstanding, total_debt, zinsverlauf, rate_start, payout_date, payout_days=payout_days)
                             bucket["required_monthly_rate"] = round(req_rate, 2)
                             bucket["months_left"] = bucket["income_events_left"]
                 if bucket["bucket_type"] == "invest":
@@ -274,10 +305,10 @@ class AllocationService:
             "config": config_buckets,
             "savings_total": savings_total,
             "savings_plans": savings_plans,
-            "auto_hidden_plan_ids": auto_hidden if auto_hidden is not None else [
-                p["id"] for p in savings_plans if p.get("auto_hidden")
-            ],
+            "auto_hidden_plan_ids": [],
             "available_for_savings": available_for_savings,
+            "payout_days": get_income_payout_days(run["month"]),
+            "holidays": holiday_dates(get_holiday_state(), datetime.now().year - 1, datetime.now().year + 20),
         }
 
     def _detect_income(self, month: str) -> float:
@@ -536,18 +567,23 @@ class AllocationService:
         this_month = month_breakdown.get("saldo", 0.0)
         target_amount_f = target_amount if target_amount else 0.0
         from_date = f"{month}-01" if month else None
+        partner = (
+            get_zahlungspartner_by_iban(plan.get("target_recipient_iban"))
+            if plan.get("target_recipient_iban")
+            else None
+        )
 
         required_rate = None
         income_events_left = None
         if target_amount and target_date:
             saved_before_this = max(0.0, saved_amount - this_month)
             remaining = max(0.0, target_amount_f - saved_before_this)
-            if remaining == 0.0:
-                required_rate = 0.0
-                income_events_left = count_income_events_until(target_date, payout_days, from_date)
-            else:
-                income_events_left = count_income_events_until(target_date, payout_days, from_date)
-                required_rate = round(remaining / income_events_left, 2)
+            future = count_income_events_until(target_date, payout_days, from_date, min_result=0)
+            # ponytail: +1 income event once the plan has been running for a month — the
+            # salary that arrived last month already funds the current month's rate
+            bonus = 0 if month and (plan.get("created_at") or "")[:7] == month else 1
+            income_events_left = max(1, future + bonus)
+            required_rate = 0.0 if remaining == 0.0 else round(remaining / income_events_left, 2)
         else:
             required_rate = None if not target_amount else 0.0
 
@@ -558,18 +594,15 @@ class AllocationService:
             "this_month": this_month,
             "required_monthly_rate": required_rate,
             "income_events_left": income_events_left,
+            "future_income_events": future,
+            "recipient_logo_url": partner["logo_url"] if partner else None,
+            "recipient_logo_white_background": bool(partner["logo_white_background"]) if partner else False,
+            "recipient_logo_padding": bool(partner["logo_padding"]) if partner else False,
             "saved_einzahlungen": saved_breakdown.get("einzahlungen", 0.0),
             "saved_entnahmen": saved_breakdown.get("entnahmen", 0.0),
             "month_einzahlungen": month_breakdown.get("einzahlungen", 0.0),
             "month_entnahmen": month_breakdown.get("entnahmen", 0.0),
         }
-
-    def get_savings_total(self, month: str | None = None) -> float:
-        plans = list_plans()
-        return sum(
-            self._enrich_savings_plan(p, month)["monthly_rate"]
-            for p in plans if p.get("is_visible")
-        )
 
     def list_savings_plans(self, month: str | None = None) -> list[dict[str, Any]]:
         plans = list_plans()

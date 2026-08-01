@@ -47,7 +47,8 @@ class BafoegRateResponse(BaseModel):
 
 
 class AllocationSettingsUpdate(BaseModel):
-    bafoeg_enabled: bool
+    bafoeg_enabled: bool | None = None
+    holiday_state: str | None = None
 
 
 class SavingsPlan(BaseModel):

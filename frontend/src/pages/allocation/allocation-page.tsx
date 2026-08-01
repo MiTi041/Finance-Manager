@@ -244,7 +244,7 @@ export default function AllocationPage() {
     spendingBucket && subscriptions.length > 0
       ? computeSpendingSubscriptionState(subscriptions, spendingBucket.target_amount)
       : null;
-  const diff = status.net_income - status.total_allocated - status.remaining;
+  const diff = status.remaining;
   const balanced = status.net_income > 0 && status.total_allocated > 0 && Math.abs(diff) < 0.01;
   const visibleBuckets = status.buckets.filter((bucket) => {
     const config = status.config.find((c) => c.id === bucket.bucket_id);
@@ -276,7 +276,9 @@ export default function AllocationPage() {
               <p className="text-xs text-muted-foreground">
                 {balanced
                   ? "Netto-Einkommen ist vollständig verteilt"
-                  : `Differenz von ${formatAmount(diff)} zum Netto-Einkommen`}
+                  : diff < 0
+                    ? `Mehr verteilt als Netto-Einkommen (${formatAmount(Math.abs(diff))} aus Kontoguthaben finanziert)`
+                    : `Differenz von ${formatAmount(diff)} zum Netto-Einkommen`}
               </p>
             </div>
           </div>
@@ -364,12 +366,13 @@ export default function AllocationPage() {
         savingsTotal={status.savings_total}
         availableForSavings={status.available_for_savings}
         currentMonth={status.month}
+        payoutDays={status.payout_days ?? []}
+        holidays={status.holidays ?? []}
         onRefresh={handleSavingsRefresh}
         onTransfer={handleSavingsPlanTransfer}
         recipientAccounts={recipientAccounts}
         bankAccounts={bankAccounts}
         canTransferMap={canTransferMap}
-        autoHiddenPlanIds={status.auto_hidden_plan_ids}
       />
 
       <TransferDialog

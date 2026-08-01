@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   ArrowRightToLine,
   Car,
@@ -34,6 +34,7 @@ import { Label } from "@/components/ui/label";
 import { PayoutSlider } from "./payout-slider";
 import { SavingsPlanDatePickerInput } from "./savings-plan-date-picker-input";
 import { SearchableSelect } from "@/components/searchable-select";
+import { BankLogo } from "@/components/bank-logo";
 import {
   createSavingsPlan,
   deleteSavingsPlan,
@@ -43,19 +44,25 @@ import {
 } from "@/lib/allocation";
 import { type RecipientAccountRecord } from "@/lib/recipient-accounts";
 import { formatAmount } from "@/lib/utils/format";
-import { formatDateInputValue, parseIsoDate } from "../utils";
+import {
+  formatDateInputValue,
+  parseIsoDate,
+  countIncomeEventsUntil,
+  effectivePayoutDays,
+} from "../utils";
 
 type Props = {
   plans: SavingsPlan[];
   savingsTotal: number;
   availableForSavings: number;
   currentMonth: string;
+  payoutDays: number[];
+  holidays: string[];
   onRefresh: () => void;
   onTransfer: (plan: SavingsPlan, customAmount?: number) => void;
   recipientAccounts: RecipientAccountRecord[];
   bankAccounts: { iban: string; name: string; bankKey: string }[];
   canTransferMap: Map<string, boolean>;
-  autoHiddenPlanIds: number[];
 };
 
 function formatIban(iban: string) {
@@ -107,17 +114,22 @@ function computeMonthlyRate(
   targetAmount: string,
   targetDate: Date | null,
   savedAmount: number,
+  currentMonth: string,
+  payoutDays: number[],
+  isFirstMonth: boolean,
+  holidays: Set<string>,
 ): number | null {
   const amount = parseFloat(targetAmount.replace(",", "."));
   if (!targetDate || isNaN(amount) || amount <= 0) return null;
-  const now = new Date();
-  if (targetDate <= now) return null;
-  const months =
-    (targetDate.getFullYear() - now.getFullYear()) * 12 + (targetDate.getMonth() - now.getMonth());
-  if (months <= 0) return null;
+  const fromDate = parseIsoDate(`${currentMonth}-01`) ?? new Date();
+  if (targetDate <= fromDate) return null;
   const remaining = amount - savedAmount;
   if (remaining <= 0) return 0;
-  return Math.round((remaining / months) * 100) / 100;
+  const events = Math.max(
+    1,
+    countIncomeEventsUntil(targetDate, payoutDays, fromDate, 0, holidays) + (isFirstMonth ? 0 : 1),
+  );
+  return Math.round((remaining / events) * 100) / 100;
 }
 
 // Shared field layout for both the create and edit dialogs, so the two
@@ -131,6 +143,10 @@ function PlanFormFields({
   canTransferMap,
   existingTotal,
   availableForSavings,
+  currentMonth,
+  payoutDays,
+  holidays,
+  isFirstMonth,
   savedAmount = 0,
 }: {
   values: FormValues;
@@ -140,19 +156,56 @@ function PlanFormFields({
   canTransferMap: Map<string, boolean>;
   existingTotal: number;
   availableForSavings: number;
+  currentMonth: string;
+  payoutDays: number[];
+  holidays: Set<string>;
+  isFirstMonth: boolean;
   savedAmount?: number;
 }) {
   const [debouncing, setDebouncing] = useState(false);
   const [computedRate, setComputedRate] = useState<number | null>(null);
 
   useEffect(() => {
+    if (!values.targetAmount.trim() || !values.targetDate) {
+      setDebouncing(false);
+      setComputedRate(null);
+      return;
+    }
     setDebouncing(true);
     const timer = setTimeout(() => {
-      setComputedRate(computeMonthlyRate(values.targetAmount, values.targetDate, savedAmount));
+      setComputedRate(
+        computeMonthlyRate(
+          values.targetAmount,
+          values.targetDate,
+          savedAmount,
+          currentMonth,
+          payoutDays,
+          isFirstMonth,
+          holidays,
+        ),
+      );
       setDebouncing(false);
     }, 500);
     return () => clearTimeout(timer);
-  }, [values.targetAmount, values.targetDate, savedAmount]);
+  }, [
+    values.targetAmount,
+    values.targetDate,
+    savedAmount,
+    currentMonth,
+    payoutDays,
+    holidays,
+    isFirstMonth,
+  ]);
+
+  const hasTargetInput = values.targetAmount.trim() !== "" && values.targetDate != null;
+
+  const incomeEvents = (() => {
+    const targetDate = values.targetDate;
+    if (!targetDate) return null;
+    const fromDate = parseIsoDate(`${currentMonth}-01`);
+    if (!fromDate || targetDate <= fromDate) return null;
+    return countIncomeEventsUntil(targetDate, payoutDays, fromDate, 0, holidays);
+  })();
 
   const rateExceedsBudget =
     computedRate != null && existingTotal + computedRate > availableForSavings + 0.001;
@@ -230,31 +283,38 @@ function PlanFormFields({
         </div>
       </div>
 
-      <div className="flex items-center gap-2 text-sm">
-        {debouncing ? (
-          <div className="flex items-center gap-1.5 text-muted-foreground">
+      {hasTargetInput ? (
+        debouncing ? (
+          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <Loader2 className="size-3 animate-spin" />
             <span>Monatliche Rate wird berechnet…</span>
           </div>
         ) : computedRate != null ? (
-          <>
-            <span className="font-medium">Monatliche Rate: {formatAmount(computedRate)}</span>
-            <span className="text-xs text-muted-foreground">
-              (max. mögliche monatliche Rate:{" "}
-              {formatAmount(Math.max(0, availableForSavings - existingTotal))})
-            </span>
-          </>
-        ) : values.targetAmount.trim() && values.targetDate ? (
-          <span className="text-muted-foreground">Monatliche Rate: 0,00 €</span>
-        ) : null}
-      </div>
-
-      {rateExceedsBudget && (
-        <p className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
-          <TriangleAlert className="size-3 shrink-0" />
-          Sparplan überschreitet das verfügbare Budget und wird automatisch ausgeblendet.
-        </p>
-      )}
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
+              <div>
+                <p className="text-xs text-muted-foreground">Monatliche Rate</p>
+                <p className="font-medium tabular-nums">{formatAmount(computedRate)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">
+                  Erwartete Einkommen bis zum Zieldatum
+                </p>
+                <p className="font-medium">{incomeEvents === 0 ? "Keins" : incomeEvents}</p>
+              </div>
+            </div>
+            {rateExceedsBudget && (
+              <p className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+                <TriangleAlert className="size-3 shrink-0" />
+                Max. Rate/Monat: {formatAmount(Math.max(0, availableForSavings - existingTotal))} -
+                überschreitet das verfügbare Budget.
+              </p>
+            )}
+          </div>
+        ) : (
+          <span className="text-sm text-muted-foreground">Monatliche Rate: 0,00 €</span>
+        )
+      ) : null}
 
       <div className="space-y-3 rounded-lg border p-3">
         <p className="text-xs font-medium text-muted-foreground">Zahlungsempfänger</p>
@@ -314,7 +374,9 @@ function PlanFormFields({
                 return (
                   <div className="flex flex-col gap-0.5 py-1">
                     <span className="font-medium text-sm leading-tight">{a.name}</span>
-                    <span className="text-xs text-muted-foreground leading-tight">Eigenes Konto</span>
+                    <span className="text-xs text-muted-foreground leading-tight">
+                      Eigenes Konto
+                    </span>
                     <span className="font-mono text-xs text-muted-foreground/70 leading-tight">
                       {formatIban(a.iban)}
                     </span>
@@ -412,7 +474,9 @@ function PlanFormFields({
           value={values.senderIban}
           onValueChange={(v) => set("senderIban", v)}
           options={bankAccounts
-            .filter((a) => canTransferMap.get(a.bankKey) !== false && a.iban !== values.recipientIban)
+            .filter(
+              (a) => canTransferMap.get(a.bankKey) !== false && a.iban !== values.recipientIban,
+            )
             .map((a) => ({
               value: a.iban,
               label: `${a.name} ${a.iban}`,
@@ -458,13 +522,15 @@ export function SavingsPlansCard({
   savingsTotal,
   availableForSavings,
   currentMonth,
+  payoutDays,
+  holidays,
   onRefresh,
   onTransfer,
   recipientAccounts,
   bankAccounts,
   canTransferMap,
-  autoHiddenPlanIds,
 }: Props) {
+  const holidaySet = useMemo(() => new Set(holidays ?? []), [holidays]);
   const [createOpen, setCreateOpen] = useState(false);
   const [createValues, setCreateValues] = useState<FormValues>(emptyForm);
   const [creating, setCreating] = useState(false);
@@ -552,9 +618,6 @@ export function SavingsPlansCard({
         target_date: editValues.targetDate ? formatDateInputValue(editValues.targetDate) : null,
         sender_iban: editValues.senderIban.trim() || null,
       });
-      if (autoHiddenPlanIds.includes(editingPlan.id)) {
-        await updateSavingsPlan(editingPlan.id, { is_visible: true, auto_hidden: false });
-      }
       setEditingPlan(null);
       onRefresh();
     } catch (e) {
@@ -626,6 +689,10 @@ export function SavingsPlansCard({
                 canTransferMap={canTransferMap}
                 existingTotal={savingsTotal}
                 availableForSavings={availableForSavings}
+                currentMonth={currentMonth}
+                payoutDays={payoutDays}
+                holidays={holidaySet}
+                isFirstMonth={true}
               />
               {createError && (
                 <p className="flex items-center gap-1.5 text-sm text-destructive">
@@ -663,11 +730,10 @@ export function SavingsPlansCard({
           </div>
         )}
 
-        {autoHiddenPlanIds.length > 0 && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
-            ⚠ {autoHiddenPlanIds.length} Sparplan
-            {autoHiddenPlanIds.length !== 1 ? " wurden" : " wurde"} ausgeblendet - Budget nicht
-            ausreichend. Älteste Sparpläne haben Vorrang.
+        {savingsTotal > availableForSavings + 0.001 && (
+          <div className="w-min whitespace-nowrap rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+            ⚠ Die Sparpläne übersteigen das verfügbare Budget um{" "}
+            {formatAmount(savingsTotal - availableForSavings)}
           </div>
         )}
 
@@ -698,68 +764,12 @@ export function SavingsPlansCard({
             const remainingToSave =
               targetAmount > 0 ? Math.max(0, targetAmount - savedTotal) : topUp;
             const planPaid = requiredRate != null && topUp <= 0;
-            const isAutoHidden = autoHiddenPlanIds.includes(plan.id);
 
             return (
               <div
                 key={plan.id}
                 className={`relative flex flex-col gap-3 rounded-lg border p-4 transition-opacity ${isVisible ? "" : "opacity-50"}`}
               >
-                {isAutoHidden && (
-                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-lg bg-amber-50/80 text-center text-xs text-amber-700 backdrop-blur-[1px] dark:bg-amber-950/70 dark:text-amber-300">
-                    <Popover
-                      open={menuOpenId === plan.id}
-                      onOpenChange={(open) => setMenuOpenId(open ? plan.id : null)}
-                    >
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="absolute right-1 top-1 z-20 size-7 cursor-pointer text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-200"
-                          aria-label={`Optionen für ${plan.name}`}
-                        >
-                          <MoreVertical className="size-4" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent align="end" className="w-48 p-1">
-                        <Button
-                          variant="ghost"
-                          className="w-full cursor-pointer justify-start gap-2 px-2 py-1.5 text-sm"
-                          onClick={() => openEditDialog(plan)}
-                        >
-                          <Pencil className="size-4" /> Bearbeiten
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          disabled={isToggling}
-                          className="w-full cursor-pointer justify-start gap-2 px-2 py-1.5 text-sm disabled:cursor-not-allowed"
-                          onClick={() => handleToggleVisibility(plan)}
-                        >
-                          {isToggling ? (
-                            <Loader2 className="size-4 animate-spin" />
-                          ) : (
-                            <Eye className="size-4" />
-                          )}{" "}
-                          Einblenden
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          disabled={isDeleting}
-                          className="w-full cursor-pointer justify-start gap-2 px-2 py-1.5 text-sm text-red-600 hover:text-red-700 disabled:cursor-not-allowed"
-                          onClick={() => setDeletingPlan(plan)}
-                        >
-                          {isDeleting ? (
-                            <Loader2 className="size-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="size-4" />
-                          )}{" "}
-                          Löschen
-                        </Button>
-                      </PopoverContent>
-                    </Popover>
-                    Ausgeblendet - Budget nicht ausreichend
-                  </div>
-                )}
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2.5">
                     <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400">
@@ -768,57 +778,55 @@ export function SavingsPlansCard({
                     <span className="text-sm font-medium">{plan.name}</span>
                   </div>
 
-                  {!isAutoHidden && (
-                    <Popover
-                      open={menuOpenId === plan.id}
-                      onOpenChange={(open) => setMenuOpenId(open ? plan.id : null)}
-                    >
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-7 cursor-pointer text-muted-foreground hover:text-foreground"
-                          aria-label={`Optionen für ${plan.name}`}
-                        >
-                          <MoreVertical className="size-4" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent align="end" className="w-48 p-1">
-                        <Button
-                          variant="ghost"
-                          className="w-full cursor-pointer justify-start gap-2 px-2 py-1.5 text-sm"
-                          onClick={() => openEditDialog(plan)}
-                        >
-                          <Pencil className="size-4" /> Bearbeiten
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          disabled={isToggling}
-                          className="w-full cursor-pointer justify-start gap-2 px-2 py-1.5 text-sm disabled:cursor-not-allowed"
-                          onClick={() => handleToggleVisibility(plan)}
-                        >
-                          {isToggling ? (
-                            <Loader2 className="size-4 animate-spin" />
-                          ) : isVisible ? (
-                            <EyeOff className="size-4" />
-                          ) : (
-                            <Eye className="size-4" />
-                          )}
-                          {isVisible ? "Ausblenden" : "Einblenden"}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          className="w-full cursor-pointer justify-start gap-2 px-2 py-1.5 text-sm text-destructive hover:bg-destructive/10"
-                          onClick={() => {
-                            setMenuOpenId(null);
-                            setDeletingPlan(plan);
-                          }}
-                        >
-                          <Trash2 className="size-4" /> Löschen
-                        </Button>
-                      </PopoverContent>
-                    </Popover>
-                  )}
+                  <Popover
+                    open={menuOpenId === plan.id}
+                    onOpenChange={(open) => setMenuOpenId(open ? plan.id : null)}
+                  >
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 cursor-pointer text-muted-foreground hover:text-foreground"
+                        aria-label={`Optionen für ${plan.name}`}
+                      >
+                        <MoreVertical className="size-4" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" className="w-48 p-1">
+                      <Button
+                        variant="ghost"
+                        className="w-full cursor-pointer justify-start gap-2 px-2 py-1.5 text-sm"
+                        onClick={() => openEditDialog(plan)}
+                      >
+                        <Pencil className="size-4" /> Bearbeiten
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        disabled={isToggling}
+                        className="w-full cursor-pointer justify-start gap-2 px-2 py-1.5 text-sm disabled:cursor-not-allowed"
+                        onClick={() => handleToggleVisibility(plan)}
+                      >
+                        {isToggling ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : isVisible ? (
+                          <EyeOff className="size-4" />
+                        ) : (
+                          <Eye className="size-4" />
+                        )}
+                        {isVisible ? "Ausblenden" : "Einblenden"}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        className="w-full cursor-pointer justify-start gap-2 px-2 py-1.5 text-sm text-destructive hover:bg-destructive/10"
+                        onClick={() => {
+                          setMenuOpenId(null);
+                          setDeletingPlan(plan);
+                        }}
+                      >
+                        <Trash2 className="size-4" /> Löschen
+                      </Button>
+                    </PopoverContent>
+                  </Popover>
                 </div>
 
                 <div className="space-y-1.5">
@@ -920,18 +928,50 @@ export function SavingsPlansCard({
                     </p>
                   </div>
                 </div>
-                {plan.income_events_left != null && (
-                  <p className="text-xs text-muted-foreground">
-                    {plan.income_events_left} erwartete Einkommen bis zum Zieldatum
-                  </p>
+                {plan.future_income_events != null && (
+                  <div className="flex items-start gap-2 rounded-md border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-xs">
+                    <Info className="mt-0.5 size-4 shrink-0 text-blue-600 dark:text-blue-400" />
+                    <div className="space-y-0.5">
+                      <p className="font-medium text-foreground">
+                        {plan.future_income_events === 0
+                          ? "Keine erwarteten Einkommen bis zum Zieldatum"
+                          : `${plan.future_income_events} erwartete Einkommen bis zum Zieldatum`}
+                      </p>
+                      {effectivePayoutDays(payoutDays).length > 0 && (
+                        <p className="text-muted-foreground">
+                          Berechnetes Einkommen immer{" "}
+                          {effectivePayoutDays(payoutDays)
+                            .map((d) => (d < 0 ? "am letzten Arbeitstag" : `am ${d}.`))
+                            .join(" und ")}{" "}
+                          des Monats
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 )}
 
                 {hasPaymentData ? (
-                  <div className="space-y-0.5 rounded-md border px-3 py-2 text-xs">
-                    <p className="font-medium">{plan.target_recipient_name}</p>
-                    <p className="truncate font-mono text-muted-foreground">
-                      {formatIban(plan.target_recipient_iban!)}
-                    </p>
+                  <div className="flex items-center gap-3 rounded-md border bg-muted/50 px-3 py-2.5">
+                    <BankLogo
+                      src={plan.recipient_logo_url ?? undefined}
+                      alt={plan.target_recipient_name ?? ""}
+                      sizeClassName="size-9 shrink-0"
+                      backgroundClassName={
+                        plan.recipient_logo_white_background ? "bg-white" : "bg-muted"
+                      }
+                      imgNoPadding={!plan.recipient_logo_padding}
+                    />
+                    <div className="min-w-0 space-y-0.5">
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Empfänger
+                      </p>
+                      <p className="truncate text-sm font-medium leading-tight">
+                        {plan.target_recipient_name}
+                      </p>
+                      <p className="truncate font-mono text-xs text-muted-foreground leading-tight">
+                        {formatIban(plan.target_recipient_iban!)}
+                      </p>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex items-start gap-2 rounded-md border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-xs text-orange-700 dark:text-orange-400">
@@ -979,15 +1019,15 @@ export function SavingsPlansCard({
                     </>
                   ) : (
                     <Button
-                        type="button"
-                        size="sm"
-                        disabled={!hasPaymentData}
-                        className="w-full"
-                        onClick={() => onTransfer(plan)}
-                      >
-                        <ArrowRightToLine className="size-4" />
-                        {`${formatAmount(topUp)} jetzt zahlen`}
-                      </Button>
+                      type="button"
+                      size="sm"
+                      disabled={!hasPaymentData}
+                      className="w-full"
+                      onClick={() => onTransfer(plan)}
+                    >
+                      <ArrowRightToLine className="size-4" />
+                      {`${formatAmount(topUp)} jetzt zahlen`}
+                    </Button>
                   )}
                 </div>
                 {isDeleting && (
@@ -1017,12 +1057,12 @@ export function SavingsPlansCard({
             recipientAccounts={recipientAccounts}
             bankAccounts={bankAccounts}
             canTransferMap={canTransferMap}
-            existingTotal={
-              editingPlan && autoHiddenPlanIds.includes(editingPlan.id)
-                ? savingsTotal
-                : savingsTotal - (editingPlan?.monthly_rate ?? 0)
-            }
+            existingTotal={savingsTotal - (editingPlan?.monthly_rate ?? 0)}
             availableForSavings={availableForSavings}
+            currentMonth={currentMonth}
+            payoutDays={payoutDays}
+            holidays={holidaySet}
+            isFirstMonth={editingPlan?.created_at?.slice(0, 7) === currentMonth}
             savedAmount={editingPlan?.saved_amount ?? 0}
           />
           {editError && (

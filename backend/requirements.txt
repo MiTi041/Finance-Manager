@@ -12,4 +12,5 @@ boto3
 fints
 bleach
 sepaxml
+holidays
 pytest

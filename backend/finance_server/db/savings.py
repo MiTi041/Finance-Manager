@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 from typing import Any
 
 from finance_server.core.database import get_connection
+from finance_server.core.feiertage import letzter_arbeitstag
+from finance_server.db.settings import get_holiday_state
 
 
 def list_plans() -> list[dict[str, Any]]:
@@ -180,44 +182,52 @@ def get_income_payout_days(month: str) -> list[int]:
             continue
         groups.setdefault(f"{name} | {purpose_clean}", []).append(row["date"])
 
+    state = get_holiday_state()
     days: set[int] = set()
     for dates in groups.values():
-        if len(dates) < 3:
-            continue
-        dates_sorted = sorted(dates)
-        recurring = True
-        for i in range(1, len(dates_sorted)):
-            d1 = datetime.strptime(dates_sorted[i - 1], "%Y-%m-%d").date()
-            d2 = datetime.strptime(dates_sorted[i], "%Y-%m-%d").date()
-            if abs((d2 - d1).days - 30) > 5:
-                recurring = False
-                break
-        if recurring:
-            for d in dates_sorted[-3:]:
-                day = datetime.strptime(d, "%Y-%m-%d").date().day
-                if day >= 1 and day <= 28:
-                    days.add(day)
-                else:
-                    days.add(28)
+        classified = _classify_group(dates, state)
+        if classified is not None:
+            days.add(classified)
 
     return sorted(days) if days else [1]
 
 
-def count_income_events_until(target_date: str, payout_days: list[int], from_date: str | None = None) -> int:
+def _classify_group(dates: list[str], state: str) -> int | None:
+    """-1 for last-working-day payouts, else fixed day-of-month; None if not recurring."""
+    if len(dates) < 3:
+        return None
+    parsed = [datetime.strptime(d, "%Y-%m-%d").date() for d in sorted(dates)]
+    for i in range(1, len(parsed)):
+        if abs((parsed[i] - parsed[i - 1]).days - 30) > 5:
+            return None
+    last3 = parsed[-3:]
+    if all(d == letzter_arbeitstag(state, d.year, d.month) for d in last3):
+        return -1
+    return min(last3[-1].day, 28)
+
+
+def count_income_events_until(
+    target_date: str, payout_days: list[int], from_date: str | None = None, min_result: int = 1
+) -> int:
     now = datetime.strptime(from_date, "%Y-%m-%d").date() if from_date else datetime.now().date()
     td = datetime.strptime(target_date, "%Y-%m-%d").date()
     if td <= now:
-        return 1
+        return min_result
+    state = get_holiday_state()
     result = 0
     cursor = now.replace(day=1)
     end = td.replace(day=1)
     while cursor <= end:
-        for day in payout_days:
-            last = monthrange(cursor.year, cursor.month)[1]
-            pd = cursor.replace(day=min(day, last))
-            if now <= pd <= td:
-                result += 1
+        candidates = [
+            letzter_arbeitstag(state, cursor.year, cursor.month)
+            if day < 0
+            else cursor.replace(day=min(day, monthrange(cursor.year, cursor.month)[1]))
+            for day in payout_days
+        ]
+        pd = max(candidates)
+        if now <= pd <= td:
+            result += 1
         y = cursor.year + (cursor.month // 12)
         m = cursor.month % 12 + 1
         cursor = cursor.replace(year=y, month=m)
-    return max(1, result)
+    return max(min_result, result)

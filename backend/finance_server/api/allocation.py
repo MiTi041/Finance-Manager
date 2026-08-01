@@ -117,7 +117,7 @@ def update_allocation_settings(
     payload: AllocationSettingsUpdate = Body(...),
     service: AllocationService = Depends(get_allocation_service),
 ) -> dict[str, Any]:
-    return service.update_settings(payload.model_dump())
+    return service.update_settings(payload.model_dump(exclude_none=True))
 
 
 @router.post("/allocation/run")

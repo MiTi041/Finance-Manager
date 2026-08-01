@@ -69,13 +69,15 @@ def _serialize_budget(row: Any, spent: float, cats: list[dict[str, Any]]) -> dic
         "spent": spent_r,
         "remaining": round(monthly_r - spent_r, 2),
         "is_over": spent_r > monthly_r,
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
     }
 
 
 def _get_budget(budget_id: int) -> dict[str, Any] | None:
     with get_connection() as conn:
         row = conn.execute(
-            "SELECT id, name, category_ids, monthly_amount FROM budgets WHERE id = ?",
+            "SELECT id, name, category_ids, monthly_amount, created_at, updated_at FROM budgets WHERE id = ?",
             (budget_id,),
         ).fetchone()
         if row is None:
@@ -92,7 +94,7 @@ def _get_budget(budget_id: int) -> dict[str, Any] | None:
 def list_budgets(month: str) -> list[dict[str, Any]]:
     with get_connection() as conn:
         rows = conn.execute(
-            "SELECT id, name, category_ids, monthly_amount FROM budgets ORDER BY id ASC",
+            "SELECT id, name, category_ids, monthly_amount, created_at, updated_at FROM budgets ORDER BY id ASC",
         ).fetchall()
         budgets: list[dict[str, Any]] = []
         for row in rows:

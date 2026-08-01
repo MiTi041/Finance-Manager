@@ -76,6 +76,7 @@ VALID_SYNC_TABLES = {
     "kategorien", "umsaetze", "zahlungspartner", "empfaengerkonten",
     "subscription_identities", "ibans",
     "allocation_buckets", "allocation_bafoeg_config", "savings_plans", "budgets",
+    "app_settings",
 }
 
 VALID_SYNC_COLUMNS: dict[str, set[str]] = {
@@ -102,13 +103,14 @@ VALID_SYNC_COLUMNS: dict[str, set[str]] = {
         "created_at", "updated_at",
     },
     "zahlungspartner": {"id", "name", "website", "logo_url", "local_logo_path", "is_company", "logo_white_background", "logo_padding", "updated_at"},
-    "empfaengerkonten": {"id", "account_name", "iban", "bic", "recipient_name", "is_donation_account", "updated_at"},
+    "empfaengerkonten": {"id", "account_name", "iban", "bic", "recipient_name", "is_donation_account", "created_at", "updated_at"},
     "subscription_identities": {"id", "counterparty_name", "amount", "display_name", "f_zahlungspartner_id", "dismissed", "updated_at"},
     "ibans": {"iban", "f_zahlungspartner_id"},
-    "allocation_buckets": {"id", "bucket_type", "percentage", "recipient_account_id", "sender_iban", "is_active", "sort_order", "created_at", "updated_at"},
-    "allocation_bafoeg_config": {"id", "total_debt", "monthly_rate", "interest_rate", "payout_date", "created_at", "updated_at"},
+    "allocation_buckets": {"id", "bucket_type", "percentage", "recipient_account_id", "sender_iban", "is_active", "sort_order", "target_amount", "target_months", "recipient_iban", "created_at", "updated_at"},
+    "allocation_bafoeg_config": {"id", "total_debt", "monthly_rate", "interest_rate", "payout_date", "current_balance", "created_at", "updated_at"},
     "savings_plans": {"id", "name", "tag", "target_amount", "target_date", "target_recipient_name", "target_recipient_iban", "target_recipient_bic", "is_visible", "sender_iban", "created_at", "updated_at"},
     "budgets": {"id", "name", "category_ids", "monthly_amount", "created_at", "updated_at"},
+    "app_settings": {"key", "value", "updated_at"},
 }
 
 
@@ -123,6 +125,10 @@ def _resolve_lookup(
         return "transaction_hash", data["transaction_hash"], row_id
     if table == "ibans":
         return "iban", row_id, row_id
+    if table == "empfaengerkonten" and data and data.get("iban"):
+        return "iban", data["iban"], row_id
+    if table == "app_settings" and data and data.get("key"):
+        return "key", data["key"], None
     return "id", row_id, row_id
 
 
@@ -158,18 +164,34 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
         if pk == "id" and "id" not in filtered_data:
             return False
 
+        if table == "app_settings" and filtered_data.get("key") != "bafoeg_enabled":
+            return False
+
         if table == "umsaetze" and "splits" in filtered_data and isinstance(filtered_data["splits"], (dict, list)):
             filtered_data["splits"] = json.dumps(filtered_data["splits"], ensure_ascii=False) if filtered_data["splits"] else None
+
+        if table == "budgets" and "category_ids" in filtered_data and isinstance(filtered_data["category_ids"], list):
+            filtered_data["category_ids"] = json.dumps(filtered_data["category_ids"], ensure_ascii=False)
 
         columns = [k for k in filtered_data.keys() if k != pk]
         placeholders = [f"{k} = ?" for k in columns]
         values = [filtered_data[k] for k in columns]
 
-        existing = connection.execute(
-            f"SELECT 1 FROM {table} WHERE {pk} = ?", (pk_value,)
-        ).fetchone()
+        if table == "allocation_buckets":
+            existing = connection.execute(
+                "SELECT id FROM allocation_buckets WHERE bucket_type = ?", (pk_value,)
+            ).fetchone()
+        else:
+            existing = connection.execute(
+                f"SELECT 1 FROM {table} WHERE {pk} = ?", (pk_value,)
+            ).fetchone()
         if table == "allocation_buckets" and existing:
-            use_id = existing["id"] if existing else row_id
+            use_id = existing["id"]
+
+        if table == "empfaengerkonten" and existing and "id" in columns:
+            columns = [c for c in columns if c != "id"]
+            placeholders = [f"{k} = ?" for k in columns]
+            values = [filtered_data[k] for k in columns]
 
         if existing and "updated_at" in valid_cols and op_type != "INSERT":
             current_updated = connection.execute(
@@ -194,6 +216,17 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
             all_placeholders = ["?"] * len(all_columns)
             sql = f"INSERT OR IGNORE INTO {table} ({', '.join(all_columns)}) VALUES ({', '.join(all_placeholders)})"
             cursor = connection.execute(sql, all_values)
+            # ponytail: incoming id taken by a different account on this device ->
+            # retry without id so the account still arrives with an auto-increment id
+            if (
+                cursor.rowcount == 0
+                and table == "empfaengerkonten"
+                and "id" in all_columns
+            ):
+                retry_cols = [c for c in all_columns if c != "id"]
+                retry_vals = [v for c, v in zip(all_columns, all_values) if c != "id"]
+                retry_sql = f"INSERT OR IGNORE INTO {table} ({', '.join(retry_cols)}) VALUES ({', '.join('?' for _ in retry_cols)})"
+                cursor = connection.execute(retry_sql, retry_vals)
         return cursor.rowcount > 0
 
 
@@ -201,11 +234,14 @@ def bootstrap_sync_ops() -> int:
     ops_count = 0
     with get_connection() as connection:
         for table in sorted(VALID_SYNC_TABLES):
-            pk = "iban" if table == "ibans" else "id"
+            pk = {"ibans": "iban", "app_settings": "key"}.get(table, "id")
             cols = [c for c in sorted(VALID_SYNC_COLUMNS.get(table, set())) if c != pk]
             all_cols = [pk] + cols
             col_list = ", ".join(all_cols)
-            rows = connection.execute(f"SELECT {col_list} FROM {table} ORDER BY {pk}").fetchall()
+            where = " WHERE key = 'bafoeg_enabled'" if table == "app_settings" else ""
+            rows = connection.execute(
+                f"SELECT {col_list} FROM {table}{where} ORDER BY {pk}"
+            ).fetchall()
             for row in rows:
                 row_dict = dict(row)
                 log_sync_op(table, row_dict[pk], "INSERT", row_dict)

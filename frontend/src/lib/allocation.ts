@@ -37,12 +37,14 @@ export type AllocationRunBucket = {
   payout_date?: string | null;
   required_monthly_rate?: number;
   income_events_left?: number;
+  future_income_events?: number;
 };
 
 export type SavingsPlan = {
   id: number;
   name: string;
   tag: string | null;
+  created_at?: string;
   target_amount: number | null;
   target_date: string | null;
   target_recipient_name: string | null;
@@ -56,6 +58,10 @@ export type SavingsPlan = {
   this_month: number;
   required_monthly_rate: number | null;
   income_events_left: number | null;
+  future_income_events?: number | null;
+  recipient_logo_url?: string | null;
+  recipient_logo_white_background?: boolean;
+  recipient_logo_padding?: boolean;
   saved_einzahlungen: number;
   saved_entnahmen: number;
   month_einzahlungen: number;
@@ -88,6 +94,8 @@ export type AllocationStatus = {
   savings_plans: SavingsPlan[];
   auto_hidden_plan_ids: number[];
   available_for_savings: number;
+  payout_days?: number[];
+  holidays?: string[];
 };
 
 export async function fetchAllocationStatus(month?: string): Promise<AllocationStatus> {
@@ -234,6 +242,8 @@ export async function berechneBafoegRate(payload: {
 
 export type AllocationSettings = {
   bafoeg_enabled: boolean;
+  holiday_state: string;
+  holiday_states: { code: string; name: string }[];
 };
 
 export async function fetchAllocationSettings(): Promise<AllocationSettings> {

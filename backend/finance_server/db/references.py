@@ -436,6 +436,8 @@ def _serialize_empfaengerkonto_row(row: sqlite3.Row) -> dict[str, Any]:
         "bic": row["bic"],
         "recipient_name": row["recipient_name"],
         "is_donation_account": bool(row["is_donation_account"]),
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
     }
 
 
@@ -443,7 +445,7 @@ def list_empfaengerkonten_records() -> list[dict[str, Any]]:
     with get_connection() as connection:
         rows = connection.execute(
             """
-            SELECT id, account_name, iban, bic, recipient_name, is_donation_account
+            SELECT id, account_name, iban, bic, recipient_name, is_donation_account, created_at, updated_at
             FROM empfaengerkonten
             ORDER BY recipient_name COLLATE NOCASE ASC, account_name COLLATE NOCASE ASC, iban ASC
             """
@@ -456,7 +458,7 @@ def get_empfaengerkonto_record(empfaengerkonto_id: int) -> dict[str, Any] | None
     with get_connection() as connection:
         row = connection.execute(
             """
-            SELECT id, account_name, iban, bic, recipient_name, is_donation_account
+            SELECT id, account_name, iban, bic, recipient_name, is_donation_account, created_at, updated_at
             FROM empfaengerkonten
             WHERE id = ?
             """,
@@ -600,6 +602,7 @@ def update_empfaengerkonto_record(
 
 
 def delete_empfaengerkonto_record(empfaengerkonto_id: int) -> bool:
+    record = get_empfaengerkonto_record(empfaengerkonto_id)
     with get_connection() as connection:
         cursor = connection.execute(
             "DELETE FROM empfaengerkonten WHERE id = ?",
@@ -607,7 +610,8 @@ def delete_empfaengerkonto_record(empfaengerkonto_id: int) -> bool:
         )
 
     result = cursor.rowcount > 0
-    _log("empfaengerkonten", empfaengerkonto_id, "DELETE")
+    if result:
+        _log("empfaengerkonten", empfaengerkonto_id, "DELETE", record)
     return result
 
 

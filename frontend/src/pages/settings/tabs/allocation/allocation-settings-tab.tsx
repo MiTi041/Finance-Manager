@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
-import { PiggyBank, Loader2 } from "lucide-react";
+import { PiggyBank, Loader2, CalendarDays } from "lucide-react";
 import {
   fetchAllocationSettings,
   updateAllocationSettings,
   type AllocationSettings,
 } from "@/lib/allocation";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export function AllocationSettingsTab() {
   const [settings, setSettings] = useState<AllocationSettings | null>(null);
@@ -43,6 +50,20 @@ export function AllocationSettingsTab() {
     }
   }, [settings]);
 
+  const changeHolidayState = useCallback(async (state: string) => {
+    if (!settings || state === settings.holiday_state) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await updateAllocationSettings({ holiday_state: state });
+      setSettings(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Einstellung konnte nicht gespeichert werden");
+    } finally {
+      setSaving(false);
+    }
+  }, [settings]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -59,6 +80,37 @@ export function AllocationSettingsTab() {
       {error && (
         <p className="text-sm text-destructive mb-4">{error}</p>
       )}
+
+      <div className="mb-4 flex flex-col gap-2 rounded-lg border border-muted bg-muted/70 px-4 py-3">
+        <div className="flex items-center gap-3">
+          <CalendarDays className="size-5 text-muted-foreground" />
+          <div className="flex-1">
+            <div className="text-sm font-medium">Feiertags-Bundesland</div>
+            <div className="text-xs text-muted-foreground">
+              Gehalt wird am letzten Arbeitstag des Monats gezahlt (bei Wochenende oder Feiertag
+              vorgezogen). Welche Feiertage gelten, hängt vom Bundesland deines Arbeitgebers ab.
+              Diese Einstellung beeinflusst, wie dein Gehaltstag erkannt wird und wie viele
+              Einkommen bis zum Zieldatum deiner Sparpläne eingehen.
+            </div>
+          </div>
+        </div>
+        <Select
+          value={settings?.holiday_state ?? "nw"}
+          onValueChange={changeHolidayState}
+          disabled={saving}
+        >
+          <SelectTrigger id="holiday-state" className="w-full">
+            <SelectValue placeholder="Bundesland wählen" />
+          </SelectTrigger>
+          <SelectContent>
+            {(settings?.holiday_states ?? []).map((state) => (
+              <SelectItem key={state.code} value={state.code}>
+                {state.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
       <button
         type="button"
