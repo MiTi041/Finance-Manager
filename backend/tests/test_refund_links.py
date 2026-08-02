@@ -93,3 +93,58 @@ class TestDeleteRefundLink:
 
     def test_delete_missing_returns_false(self, test_db):
         assert _run(test_db, lambda: delete_refund_link(999)) is False
+
+
+from finance_server.db.transactions import delete_transaction, fetch_latest_transaction, fetch_transactions
+
+
+class TestDeleteCleanup:
+    def test_delete_income_removes_links_and_recalcs(self, test_db):
+        income = _ins(test_db, 50.0, "inc")
+        expense = _ins(test_db, -30.0, "exp")
+        _run(test_db, lambda: add_refund_link(income, expense, 20.0))
+
+        assert _run(test_db, lambda: delete_transaction(income)) is True
+
+        assert test_db.execute("SELECT COUNT(*) FROM refund_links").fetchone()[0] == 0
+        assert test_db.execute("SELECT refund_total FROM umsaetze WHERE id = ?", (expense,)).fetchone()[0] == 0.0
+
+    def test_delete_expense_removes_its_links(self, test_db):
+        income = _ins(test_db, 50.0, "inc")
+        expense = _ins(test_db, -30.0, "exp")
+        _run(test_db, lambda: add_refund_link(income, expense, 20.0))
+
+        assert _run(test_db, lambda: delete_transaction(expense)) is True
+
+        assert test_db.execute("SELECT COUNT(*) FROM refund_links").fetchone()[0] == 0
+
+
+class TestDto:
+    def test_fetch_transactions_includes_links_and_attributed(self, test_db):
+        income = _ins(test_db, 90.0, "inc")
+        exp1 = _ins(test_db, -30.0, "exp1")
+        exp2 = _ins(test_db, -40.0, "exp2")
+        _run(test_db, lambda: add_refund_link(income, exp1, 30.0))
+        _run(test_db, lambda: add_refund_link(income, exp2, 40.0))
+
+        with patch("finance_server.db.transactions.get_connection", return_value=test_db):
+            rows = fetch_transactions(days=36500)
+        income_dto = next(r for r in rows if r["id"] == income)
+
+        assert income_dto["refund_links"] == [
+            {"id": 1, "refund_transaction_id": income, "expense_transaction_id": exp1, "amount": 30.0},
+            {"id": 2, "refund_transaction_id": income, "expense_transaction_id": exp2, "amount": 40.0},
+        ]
+        assert income_dto["refund_attributed"] == 70.0
+        assert income_dto["is_refund"] is True
+        assert next(r for r in rows if r["id"] == exp1)["is_refund"] is False
+
+    def test_fetch_latest_transaction_includes_links(self, test_db):
+        income = _ins(test_db, 50.0, "inc")
+        expense = _ins(test_db, -30.0, "exp")
+        _run(test_db, lambda: add_refund_link(income, expense, 20.0))
+
+        with patch("finance_server.db.transactions.get_connection", return_value=test_db):
+            latest = fetch_latest_transaction(iban="DE1")
+        assert latest["id"] == expense
+        assert latest["refund_links"] == []

@@ -3,13 +3,14 @@ from __future__ import annotations
 from typing import Any
 
 from finance_server.db import (
+    add_refund_link,
+    delete_refund_link,
     delete_transaction,
     delete_transactions_batch,
     fetch_latest_transaction,
     fetch_transactions,
     update_transaction_category,
     update_transaction_note,
-    update_transaction_refund_link,
     update_transaction_splits,
     update_transactions_category_batch,
 )
@@ -51,10 +52,13 @@ class TransactionService:
     ) -> bool:
         return update_transaction_splits(transaction_id, splits)
 
-    def update_refund_link(
-        self, transaction_id: int, refund_ref_transaction_id: int | None
-    ) -> bool:
-        return update_transaction_refund_link(transaction_id, refund_ref_transaction_id)
+    def add_refund_link(
+        self, refund_transaction_id: int, expense_transaction_id: int, amount: float
+    ) -> dict[str, Any] | None:
+        return add_refund_link(refund_transaction_id, expense_transaction_id, amount)
+
+    def delete_refund_link(self, link_id: int) -> bool:
+        return delete_refund_link(link_id)
 
     def update_category(
         self, transaction_id: int, category_id: int | None

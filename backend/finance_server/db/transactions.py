@@ -142,7 +142,28 @@ def insert_transactions(rows: Iterable[dict[str, Any]]) -> dict[str, int]:
     }
 
 
-def row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
+def _refund_links_map(connection: sqlite3.Connection) -> dict[int, list[dict[str, Any]]]:
+    rows = connection.execute(
+        """SELECT id, refund_transaction_id, expense_transaction_id, amount
+           FROM refund_links ORDER BY id"""
+    ).fetchall()
+    links_map: dict[int, list[dict[str, Any]]] = {}
+    for row in rows:
+        links_map.setdefault(row["refund_transaction_id"], []).append(
+            {
+                "id": row["id"],
+                "refund_transaction_id": row["refund_transaction_id"],
+                "expense_transaction_id": row["expense_transaction_id"],
+                "amount": row["amount"],
+            }
+        )
+    return links_map
+
+
+def row_to_dict(
+    row: sqlite3.Row, refund_links: list[dict[str, Any]] | None = None
+) -> dict[str, Any]:
+    links = refund_links or []
     return {
         "id": row["id"],
         "transaction_hash": row["transaction_hash"],
@@ -194,9 +215,10 @@ def row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
         "splits": json.loads(row["splits"]) if row["splits"] else None,
         "created_at": row["created_at"],
         "bank_deleted": bool(dict(row).get("bank_deleted", False)),
-        "refund_ref_transaction_id": row["refund_ref_transaction_id"],
+        "refund_links": links,
+        "refund_attributed": round(sum(l["amount"] for l in links), 2),
         "refund_total": row["refund_total"],
-        "is_refund": row["refund_ref_transaction_id"] is not None and row["amount"] > 0,
+        "is_refund": row["amount"] > 0 and len(links) > 0,
     }
 
 
@@ -247,8 +269,9 @@ def fetch_transactions(
 
     with get_connection() as connection:
         rows = connection.execute("\n".join(query_parts), params).fetchall()
+        links_map = _refund_links_map(connection)
 
-    return [row_to_dict(row) for row in rows]
+    return [row_to_dict(row, links_map.get(row["id"])) for row in rows]
 
 def fetch_latest_transaction(
     iban: str | None = None,
@@ -270,7 +293,8 @@ def fetch_latest_transaction(
 
     with get_connection() as connection:
         row = connection.execute("\n".join(query_parts), params).fetchone()
-    return row_to_dict(row) if row else None
+        links_map = _refund_links_map(connection)
+    return row_to_dict(row, links_map.get(row["id"])) if row else None
 
 
 def fetch_transaction_balance(account_iban: str) -> float:
@@ -295,16 +319,23 @@ def fetch_transaction_balance(account_iban: str) -> float:
 
 def delete_transaction(transaction_id: int) -> bool:
     with get_connection() as connection:
-        row = connection.execute(
-            "SELECT refund_ref_transaction_id FROM umsaetze WHERE id = ?",
-            (transaction_id,),
-        ).fetchone()
-        parent_id = row["refund_ref_transaction_id"] if row else None
+        expense_ids = [
+            r["expense_transaction_id"]
+            for r in connection.execute(
+                "SELECT expense_transaction_id FROM refund_links WHERE refund_transaction_id = ?",
+                (transaction_id,),
+            ).fetchall()
+        ]
+        connection.execute(
+            "DELETE FROM refund_links WHERE refund_transaction_id = ? OR expense_transaction_id = ?",
+            (transaction_id, transaction_id),
+        )
+        for expense_id in set(expense_ids):
+            if expense_id != transaction_id:
+                _recalc_refund_total(expense_id, connection)
         cursor = connection.execute("DELETE FROM umsaetze WHERE id = ?", (transaction_id,))
         result = cursor.rowcount > 0
         _log("umsaetze", transaction_id, "DELETE", connection=connection)
-        if parent_id:
-            _recalc_refund_total(parent_id, connection)
         return result
 
 
@@ -313,10 +344,17 @@ def delete_transactions_batch(transaction_ids: list[int]) -> int:
         return 0
     placeholders = ",".join("?" for _ in transaction_ids)
     with get_connection() as connection:
-        parents = connection.execute(
-            f"SELECT DISTINCT refund_ref_transaction_id FROM umsaetze WHERE id IN ({placeholders}) AND refund_ref_transaction_id IS NOT NULL",
-            transaction_ids,
-        ).fetchall()
+        expense_ids = [
+            r["expense_transaction_id"]
+            for r in connection.execute(
+                f"SELECT expense_transaction_id FROM refund_links WHERE refund_transaction_id IN ({placeholders})",
+                transaction_ids,
+            ).fetchall()
+        ]
+        connection.execute(
+            f"DELETE FROM refund_links WHERE refund_transaction_id IN ({placeholders}) OR expense_transaction_id IN ({placeholders})",
+            transaction_ids + transaction_ids,
+        )
         cursor = connection.execute(
             f"DELETE FROM umsaetze WHERE id IN ({placeholders})",
             transaction_ids,
@@ -324,8 +362,9 @@ def delete_transactions_batch(transaction_ids: list[int]) -> int:
         result = cursor.rowcount
         for tid in transaction_ids:
             _log("umsaetze", tid, "DELETE", connection=connection)
-        for p in parents:
-            _recalc_refund_total(p["refund_ref_transaction_id"], connection)
+        for expense_id in set(expense_ids):
+            if expense_id not in transaction_ids:
+                _recalc_refund_total(expense_id, connection)
         return result
 
 
