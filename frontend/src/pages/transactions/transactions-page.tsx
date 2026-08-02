@@ -731,6 +731,7 @@ export default function TransactionsPage() {
           if (open) return;
           setToggleConfirmOpen(false);
           setPendingToggleId(null);
+          pendingRefundScrollRef.current = null;
         }}
       />
     </div>
