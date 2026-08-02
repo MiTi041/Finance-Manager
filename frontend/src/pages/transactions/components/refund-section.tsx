@@ -44,22 +44,34 @@ export function RefundSectionIncoming({
   const remaining = Math.max(0, transaction.betrag.wert - transaction.refundAttributed);
   const canAdd = remaining > 0.005;
 
+  const refundedByExpense = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const t of allTransactions) {
+      for (const link of t.refundLinks) {
+        map.set(
+          link.expense_transaction_id,
+          (map.get(link.expense_transaction_id) ?? 0) + link.amount,
+        );
+      }
+    }
+    return map;
+  }, [allTransactions]);
+
+  const expenseRefundedFor = (expense: Transaction) =>
+    refundedByExpense.get(expense.id) ?? 0;
+
+  const expenseRemainingFor = (expense: Transaction) =>
+    Math.max(0, Math.abs(expense.betrag.wert) - expenseRefundedFor(expense));
+
   const outgoingList = useMemo(
     () => allTransactions.filter((t) => t.betrag.wert < 0),
     [allTransactions],
   );
 
-  const expenseRemainingFor = (expense: Transaction) => {
-    const refunded = allTransactions.reduce(
-      (sum, t) =>
-        sum +
-        t.refundLinks
-          .filter((link) => link.expense_transaction_id === expense.id)
-          .reduce((s, link) => s + link.amount, 0),
-      0,
-    );
-    return Math.max(0, Math.abs(expense.betrag.wert) - refunded);
-  };
+  const pickableList = useMemo(
+    () => outgoingList.filter((t) => expenseRemainingFor(t) > 0.005),
+    [outgoingList, refundedByExpense],
+  );
 
   const handlePick = (expense: Transaction) => {
     setSelectedExpense(expense);
@@ -104,9 +116,11 @@ export function RefundSectionIncoming({
 
   return (
     <div>
-      <p className="mb-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
-        Diese Gutschrift ist eine Rückerstattung für
-      </p>
+      {links.length > 0 && (
+        <p className="mb-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
+          Diese Gutschrift ist eine Rückerstattung für
+        </p>
+      )}
 
       {links.length > 0 && (
         <div className="space-y-1.5">
@@ -167,21 +181,25 @@ export function RefundSectionIncoming({
         </div>
       )}
 
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <span className="text-xs tabular-nums text-muted-foreground">
-          Rest: {formatAmount(remaining, transaction.betrag.waehrung)}
-        </span>
+      <div className="mt-2 flex items-center justify-start gap-2">
         {canAdd && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setPickerOpen(true)}
-            className="shadow-none h-9 text-muted-foreground font-normal hover:text-foreground"
-          >
-            <Plus className="size-3.5 shrink-0 opacity-50" />
-            <span>Rückerstattung hinzufügen</span>
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setPickerOpen(true)}
+                className="shadow-none h-9 text-muted-foreground font-normal hover:text-foreground"
+              >
+                <Plus className="size-3.5 shrink-0 opacity-50" />
+                <span>Rückerstattung hinzufügen</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              Diese Gutschrift anteilig einer oder mehreren Ausgaben zuordnen
+            </TooltipContent>
+          </Tooltip>
         )}
       </div>
 
@@ -198,7 +216,7 @@ export function RefundSectionIncoming({
             <CommandList>
               <CommandEmpty>Keine ausgehende Zahlung gefunden</CommandEmpty>
               <CommandGroup>
-                {outgoingList.map((t) => (
+                {pickableList.map((t) => (
                   <CommandItem
                     key={t.id}
                     value={`${t.id}-${t.zahlungspartner.name || ""} ${formatAmount(Math.abs(t.betrag.wert), t.betrag.waehrung)} ${formatDate(t.daten.buchungsdatum)}`}
@@ -219,13 +237,27 @@ export function RefundSectionIncoming({
                       <p className="truncate text-sm font-medium text-foreground">
                         {t.zahlungspartner.datenbankName || t.zahlungspartner.name || "–"}
                       </p>
-                      <p className="truncate text-xs text-muted-foreground">
+                      <p className="text-xs text-muted-foreground">
                         {formatDate(t.daten.buchungsdatum)}
                       </p>
+                      {(t.texte.verwendungszweck || t.texte.zusatzVerwendungszweck) && (
+                        <p className="mt-0.5 whitespace-pre-line text-xs leading-relaxed text-muted-foreground/80">
+                          {t.texte.verwendungszweck}
+                          {t.texte.verwendungszweck && t.texte.zusatzVerwendungszweck ? "\n" : ""}
+                          {t.texte.zusatzVerwendungszweck}
+                        </p>
+                      )}
                     </div>
-                    <span className="shrink-0 text-sm tabular-nums text-red-500">
-                      {formatAmount(Math.abs(t.betrag.wert), t.betrag.waehrung)}
-                    </span>
+                    <div className="shrink-0 text-right">
+                      <span className="block text-sm tabular-nums text-red-500">
+                        {formatAmount(Math.abs(t.betrag.wert), t.betrag.waehrung)}
+                      </span>
+                      {expenseRefundedFor(t) > 0.005 && (
+                        <span className="block text-xs tabular-nums text-green-600">
+                          −{formatAmount(expenseRefundedFor(t), t.betrag.waehrung)} erstattet
+                        </span>
+                      )}
+                    </div>
                   </CommandItem>
                 ))}
               </CommandGroup>
