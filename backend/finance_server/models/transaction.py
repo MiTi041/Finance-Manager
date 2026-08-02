@@ -17,5 +17,6 @@ class BatchIdsRequest(BaseModel):
     transaction_ids: list[int]
 
 
-class TransactionRefundLinkUpdateRequest(BaseModel):
-    refund_ref_transaction_id: int | None
+class RefundLinkCreateRequest(BaseModel):
+    expense_transaction_id: int
+    amount: float

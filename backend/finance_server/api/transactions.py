@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from finance_server.models.transaction import BatchIdsRequest, TransactionNoteUpdateRequest, TransactionRefundLinkUpdateRequest, TransactionSplitUpdateRequest
+from finance_server.models.transaction import BatchIdsRequest, RefundLinkCreateRequest, TransactionNoteUpdateRequest, TransactionSplitUpdateRequest
 from finance_server.services.transaction_service import TransactionService
 from finance_server.api._crud import crud_delete
 from finance_server.api.deps import get_transaction_service
@@ -88,17 +88,28 @@ def set_transaction_splits(
     return {"transaction_id": transaction_id, "splits": request.splits}
 
 
-@router.patch("/db/transactions/{transaction_id}/refund-link")
-def set_transaction_refund_link(
+@router.post("/db/transactions/{transaction_id}/refund-links")
+def create_refund_link(
     transaction_id: int,
-    request: TransactionRefundLinkUpdateRequest,
+    request: RefundLinkCreateRequest,
     service: TransactionService = Depends(get_transaction_service),
 ) -> dict[str, Any]:
-    updated = service.update_refund_link(transaction_id, request.refund_ref_transaction_id)
-    if not updated:
+    try:
+        link = service.add_refund_link(transaction_id, request.expense_transaction_id, request.amount)
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
+    if link is None:
         raise HTTPException(status_code=404, detail="Transaktion nicht gefunden")
+    return {"link": link}
 
-    return {
-        "transaction_id": transaction_id,
-        "refund_ref_transaction_id": request.refund_ref_transaction_id,
-    }
+
+@router.delete("/db/transactions/{transaction_id}/refund-links/{link_id}")
+def remove_refund_link(
+    transaction_id: int,
+    link_id: int,
+    service: TransactionService = Depends(get_transaction_service),
+) -> dict[str, Any]:
+    deleted = service.delete_refund_link(link_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Rückerstattung nicht gefunden")
+    return {"deleted": link_id}
