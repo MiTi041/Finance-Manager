@@ -41,7 +41,7 @@ def fetch_summary(
             f"""
             SELECT
                 COALESCE(SUM(amount), 0) AS balance,
-                COALESCE(SUM(CASE WHEN amount > 0 AND refund_ref_transaction_id IS NULL THEN amount ELSE 0 END), 0) AS incomes,
+                COALESCE(SUM(CASE WHEN amount > 0 THEN amount - COALESCE((SELECT SUM(amount) FROM refund_links rl WHERE rl.refund_transaction_id = umsaetze.id), 0) ELSE 0 END), 0) AS incomes,
                 COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) - COALESCE(refund_total, 0) ELSE 0 END), 0) AS expenses,
                 COUNT(*) AS transaction_count
             FROM umsaetze
@@ -137,7 +137,7 @@ def fetch_category_analytics(
         total_row = conn.execute(
             f"""SELECT COALESCE(SUM(ABS(
                 CASE
-                    WHEN u.amount > 0 AND u.refund_ref_transaction_id IS NOT NULL THEN 0
+                    WHEN u.amount > 0 THEN u.amount - COALESCE((SELECT SUM(amount) FROM refund_links rl WHERE rl.refund_transaction_id = u.id), 0)
                     WHEN u.amount < 0 THEN u.amount + COALESCE(u.refund_total, 0)
                     ELSE u.amount
                 END
@@ -155,7 +155,7 @@ def fetch_category_analytics(
                 k.icon,
                 COALESCE(SUM(
                     CASE
-                        WHEN u.amount > 0 AND u.refund_ref_transaction_id IS NOT NULL THEN 0
+                        WHEN u.amount > 0 THEN u.amount - COALESCE((SELECT SUM(amount) FROM refund_links rl WHERE rl.refund_transaction_id = u.id), 0)
                         WHEN u.amount < 0 THEN u.amount + COALESCE(u.refund_total, 0)
                         ELSE u.amount
                     END
@@ -167,7 +167,7 @@ def fetch_category_analytics(
             GROUP BY COALESCE(u.kategorie, 0)
             ORDER BY COALESCE(SUM(ABS(
                 CASE
-                    WHEN u.amount > 0 AND u.refund_ref_transaction_id IS NOT NULL THEN 0
+                    WHEN u.amount > 0 THEN u.amount - COALESCE((SELECT SUM(amount) FROM refund_links rl WHERE rl.refund_transaction_id = u.id), 0)
                     WHEN u.amount < 0 THEN u.amount + COALESCE(u.refund_total, 0)
                     ELSE u.amount
                 END
@@ -228,7 +228,7 @@ def fetch_partner_analytics(
                 COALESCE(NULLIF(applicant_iban, ''), NULLIF(gvc_applicant_iban, ''), '') AS partner_iban,
                 SUM(
                     CASE
-                        WHEN amount > 0 AND refund_ref_transaction_id IS NOT NULL THEN 0
+                        WHEN amount > 0 THEN amount - COALESCE((SELECT SUM(amount) FROM refund_links rl WHERE rl.refund_transaction_id = umsaetze.id), 0)
                         WHEN amount < 0 THEN amount + COALESCE(refund_total, 0)
                         ELSE amount
                     END
@@ -239,7 +239,7 @@ def fetch_partner_analytics(
             GROUP BY partner_name
             ORDER BY SUM(ABS(
                 CASE
-                    WHEN amount > 0 AND refund_ref_transaction_id IS NOT NULL THEN 0
+                    WHEN amount > 0 THEN amount - COALESCE((SELECT SUM(amount) FROM refund_links rl WHERE rl.refund_transaction_id = umsaetze.id), 0)
                     WHEN amount < 0 THEN amount + COALESCE(refund_total, 0)
                     ELSE amount
                 END

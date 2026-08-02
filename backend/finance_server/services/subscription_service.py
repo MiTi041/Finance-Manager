@@ -481,14 +481,14 @@ class SubscriptionService:
             with get_connection() as connection:
                 refund_rows = connection.execute(
                     f"""
-                    SELECT refund_ref_transaction_id, SUM(amount) as refund_total
-                    FROM umsaetze
-                    WHERE refund_ref_transaction_id IN ({placeholders})
-                    GROUP BY refund_ref_transaction_id
+                    SELECT rl.expense_transaction_id AS expense_id, SUM(rl.amount) AS refund_total
+                    FROM refund_links rl
+                    WHERE rl.expense_transaction_id IN ({placeholders})
+                    GROUP BY rl.expense_transaction_id
                     """,
                     all_tx_ids,
                 ).fetchall()
-            refund_map = {row["refund_ref_transaction_id"]: abs(row["refund_total"]) for row in refund_rows}
+            refund_map = {row["expense_id"]: float(row["refund_total"]) for row in refund_rows}
         else:
             refund_map = {}
 

@@ -148,3 +148,40 @@ class TestDto:
             latest = fetch_latest_transaction(iban="DE1")
         assert latest["id"] == expense
         assert latest["refund_links"] == []
+
+
+from finance_server.db.analytics import fetch_summary
+
+
+class TestAnalytics:
+    def _summary(self, conn):
+        with patch("finance_server.db.analytics.get_connection", return_value=conn):
+            return fetch_summary(days=36500)
+
+    def test_partial_refund_keeps_remaining_expense(self, test_db):
+        income = _ins(test_db, 75.0, "inc")
+        e1 = _ins(test_db, -30.0, "e1")
+        e2 = _ins(test_db, -40.0, "e2")
+        e3 = _ins(test_db, -10.0, "e3")
+        _run(test_db, lambda: add_refund_link(income, e1, 30.0))
+        _run(test_db, lambda: add_refund_link(income, e2, 40.0))
+        _run(test_db, lambda: add_refund_link(income, e3, 5.0))
+
+        summary = self._summary(test_db)
+
+        assert summary["incomes"] == 0.0
+        assert summary["expenses"] == 5.0
+
+    def test_remaining_income_counts_as_income(self, test_db):
+        income = _ins(test_db, 90.0, "inc")
+        e1 = _ins(test_db, -30.0, "e1")
+        e2 = _ins(test_db, -40.0, "e2")
+        e3 = _ins(test_db, -10.0, "e3")
+        _run(test_db, lambda: add_refund_link(income, e1, 30.0))
+        _run(test_db, lambda: add_refund_link(income, e2, 40.0))
+        _run(test_db, lambda: add_refund_link(income, e3, 10.0))
+
+        summary = self._summary(test_db)
+
+        assert summary["incomes"] == 10.0
+        assert summary["expenses"] == 0.0

@@ -184,7 +184,7 @@ class AllocationService:
                     row = conn.execute(
                         """SELECT COALESCE(SUM(
                             CASE
-                                WHEN amount > 0 AND refund_ref_transaction_id IS NOT NULL THEN 0
+                                WHEN amount > 0 THEN amount - COALESCE((SELECT SUM(amount) FROM refund_links rl WHERE rl.refund_transaction_id = umsaetze.id), 0)
                                 WHEN amount < 0 THEN ABS(amount) - COALESCE(refund_total, 0)
                                 ELSE ABS(amount)
                             END
@@ -348,7 +348,7 @@ class AllocationService:
                 """SELECT applicant_name, purpose, amount, date
                    FROM umsaetze
                    WHERE amount > 0
-                     AND refund_ref_transaction_id IS NULL
+                     AND NOT EXISTS (SELECT 1 FROM refund_links rl WHERE rl.refund_transaction_id = umsaetze.id)
                      AND date >= ? AND date <= ?
                      AND (purpose IS NULL OR purpose NOT LIKE '%tag.%')
                    ORDER BY applicant_name, purpose, date""",
