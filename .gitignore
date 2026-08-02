@@ -2,6 +2,7 @@
 # opencode / Agents
 # ------------------------------
 .agents/
+.opencode/
 
 # ------------------------------
 # Node.js / Frontend / Electron
