@@ -14,30 +14,17 @@ export type SubscriptionOverride = {
 
 export function useTransactionDerivations(
   transaction: Transaction,
-  allTransactions: Transaction[],
   subscriptionOverride: SubscriptionOverride | null,
 ) {
   const isRefund =
-    transaction.betrag.wert > 0 && transaction.technisch.refundRefTransactionId != null;
+    transaction.betrag.wert > 0 && transaction.refundLinks.length > 0;
 
-  const linkedRefundTotal = useMemo(() => {
-    if (transaction.betrag.wert >= 0) return 0;
-    return allTransactions
-      .filter((t) => t.technisch.refundRefTransactionId === transaction.id)
-      .reduce((sum, t) => sum + Math.abs(t.betrag.wert), 0);
-  }, [transaction, allTransactions]);
-
-  const linkedOriginalAmount = useMemo(() => {
-    if (!transaction.technisch.refundRefTransactionId) return 0;
-    const original = allTransactions.find(
-      (t) => t.id === transaction.technisch.refundRefTransactionId,
-    );
-    return original ? Math.abs(original.betrag.wert) : 0;
-  }, [transaction, allTransactions]);
+  const linkedRefundTotal =
+    transaction.betrag.wert < 0 ? transaction.betrag.refundTotal : 0;
 
   const refundRemaining = useMemo(
-    () => Math.max(0, transaction.betrag.wert - linkedOriginalAmount),
-    [transaction.betrag.wert, linkedOriginalAmount],
+    () => Math.max(0, transaction.betrag.wert - transaction.refundAttributed),
+    [transaction.betrag.wert, transaction.refundAttributed],
   );
 
   const hasRefunds = linkedRefundTotal > 0;
@@ -46,12 +33,11 @@ export function useTransactionDerivations(
     if (isRefund) return refundRemaining;
     if (hasRefunds) return Math.min(0, transaction.betrag.wert + linkedRefundTotal);
     return transaction.betrag.wert;
-  }, [transaction, linkedOriginalAmount, linkedRefundTotal, isRefund, hasRefunds]);
+  }, [transaction, linkedRefundTotal, isRefund, hasRefunds, refundRemaining]);
 
   const showRefundSection =
     transaction.betrag.wert > 0 ||
-    (transaction.betrag.wert < 0 &&
-      allTransactions.some((t) => t.technisch.refundRefTransactionId === transaction.id));
+    (transaction.betrag.wert < 0 && linkedRefundTotal > 0);
 
   const purpose = transaction.texte.verwendungszweck || "";
   const additionalPurpose = transaction.texte.zusatzVerwendungszweck || "";
@@ -88,7 +74,6 @@ export function useTransactionDerivations(
   return {
     isRefund,
     linkedRefundTotal,
-    linkedOriginalAmount,
     refundRemaining,
     hasRefunds,
     displayAmount,

@@ -87,7 +87,7 @@ export function TransactionRow({
   allTransactions,
   onRefundLinkChange,
 }: TransactionRowProps) {
-  const derivations = useTransactionDerivations(transaction, allTransactions, subscriptionOverride);
+  const derivations = useTransactionDerivations(transaction, subscriptionOverride);
   const note = useNote(transaction, isExpanded, onSaveNote, onNoteDraftChange);
   const splits = useSplits(transaction, isExpanded, onSaveSplits);
 
@@ -155,7 +155,6 @@ export function TransactionRow({
     <div className="w-full">
       <CollapsedRow
         transaction={transaction}
-        allTransactions={allTransactions}
         subscriptionOverride={subscriptionOverride}
         isExpanded={isExpanded}
         isSelected={isSelected}
@@ -183,7 +182,6 @@ export function TransactionRow({
             <div className="grid grid-cols-1 divide-y divide-border/60 border-b border-muted sm:grid-cols-3 sm:divide-x sm:divide-y-0">
               <ZahlungspartnerSection
                 transaction={transaction}
-                allTransactions={allTransactions}
                 subscriptionOverride={subscriptionOverride}
                 partnerBank={partnerBank}
                 ownerId={ownerId}

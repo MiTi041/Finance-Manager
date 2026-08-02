@@ -20,7 +20,6 @@ const ING_BLZ = "50010517";
 
 type ZahlungspartnerSectionProps = {
   transaction: Transaction;
-  allTransactions: Transaction[];
   subscriptionOverride: SubscriptionOverride | null;
   partnerBank: SelectedBankOption | null;
   ownerId?: number | undefined;
@@ -32,7 +31,6 @@ type ZahlungspartnerSectionProps = {
 
 export function ZahlungspartnerSection({
   transaction,
-  allTransactions,
   subscriptionOverride,
   partnerBank,
   ownerId,
@@ -42,7 +40,7 @@ export function ZahlungspartnerSection({
   onCreateZahlungspartnerForIban,
 }: ZahlungspartnerSectionProps) {
   const { isEntgeltabschluss, deviateApplicant, overrideLogoSrc, partnerLogoSrc } =
-    useTransactionDerivations(transaction, allTransactions, subscriptionOverride);
+    useTransactionDerivations(transaction, subscriptionOverride);
 
   const {
     selectedZahlungspartnerId,

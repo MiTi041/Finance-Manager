@@ -17,7 +17,6 @@ import {
 
 type CollapsedRowProps = {
   transaction: Transaction;
-  allTransactions: Transaction[];
   subscriptionOverride: SubscriptionOverride | null;
   isExpanded: boolean;
   isSelected: boolean;
@@ -35,7 +34,6 @@ type CollapsedRowProps = {
 
 export function CollapsedRow({
   transaction,
-  allTransactions,
   subscriptionOverride,
   isExpanded,
   isSelected,
@@ -62,7 +60,7 @@ export function CollapsedRow({
     overridePartnerName,
     deviateApplicant,
     collapsedPurpose,
-  } = useTransactionDerivations(transaction, allTransactions, subscriptionOverride);
+  } = useTransactionDerivations(transaction, subscriptionOverride);
 
   const trimmedSavedNote = transaction.texte.anmerkung.trim();
 
