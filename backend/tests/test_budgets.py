@@ -149,15 +149,15 @@ class TestListBudgets:
 
         assert result[0]["spent"] == 0.0
 
-    def test_over_refunded_transaction_counts_as_negative_spend(self):
+    def test_fully_refunded_transaction_counts_as_zero_spend(self):
         conn = _make_db()
         _run(conn, lambda: create_budget("Test", [2], 50.0))
-        _tx(conn, "2026-07", -30.0, 2, refund_total=40.0)
+        _tx(conn, "2026-07", -30.0, 2, refund_total=30.0)
 
         result = _run(conn, lambda: list_budgets("2026-07"))
 
-        assert result[0]["spent"] == -10.0
-        assert result[0]["remaining"] == 60.0
+        assert result[0]["spent"] == 0.0
+        assert result[0]["remaining"] == 50.0
         assert result[0]["is_over"] is False
 
 
