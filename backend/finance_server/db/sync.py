@@ -99,7 +99,7 @@ VALID_SYNC_COLUMNS: dict[str, set[str]] = {
         "settlement_tag",
         "original_amount", "amount", "currency",
         "dummy_entry", "transaction_hash",
-        "kategorie", "note", "splits", "refund_ref_transaction_id",
+        "kategorie", "note", "splits",
         "created_at", "updated_at",
     },
     "zahlungspartner": {"id", "name", "website", "logo_url", "local_logo_path", "is_company", "logo_white_background", "logo_padding", "updated_at"},
