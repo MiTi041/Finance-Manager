@@ -359,31 +359,89 @@ def update_transaction_splits(transaction_id: int, splits: list[dict[str, Any]] 
 def _recalc_refund_total(tx_id: int, connection: sqlite3.Connection) -> None:
     connection.execute(
         """UPDATE umsaetze SET refund_total = (
-            SELECT COALESCE(SUM(r.amount), 0)
-            FROM umsaetze r
-            WHERE r.refund_ref_transaction_id = umsaetze.id AND r.amount > 0
+            SELECT COALESCE(SUM(amount), 0)
+            FROM refund_links
+            WHERE expense_transaction_id = umsaetze.id
         ) WHERE id = ?""",
         (tx_id,),
     )
 
 
-def update_transaction_refund_link(transaction_id: int, refund_ref_transaction_id: int | None) -> bool:
+def _transaction_amount(tx_id: int, connection: sqlite3.Connection) -> float | None:
+    row = connection.execute("SELECT amount FROM umsaetze WHERE id = ?", (tx_id,)).fetchone()
+    return row["amount"] if row else None
+
+
+def add_refund_link(
+    refund_transaction_id: int, expense_transaction_id: int, amount: float
+) -> dict[str, Any] | None:
     with get_connection() as connection:
-        old_row = connection.execute(
-            "SELECT refund_ref_transaction_id AS old_parent FROM umsaetze WHERE id = ?",
-            (transaction_id,),
+        refund_amt = _transaction_amount(refund_transaction_id, connection)
+        expense_amt = _transaction_amount(expense_transaction_id, connection)
+        if refund_amt is None or expense_amt is None:
+            return None
+        if refund_amt <= 0 or expense_amt >= 0:
+            raise ValueError("Einnahme und Ausgabe erforderlich")
+        if amount <= 0:
+            raise ValueError("Betrag muss positiv sein")
+
+        attributed = connection.execute(
+            "SELECT COALESCE(SUM(amount), 0) FROM refund_links WHERE refund_transaction_id = ?",
+            (refund_transaction_id,),
+        ).fetchone()[0]
+        if attributed + amount > refund_amt + 1e-9:
+            raise ValueError("Einnahme darf nicht über 0 aufgeteilt werden")
+
+        refunded = connection.execute(
+            "SELECT COALESCE(SUM(amount), 0) FROM refund_links WHERE expense_transaction_id = ?",
+            (expense_transaction_id,),
+        ).fetchone()[0]
+        if refunded + amount > abs(expense_amt) + 1e-9:
+            raise ValueError("Ausgabe darf nicht unter 0 erstattet werden")
+
+        duplicate = connection.execute(
+            "SELECT 1 FROM refund_links WHERE refund_transaction_id = ? AND expense_transaction_id = ?",
+            (refund_transaction_id, expense_transaction_id),
         ).fetchone()
-        old_parent = old_row["old_parent"] if old_row else None
+        if duplicate:
+            raise ValueError("Rückerstattung bereits verknüpft")
 
         cursor = connection.execute(
-            "UPDATE umsaetze SET refund_ref_transaction_id = ? WHERE id = ?",
-            (refund_ref_transaction_id, transaction_id),
+            """INSERT INTO refund_links
+               (refund_transaction_id, expense_transaction_id, amount, created_at)
+               VALUES (?, ?, ?, ?)""",
+            (
+                refund_transaction_id,
+                expense_transaction_id,
+                round(amount, 2),
+                datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+            ),
         )
-        result = cursor.rowcount > 0
-        _log("umsaetze", transaction_id, "UPDATE", {"id": transaction_id, "refund_ref_transaction_id": refund_ref_transaction_id, "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat()}, connection=connection)
+        link_id = cursor.lastrowid
+        link = {
+            "id": link_id,
+            "refund_transaction_id": refund_transaction_id,
+            "expense_transaction_id": expense_transaction_id,
+            "amount": round(amount, 2),
+        }
+        _log(
+            "refund_links", link_id, "INSERT",
+            {"id": link_id, "refund_transaction_id": refund_transaction_id, "expense_transaction_id": expense_transaction_id, "amount": round(amount, 2)},
+            connection=connection,
+        )
+        _recalc_refund_total(expense_transaction_id, connection)
+        return link
 
-        parents = {p for p in (old_parent, refund_ref_transaction_id) if p is not None}
-        for pid in parents:
-            _recalc_refund_total(pid, connection)
 
-        return result
+def delete_refund_link(link_id: int) -> bool:
+    with get_connection() as connection:
+        row = connection.execute(
+            "SELECT refund_transaction_id, expense_transaction_id FROM refund_links WHERE id = ?",
+            (link_id,),
+        ).fetchone()
+        if row is None:
+            return False
+        cursor = connection.execute("DELETE FROM refund_links WHERE id = ?", (link_id,))
+        _log("refund_links", link_id, "DELETE", connection=connection)
+        _recalc_refund_total(row["expense_transaction_id"], connection)
+        return cursor.rowcount > 0
