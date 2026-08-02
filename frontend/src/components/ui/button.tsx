@@ -9,7 +9,6 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        // Primary – Cloudflare-Blau
         default:
           "relative text-white border border-[#1d5fd1] " +
           "bg-gradient-to-b from-[#3b82f6] to-[#2563eb] " +
@@ -18,7 +17,6 @@ const buttonVariants = cva(
           "hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_2px_4px_rgba(0,0,0,0.25)] " +
           "active:from-[#2563eb] active:to-[#1d4ed8] active:shadow-[inset_0_1px_2px_rgba(0,0,0,0.25)]",
 
-        // Destructive – Rot, gleiches Prinzip
         destructive:
           "relative text-white border border-[#b91c1c] " +
           "bg-gradient-to-b from-[#ef4444] to-[#dc2626] " +
@@ -28,7 +26,6 @@ const buttonVariants = cva(
           "active:from-[#dc2626] active:to-[#b91c1c] active:shadow-[inset_0_1px_2px_rgba(0,0,0,0.25)] " +
           "focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40",
 
-        // Outline – hell, mit dezentem Glanz statt kräftigem Verlauf
         outline:
           "relative text-foreground border border-input " +
           "bg-gradient-to-b from-white to-[#f4f4f5] dark:from-[#2a2a2e] dark:to-[#1f1f22] " +
@@ -39,7 +36,6 @@ const buttonVariants = cva(
           "dark:hover:shadow-[inset_0_0.5px_0_rgba(255,255,255,0.12),0_2px_4px_rgba(0,0,0,0.35)] " +
           "active:from-[#f0f0f1] active:to-[#e4e4e7] dark:active:from-[#222225] dark:active:to-[#1a1a1c]",
 
-        // Secondary – neutrales Grau, gleiches Muster
         secondary:
           "relative text-secondary-foreground border border-[#d4d4d8] dark:border-[#3f3f46] " +
           "bg-gradient-to-b from-[#f4f4f5] to-[#e4e4e7] dark:from-[#3a3a3e] dark:to-[#2c2c30] " +
@@ -50,10 +46,7 @@ const buttonVariants = cva(
           "dark:hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_2px_4px_rgba(0,0,0,0.35)] " +
           "active:from-[#e4e4e7] active:to-[#d4d4d8] dark:active:from-[#2c2c30] dark:active:to-[#222225]",
 
-        // Ghost bleibt unverändert
         ghost: "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
-
-        // Link bleibt ebenfalls unverändert (kein Button-Look nötig)
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
@@ -70,26 +63,61 @@ const buttonVariants = cva(
   },
 );
 
+// Klassen, die die from-/to-/border-Werte des default-Variants via CSS-Variablen ersetzen.
+// Werden nur zusätzlich angehängt, wenn eine accentColor übergeben wird.
+const accentOverrideClasses =
+  "from-[var(--accent-from)] to-[var(--accent-to)] border-[var(--accent-border)] " +
+  "hover:from-[var(--accent-hover-from)] hover:to-[var(--accent-hover-to)] " +
+  "active:from-[var(--accent-active-from)] active:to-[var(--accent-active-to)]";
+
+function getAccentStyle(accentColor: string): React.CSSProperties {
+  return {
+    "--accent-from": `color-mix(in srgb, ${accentColor} 80%, white)`,
+    "--accent-to": accentColor,
+    "--accent-border": `color-mix(in srgb, ${accentColor} 75%, black)`,
+    "--accent-hover-from": `color-mix(in srgb, ${accentColor} 65%, white)`,
+    "--accent-hover-to": `color-mix(in srgb, ${accentColor} 88%, white)`,
+    "--accent-active-from": accentColor,
+    "--accent-active-to": `color-mix(in srgb, ${accentColor} 85%, black)`,
+  } as React.CSSProperties;
+}
+
 function Button({
   className,
   variant,
   size,
   asChild = false,
   height = 10,
+  accentColor,
   style,
   ...props
 }: React.ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean;
     height?: number;
+    /**
+     * Nur bei variant="default" (bzw. keiner Angabe) wirksam.
+     * Beliebiger CSS-Farbwert, z.B. "#8b5cf6", "violet", "oklch(0.6 0.2 300)".
+     */
+    accentColor?: string;
   }) {
   const Comp = asChild ? Slot : "button";
+  const isDefaultVariant = !variant || variant === "default";
+  const useAccent = isDefaultVariant && !!accentColor;
 
   return (
     <Comp
       data-slot="button"
-      className={cn(buttonVariants({ variant, size, className }), "hover:cursor-pointer")}
-      style={{ height: `${height * 4}px`, ...style }}
+      className={cn(
+        buttonVariants({ variant, size, className }),
+        useAccent && accentOverrideClasses,
+        "hover:cursor-pointer",
+      )}
+      style={{
+        height: `${height * 4}px`,
+        ...(useAccent ? getAccentStyle(accentColor!) : null),
+        ...style,
+      }}
       {...props}
     />
   );

@@ -337,6 +337,21 @@ class TestSavingsPlanBudget:
         assert result["auto_hidden_plan_ids"] == []
         mock_update.assert_called_once_with(2, {"is_visible": True, "auto_hidden": False})
 
+    def test_hidden_plan_does_not_deplete_bucket_budget(self):
+        plans = [
+            {"id": 1, "name": "Ausgeblendet", "tag": "a", "created_at": "2026-01-01", "is_visible": False, "auto_hidden": False},
+            {"id": 2, "name": "Sichtbar", "tag": "b", "created_at": "2026-02-01", "is_visible": True, "auto_hidden": False},
+        ]
+        buckets = [
+            {"id": 10, "bucket_type": "invest", "percentage": 100.0, "is_active": True},
+        ]
+        _, _, mock_create_bucket = self._run(
+            "2026-07", 1000.0, plans, {1: 800.0, 2: 200.0}, buckets
+        )
+
+        calls = [call.args[2] for call in mock_create_bucket.call_args_list]
+        assert calls == [800.0]
+
     def test_bucket_targets_clamped_when_savings_exceed_budget(self):
         plans = [
             {"id": 1, "name": "Alt", "tag": "alt", "created_at": "2026-01-01", "is_visible": True, "auto_hidden": False},

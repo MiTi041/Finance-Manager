@@ -138,13 +138,14 @@ class AllocationService:
             donation_target = round(effective * donation_config["percentage"] / 100, 2)
             db.create_run_bucket(run_id, donation_config["id"], donation_target)
 
-        # Savings plans are always counted, never auto-hidden: the user may
-        # fund them from existing balance. If their total exceeds the budget,
-        # the remaining buckets simply get nothing that month.
+        # Only visible plans reserve budget: hiding a plan frees its monthly
+        # rate for the remaining buckets.
         available_for_savings = effective - donation_target
         all_plans = sorted(list_plans(), key=lambda p: p["created_at"])
         enriched_plans = [self._enrich_savings_plan(p, month) for p in all_plans]
-        savings_total = sum(p["monthly_rate"] for p in enriched_plans if not p["is_completed"])
+        savings_total = sum(
+            p["monthly_rate"] for p in enriched_plans if p["is_visible"] and not p["is_completed"]
+        )
 
         # Remaining after donation and savings plans → invest, emergency.
         # Clamp so buckets never receive negative targets.

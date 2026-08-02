@@ -5,10 +5,7 @@ import { CategoryCombobox } from "@/components/category-combobox";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatAmount } from "@/lib/utils/format";
-import {
-  type TransactionCategoryOption,
-  UNASSIGNED_CATEGORY_VALUE,
-} from "@/lib/utils/categories";
+import { type TransactionCategoryOption, UNASSIGNED_CATEGORY_VALUE } from "@/lib/utils/categories";
 import { cn } from "@/lib/utils";
 import { type Transaction } from "@/types/transaction";
 
@@ -71,9 +68,7 @@ export function CategorySection({
               </div>
               <CategoryCombobox
                 value={
-                  split.kategorieId == null
-                    ? UNASSIGNED_CATEGORY_VALUE
-                    : String(split.kategorieId)
+                  split.kategorieId == null ? UNASSIGNED_CATEGORY_VALUE : String(split.kategorieId)
                 }
                 onValueChange={(value) => {
                   splits.handleSplitCategoryChange(
@@ -239,8 +234,8 @@ export function CategorySection({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" className="max-w-[240px] text-xs">
-              Teilt eine Buchung auf mehrere Kategorien auf – z. B. Lebensmittel und
-              Drogerie bei einem Einkauf.
+              Teilt eine Buchung auf mehrere Kategorien auf – z. B. Lebensmittel und Drogerie bei
+              einem Einkauf.
             </TooltipContent>
           </Tooltip>
 
@@ -309,8 +304,8 @@ export function CategorySection({
                 <div className="px-2.5 pb-2.5">
                   <Button
                     type="button"
-                    variant="ghost"
-                    className="h-[26px] w-full !rounded-[5px] border border-violet-500/30 bg-transparent text-[11.5px] font-medium hover:border-violet-500/55 hover:bg-violet-500/8 hover:text-violet-600 dark:hover:text-violet-400"
+                    accentColor="#8b5cf6"
+                    className="h-[26px] w-full !rounded-[5px] text-[11.5px] font-medium"
                     onClick={() => onSaveCategory(transaction.id, predictedCategoryId)}
                   >
                     <Check className="mr-1 size-3" />
