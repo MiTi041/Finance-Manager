@@ -231,6 +231,7 @@ function VirtualizedListInner<T>(
   ref: React.Ref<VirtualizedListRef>,
 ) {
   const [globalFilter, setGlobalFilter] = useState("");
+  const [debouncedFilter, setDebouncedFilter] = useState("");
   const [sortKey, setSortKey] = useState<string>("");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [offsetTop, setOffsetTop] = useState(0);
@@ -272,10 +273,16 @@ function VirtualizedListInner<T>(
   }, []);
   const scrollRef = externalScrollRef ?? internalScrollRef;
 
+  // ponytail: fixed 200ms debounce, all VirtualizedList users benefit
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedFilter(globalFilter), 200);
+    return () => window.clearTimeout(timeout);
+  }, [globalFilter]);
+
   const activeSortOption = sortItems?.find((s) => s.value === sortKey) ?? null;
 
   const visibleItems = useMemo(() => {
-    const query = globalFilter.trim().toLowerCase();
+    const query = debouncedFilter.trim().toLowerCase();
 
     // 1. Filter
     let result = items.filter((item) =>
@@ -293,7 +300,7 @@ function VirtualizedListInner<T>(
     }
 
     return result;
-  }, [filterItem, globalFilter, items, activeSortOption, sortDir]);
+  }, [filterItem, debouncedFilter, items, activeSortOption, sortDir]);
 
   useEffect(() => {
     onVisibleItemsChange?.(visibleItems);

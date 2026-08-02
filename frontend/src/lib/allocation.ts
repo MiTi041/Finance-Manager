@@ -63,9 +63,12 @@ export type SavingsPlan = {
   recipient_logo_url?: string | null;
   recipient_logo_white_background?: boolean;
   recipient_logo_padding?: boolean;
+  effective_target: number;
   saved_einzahlungen: number;
+  saved_verschuldung: number;
   saved_entnahmen: number;
   month_einzahlungen: number;
+  month_verschuldung: number;
   month_entnahmen: number;
 };
 

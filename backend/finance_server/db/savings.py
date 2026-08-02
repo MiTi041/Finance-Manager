@@ -152,6 +152,45 @@ def get_month_breakdown(tag: str, month: str) -> dict[str, float]:
     return _tag_breakdown(tag, rows)
 
 
+def _tag_with_space(tag: str) -> str:
+    return tag if tag.startswith("tag.") else f"tag.{tag}"
+
+
+def _savings_breakdown(tag: str, month: str | None = None) -> dict[str, float]:
+    tag_pattern = _tag_with_space(tag)
+    base_like = f"%{tag_pattern}%"
+    entnahme_like = f"%{tag_pattern}.entnahme%"
+    where = "purpose LIKE ? AND purpose NOT LIKE ?"
+    params: list[Any] = [base_like, entnahme_like]
+    if month:
+        where += " AND date >= ? AND date <= ?"
+        params += [f"{month}-01", f"{month}-31"]
+    with get_connection() as connection:
+        base_rows = connection.execute(f"SELECT amount FROM umsaetze WHERE {where}", params).fetchall()
+        ent_rows = connection.execute(
+            "SELECT amount FROM umsaetze WHERE purpose LIKE ?"
+            + (f" AND date >= ? AND date <= ?" if month else ""),
+            [entnahme_like] + ([f"{month}-01", f"{month}-31"] if month else []),
+        ).fetchall()
+    einzahlungen = sum(abs(r["amount"]) for r in base_rows if r["amount"] < 0)
+    verschuldung = sum(r["amount"] for r in base_rows if r["amount"] > 0)
+    entnahmen = sum(r["amount"] for r in ent_rows if r["amount"] > 0)
+    return {
+        "einzahlungen": round(einzahlungen, 2),
+        "verschuldung": round(verschuldung, 2),
+        "entnahmen": round(entnahmen, 2),
+        "saldo": round(einzahlungen - verschuldung - entnahmen, 2),
+    }
+
+
+def get_savings_breakdown(tag: str) -> dict[str, float]:
+    return _savings_breakdown(tag)
+
+
+def get_savings_month_breakdown(tag: str, month: str) -> dict[str, float]:
+    return _savings_breakdown(tag, month)
+
+
 def get_income_payout_days(month: str) -> list[int]:
     parts = month.split("-")
     m = int(parts[1]) - 3

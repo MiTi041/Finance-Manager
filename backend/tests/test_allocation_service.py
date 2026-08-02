@@ -7,7 +7,7 @@ from unittest.mock import Mock, call, patch
 
 import pytest
 
-from finance_server.db.savings import _classify_group, count_income_events_until
+from finance_server.db.savings import _classify_group, _savings_breakdown, count_income_events_until
 from finance_server.services.allocation_service import AllocationService
 
 
@@ -403,6 +403,60 @@ class TestSavingsPlanBudget:
             return service.get_or_create_run(month), mock_update, mock_create_bucket
 
 
+class TestForceRecalculate:
+    def _make_conn_mock(self):
+        cursor = Mock()
+        cursor.fetchone.return_value = [0.0]
+        conn = Mock()
+        conn.execute.return_value = cursor
+        return conn
+
+    def test_force_recreate_preserves_transferred_state(self):
+        service = AllocationService()
+        buckets = [
+            {"bucket_type": "spending", "percentage": 100, "id": 1, "is_active": True, "sort_order": 0,
+             "recipient_account_id": None, "sender_iban": None},
+        ]
+        existing_run = {"id": 1, "month": "2026-07", "net_income": 2000.0, "total_allocated": 2000.0, "status": "calculated"}
+        existing_buckets = [
+            {"id": 10, "run_id": 1, "bucket_id": 1, "bucket_type": "spending", "target_amount": 2000.0,
+             "transferred": 2000.0, "transferred_at": "2026-07-05T10:00:00", "is_completed": 1},
+        ]
+        new_run = {"id": 2, "month": "2026-07", "net_income": 2000.0, "total_allocated": 2000.0, "status": "calculated"}
+        new_buckets = [
+            {"id": 20, "run_id": 2, "bucket_id": 1, "bucket_type": "spending", "target_amount": 2000.0,
+             "transferred": 0.0, "transferred_at": None, "is_completed": 0},
+        ]
+        with (
+            patch("finance_server.services.allocation_service.db.list_buckets", return_value=buckets),
+            patch("finance_server.services.allocation_service.db.get_run_for_month",
+                  side_effect=[existing_run, new_run]),
+            patch("finance_server.services.allocation_service.db.get_run_buckets",
+                  side_effect=[existing_buckets, new_buckets, new_buckets]),
+            patch("finance_server.services.allocation_service.db.create_run", return_value=2),
+            patch("finance_server.services.allocation_service.db.create_run_bucket", return_value=1),
+            patch("finance_server.services.allocation_service.db.delete_run") as mock_del,
+            patch("finance_server.services.allocation_service.db.update_run_bucket_transferred") as mock_restore,
+            patch("finance_server.services.allocation_service.get_setting", return_value="false"),
+            patch("finance_server.services.allocation_service.list_plans", return_value=[]),
+            patch("finance_server.services.allocation_service.AllocationService._detect_income", return_value=2000.0),
+            patch("finance_server.services.allocation_service.AllocationService._detect_income_breakdown",
+                  return_value={"total": 2000.0, "sources": []}),
+            patch("finance_server.services.allocation_service.get_income_payout_days", return_value=[28]),
+            patch("finance_server.services.allocation_service.get_connection") as mock_conn,
+        ):
+            mock_conn.return_value.__enter__.return_value = self._make_conn_mock()
+
+            result = service.get_or_create_run("2026-07", force=True)
+
+        mock_del.assert_called_once_with("2026-07")
+        mock_restore.assert_called_once_with(
+            20,
+            {"transferred": 2000.0, "transferred_at": "2026-07-05T10:00:00", "is_completed": 1},
+        )
+        assert result["month"] == "2026-07"
+
+
 class TestEnrichSavingsPlan:
     def _plan(self, created_at: str) -> dict[str, Any]:
         return {
@@ -416,12 +470,32 @@ class TestEnrichSavingsPlan:
             "created_at": created_at,
         }
 
-    def _enrich(self, created_at: str, month: str, count: int, saved: float = 0.0) -> dict[str, Any]:
+    def _enrich(
+        self,
+        created_at: str,
+        month: str,
+        count: int,
+        saved: float = 0.0,
+        einzahlungen: float | None = None,
+        verschuldung: float = 0.0,
+        entnahmen: float = 0.0,
+    ) -> dict[str, Any]:
         service = AllocationService()
         with ExitStack() as stack:
             stack.enter_context(patch("finance_server.services.allocation_service.get_income_payout_days", return_value=[28]))
-            stack.enter_context(patch("finance_server.services.allocation_service.get_saved_breakdown", return_value={"saldo": saved}))
-            stack.enter_context(patch("finance_server.services.allocation_service.get_month_breakdown", return_value={"saldo": 0.0}))
+            stack.enter_context(patch(
+                "finance_server.services.allocation_service.get_savings_breakdown",
+                return_value={
+                    "einzahlungen": einzahlungen if einzahlungen is not None else saved,
+                    "verschuldung": verschuldung,
+                    "entnahmen": entnahmen,
+                    "saldo": (einzahlungen if einzahlungen is not None else saved) - verschuldung - entnahmen,
+                },
+            ))
+            stack.enter_context(patch(
+                "finance_server.services.allocation_service.get_savings_month_breakdown",
+                return_value={"einzahlungen": 0.0, "verschuldung": 0.0, "entnahmen": 0.0, "saldo": 0.0},
+            ))
             stack.enter_context(patch("finance_server.services.allocation_service.count_income_events_until", return_value=count))
             return service._enrich_savings_plan(self._plan(created_at), month)
 
@@ -436,8 +510,14 @@ class TestEnrichSavingsPlan:
         }
         with ExitStack() as stack:
             stack.enter_context(patch("finance_server.services.allocation_service.get_income_payout_days", return_value=[28]))
-            stack.enter_context(patch("finance_server.services.allocation_service.get_saved_breakdown", return_value={"saldo": 0.0}))
-            stack.enter_context(patch("finance_server.services.allocation_service.get_month_breakdown", return_value={"saldo": 0.0}))
+            stack.enter_context(patch(
+                "finance_server.services.allocation_service.get_savings_breakdown",
+                return_value={"einzahlungen": 0.0, "verschuldung": 0.0, "entnahmen": 0.0, "saldo": 0.0},
+            ))
+            stack.enter_context(patch(
+                "finance_server.services.allocation_service.get_savings_month_breakdown",
+                return_value={"einzahlungen": 0.0, "verschuldung": 0.0, "entnahmen": 0.0, "saldo": 0.0},
+            ))
             stack.enter_context(patch("finance_server.services.allocation_service.count_income_events_until", return_value=2))
             stack.enter_context(patch("finance_server.services.allocation_service.get_zahlungspartner_by_iban", return_value=partner))
             result = service._enrich_savings_plan(plan, "2026-08")
@@ -472,10 +552,70 @@ class TestEnrichSavingsPlan:
         service = AllocationService()
         with ExitStack() as stack:
             stack.enter_context(patch("finance_server.services.allocation_service.get_income_payout_days", return_value=[28]))
-            stack.enter_context(patch("finance_server.services.allocation_service.get_saved_breakdown", return_value={"saldo": 1000.0}))
-            stack.enter_context(patch("finance_server.services.allocation_service.get_month_breakdown", return_value={"saldo": 0.0}))
+            stack.enter_context(patch(
+                "finance_server.services.allocation_service.get_savings_breakdown",
+                return_value={"einzahlungen": 1000.0, "verschuldung": 0.0, "entnahmen": 0.0, "saldo": 1000.0},
+            ))
+            stack.enter_context(patch(
+                "finance_server.services.allocation_service.get_savings_month_breakdown",
+                return_value={"einzahlungen": 0.0, "verschuldung": 0.0, "entnahmen": 0.0, "saldo": 0.0},
+            ))
             result = service._enrich_savings_plan(plan, "2026-08")
         assert result["is_completed"] is False
+
+
+class TestEnrichSavingsPlanEntnahme:
+    def _plan(self) -> dict[str, Any]:
+        return {
+            "id": 1,
+            "name": "Urlaub",
+            "tag": "tag.griechenland",
+            "target_amount": 1000.0,
+            "target_date": "2026-09-30",
+            "is_visible": True,
+            "auto_hidden": False,
+            "created_at": "2026-07-05T10:00:00+00:00",
+        }
+
+    def _enrich(self, breakdown: dict[str, float]) -> dict[str, Any]:
+        service = AllocationService()
+        with ExitStack() as stack:
+            stack.enter_context(patch("finance_server.services.allocation_service.get_income_payout_days", return_value=[28]))
+            stack.enter_context(patch("finance_server.services.allocation_service.get_savings_breakdown", return_value=breakdown))
+            stack.enter_context(patch(
+                "finance_server.services.allocation_service.get_savings_month_breakdown",
+                return_value={"einzahlungen": 0.0, "verschuldung": 0.0, "entnahmen": 0.0, "saldo": 0.0},
+            ))
+            stack.enter_context(patch("finance_server.services.allocation_service.count_income_events_until", return_value=0))
+            return service._enrich_savings_plan(self._plan(), "2026-08")
+
+    def test_entnahme_reduces_target_and_saved(self):
+        result = self._enrich({"einzahlungen": 800.0, "verschuldung": 0.0, "entnahmen": 300.0, "saldo": 500.0})
+        assert result["effective_target"] == 700.0
+        assert result["saved_amount"] == 500.0
+        assert result["saved_entnahmen"] == 300.0
+        assert result["required_monthly_rate"] == 200.0
+        assert result["is_completed"] is False
+
+    def test_verschuldung_keeps_target_and_must_be_repaid(self):
+        result = self._enrich({"einzahlungen": 800.0, "verschuldung": 300.0, "entnahmen": 0.0, "saldo": 500.0})
+        assert result["effective_target"] == 1000.0
+        assert result["saved_amount"] == 500.0
+        assert result["saved_verschuldung"] == 300.0
+        assert result["required_monthly_rate"] == 500.0
+
+    def test_over_withdrawal_becomes_deficit(self):
+        result = self._enrich({"einzahlungen": 800.0, "verschuldung": 0.0, "entnahmen": 1000.0, "saldo": -200.0})
+        assert result["effective_target"] == 0.0
+        assert result["saved_amount"] == -200.0
+        assert result["required_monthly_rate"] == 200.0
+        assert result["is_completed"] is False
+
+    def test_completed_stays_completed_after_full_entnahme(self):
+        result = self._enrich({"einzahlungen": 1000.0, "verschuldung": 0.0, "entnahmen": 1000.0, "saldo": 0.0})
+        assert result["effective_target"] == 0.0
+        assert result["saved_amount"] == 0.0
+        assert result["is_completed"] is True
 
 
 class TestCountIncomeEventsUntil:
@@ -536,3 +676,44 @@ class TestCountIncomeEventsUntilLastWorkingDay:
     def test_multiple_fixed_days_use_later_value(self):
         assert count_income_events_until("2026-08-20", [15, 20], "2026-08-01", min_result=0) == 1
         assert count_income_events_until("2026-08-19", [15, 20], "2026-08-01", min_result=0) == 0
+
+
+class TestSavingsBreakdown:
+    def _insert(self, conn, amount: float, purpose: str, date: str = "2026-07-15"):
+        conn.execute(
+            "INSERT INTO umsaetze (amount, purpose, date, entry_date, account_iban, transaction_hash) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (amount, purpose, date, date, "iban", f"hash-{amount}-{purpose}"),
+        )
+        conn.commit()
+
+    def test_substring_tag_match_without_space(self, test_db, monkeypatch):
+        # Real bank purposes run the tag into adjacent text ("tag.spliturlaub2026DATUM",
+        # "Urlaubtag.spliturlaub2026 ...") — matching must be substring, not space-bounded.
+        monkeypatch.setattr("finance_server.db.savings.get_connection", lambda: test_db)
+        self._insert(test_db, -300.0, "Sparplan Split Urlaubtag.spliturlaub2026 01.08.2026")
+        self._insert(test_db, -450.0, "Sparplan GriechenlandUrlaub tag.griechenlandurlaub2026DATUM 27.07.2026")
+        self._insert(test_db, 550.0, "tag.griechenlandurlaub2026.entnahme Entnahme fuer Flug")
+        breakdown = _savings_breakdown("griechenlandurlaub2026")
+        assert breakdown["einzahlungen"] == 450.0
+        assert breakdown["verschuldung"] == 0.0
+        assert breakdown["entnahmen"] == 550.0
+        assert breakdown["saldo"] == -100.0
+        split = _savings_breakdown("spliturlaub2026")
+        assert split["einzahlungen"] == 300.0
+        assert split["entnahmen"] == 0.0
+
+    def test_plain_positive_tag_is_verschuldung(self, test_db, monkeypatch):
+        monkeypatch.setattr("finance_server.db.savings.get_connection", lambda: test_db)
+        self._insert(test_db, 200.0, "Geld zurueck tag.spliturlaub2026")
+        breakdown = _savings_breakdown("spliturlaub2026")
+        assert breakdown["verschuldung"] == 200.0
+        assert breakdown["einzahlungen"] == 0.0
+        assert breakdown["entnahmen"] == 0.0
+
+    def test_other_plan_tag_does_not_leak(self, test_db, monkeypatch):
+        monkeypatch.setattr("finance_server.db.savings.get_connection", lambda: test_db)
+        self._insert(test_db, -500.0, "tag.griechenlandurlaub2026DATUM")
+        self._insert(test_db, -100.0, "tag.spliturlaub2026")
+        assert _savings_breakdown("griechenlandurlaub2026")["einzahlungen"] == 500.0
+        assert _savings_breakdown("spliturlaub2026")["einzahlungen"] == 100.0

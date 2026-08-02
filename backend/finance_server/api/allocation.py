@@ -29,7 +29,7 @@ def get_allocation_status(
     service: AllocationService = Depends(get_allocation_service),
 ) -> dict[str, Any]:
     target_month = month or datetime.now().strftime("%Y-%m")
-    return service.get_or_create_run(target_month)
+    return service.get_or_create_run(target_month, force=True)
 
 
 @router.get("/allocation/buckets")

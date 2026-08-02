@@ -15,6 +15,7 @@ from finance_server.db.savings import (
     list_plans, create_plan, update_plan, delete_plan, get_plan,
     get_saved_amount, get_month_amount,
     get_saved_breakdown, get_month_breakdown,
+    get_savings_breakdown, get_savings_month_breakdown,
     get_income_payout_days, count_income_events_until,
     get_bafoeg_breakdown,
 )
@@ -99,8 +100,15 @@ class AllocationService:
                 update_plan(plan["id"], {"is_visible": True, "auto_hidden": False})
 
         existing = db.get_run_for_month(month)
+        preserved: dict[int, dict[str, Any]] = {}
         if existing:
             if force:
+                for rb in db.get_run_buckets(existing["id"]):
+                    preserved[rb["bucket_id"]] = {
+                        "transferred": rb["transferred"],
+                        "transferred_at": rb["transferred_at"],
+                        "is_completed": rb["is_completed"],
+                    }
                 db.delete_run(month)
             else:
                 return self._build_run_response(existing)
@@ -155,6 +163,13 @@ class AllocationService:
             db.create_run_bucket(run_id, spending_config["id"], round(remaining - bucket_sum, 2))
 
         run = db.get_run_for_month(month)
+        if preserved:
+            # keep the "already transferred" marker on the fresh run so a
+            # completed transfer can't be executed a second time
+            for rb in db.get_run_buckets(run["id"]):
+                state = preserved.get(rb["bucket_id"])
+                if state:
+                    db.update_run_bucket_transferred(rb["id"], state)
         return self._build_run_response(run)
 
     def _build_run_response(self, run: dict[str, Any], auto_hidden: list[int] | None = None) -> dict[str, Any]:
@@ -564,11 +579,15 @@ class AllocationService:
         target_amount = plan.get("target_amount")
         target_date = plan.get("target_date")
         payout_days = get_income_payout_days(month) if month else [1]
-        saved_breakdown = get_saved_breakdown(tag) if tag else {}
-        month_breakdown = get_month_breakdown(tag, month) if tag and month else {}
-        saved_amount = saved_breakdown.get("saldo", 0.0)
+        saved_breakdown = get_savings_breakdown(tag) if tag else {}
+        month_breakdown = get_savings_month_breakdown(tag, month) if tag and month else {}
+        einzahlungen_total = saved_breakdown.get("einzahlungen", 0.0)
+        verschuldung_total = saved_breakdown.get("verschuldung", 0.0)
+        entnahmen_total = saved_breakdown.get("entnahmen", 0.0)
+        saved_amount = round(einzahlungen_total - verschuldung_total - entnahmen_total, 2)
         this_month = month_breakdown.get("saldo", 0.0)
         target_amount_f = target_amount if target_amount else 0.0
+        effective_target = max(0.0, target_amount_f - entnahmen_total)
         from_date = f"{month}-01" if month else None
         partner = (
             get_zahlungspartner_by_iban(plan.get("target_recipient_iban"))
@@ -580,8 +599,11 @@ class AllocationService:
         income_events_left = None
         future = 0
         if target_amount and target_date:
-            saved_before_this = max(0.0, saved_amount - this_month)
-            remaining = max(0.0, target_amount_f - saved_before_this)
+            month_einz = month_breakdown.get("einzahlungen", 0.0)
+            month_versch = month_breakdown.get("verschuldung", 0.0)
+            einzahlungen_before = max(0.0, einzahlungen_total - month_einz)
+            verschuldung_before = max(0.0, verschuldung_total - month_versch)
+            remaining = max(0.0, target_amount_f - einzahlungen_before + verschuldung_before)
             future = count_income_events_until(target_date, payout_days, from_date, min_result=0)
             # ponytail: +1 income event once the plan has been running for a month — the
             # salary that arrived last month already funds the current month's rate
@@ -592,7 +614,7 @@ class AllocationService:
             required_rate = None if not target_amount else 0.0
 
         return {
-            "is_completed": target_amount_f > 0 and saved_amount >= target_amount_f,
+            "is_completed": target_amount_f > 0 and saved_amount >= effective_target,
             **plan,
             "monthly_rate": required_rate if required_rate is not None else 0.0,
             "saved_amount": saved_amount,
@@ -603,9 +625,12 @@ class AllocationService:
             "recipient_logo_url": partner["logo_url"] if partner else None,
             "recipient_logo_white_background": bool(partner["logo_white_background"]) if partner else False,
             "recipient_logo_padding": bool(partner["logo_padding"]) if partner else False,
-            "saved_einzahlungen": saved_breakdown.get("einzahlungen", 0.0),
-            "saved_entnahmen": saved_breakdown.get("entnahmen", 0.0),
+            "effective_target": effective_target,
+            "saved_einzahlungen": einzahlungen_total,
+            "saved_verschuldung": verschuldung_total,
+            "saved_entnahmen": entnahmen_total,
             "month_einzahlungen": month_breakdown.get("einzahlungen", 0.0),
+            "month_verschuldung": month_breakdown.get("verschuldung", 0.0),
             "month_entnahmen": month_breakdown.get("entnahmen", 0.0),
         }
 
@@ -635,12 +660,13 @@ class AllocationService:
             raise HTTPException(status_code=400, detail="Zahlungsdaten des Sparplans unvollständig")
 
         target_amount = enriched.get("target_amount")
+        effective_target = enriched.get("effective_target", 0)
         saved_amount = enriched.get("saved_amount", 0)
 
         if amount is not None:
             if amount <= 0:
                 raise HTTPException(status_code=400, detail="Betrag muss positiv sein")
-            if target_amount and amount > max(0, target_amount - saved_amount):
+            if target_amount and amount > max(0, effective_target - saved_amount):
                 raise HTTPException(status_code=400, detail="Betrag überschreitet das Sparziel")
             use_amount = amount
         else:

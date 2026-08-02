@@ -135,6 +135,21 @@ def mark_run_bucket_transferred(run_bucket_id: int, amount: float) -> None:
         )
 
 
+def update_run_bucket_transferred(run_bucket_id: int, state: dict[str, Any]) -> None:
+    with get_connection() as connection:
+        connection.execute(
+            """UPDATE allocation_run_buckets
+               SET transferred = ?, transferred_at = ?, is_completed = ?
+               WHERE id = ?""",
+            (
+                state.get("transferred", 0),
+                state.get("transferred_at"),
+                1 if state.get("is_completed") else 0,
+                run_bucket_id,
+            ),
+        )
+
+
 def list_runs() -> list[dict[str, Any]]:
     with get_connection() as connection:
         rows = connection.execute(

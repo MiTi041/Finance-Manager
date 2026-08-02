@@ -114,6 +114,7 @@ function computeMonthlyRate(
   targetAmount: string,
   targetDate: Date | null,
   savedAmount: number,
+  entnahmenTotal: number,
   currentMonth: string,
   payoutDays: number[],
   isFirstMonth: boolean,
@@ -123,7 +124,8 @@ function computeMonthlyRate(
   if (!targetDate || isNaN(amount) || amount <= 0) return null;
   const fromDate = parseIsoDate(`${currentMonth}-01`) ?? new Date();
   if (targetDate <= fromDate) return null;
-  const remaining = amount - savedAmount;
+  const effectiveTarget = Math.max(0, amount - entnahmenTotal);
+  const remaining = effectiveTarget - savedAmount;
   if (remaining <= 0) return 0;
   const events = Math.max(
     1,
@@ -148,6 +150,7 @@ function PlanFormFields({
   holidays,
   isFirstMonth,
   savedAmount = 0,
+  entnahmenTotal = 0,
 }: {
   values: FormValues;
   onChange: (v: FormValues) => void;
@@ -161,6 +164,7 @@ function PlanFormFields({
   holidays: Set<string>;
   isFirstMonth: boolean;
   savedAmount?: number;
+  entnahmenTotal?: number;
 }) {
   const [debouncing, setDebouncing] = useState(false);
   const [computedRate, setComputedRate] = useState<number | null>(null);
@@ -178,6 +182,7 @@ function PlanFormFields({
           values.targetAmount,
           values.targetDate,
           savedAmount,
+          entnahmenTotal,
           currentMonth,
           payoutDays,
           isFirstMonth,
@@ -191,6 +196,7 @@ function PlanFormFields({
     values.targetAmount,
     values.targetDate,
     savedAmount,
+    entnahmenTotal,
     currentMonth,
     payoutDays,
     holidays,
@@ -743,26 +749,37 @@ export function SavingsPlansCard({
             const isDeleting = deletingPlan?.id === plan.id && deleting;
             const isToggling = togglingId === plan.id;
             const targetAmount = plan.target_amount ?? 0;
-            const safeTarget = targetAmount > 0 ? targetAmount : 1;
+            const effectiveTarget = plan.effective_target ?? targetAmount;
+            const safeTarget = effectiveTarget > 0 ? effectiveTarget : 1;
             const savedTotal = plan.saved_amount ?? 0;
-            const thisMonthAmount = plan.this_month ?? 0;
+            const thisMonthAmount = plan.month_einzahlungen ?? 0;
             const einzahlungenTotal = plan.saved_einzahlungen ?? 0;
             const monthEinzahlungen = plan.month_einzahlungen ?? 0;
             const beforeMonthEinzahlungen = Math.max(0, einzahlungenTotal - monthEinzahlungen);
+            const entnahmenTotal = plan.saved_entnahmen ?? 0;
+            // Entnahme zehrt zuerst den laufenden Monat, dann frühere Monate auf.
+            let remainingEntnahme = entnahmenTotal;
+            const displayedMonth = Math.max(0, monthEinzahlungen - remainingEntnahme);
+            remainingEntnahme -= monthEinzahlungen - displayedMonth;
+            const displayedBeforeMonth = Math.max(0, beforeMonthEinzahlungen - remainingEntnahme);
             const beforeMonthPct = Math.min(
               100,
-              Math.max(0, (beforeMonthEinzahlungen / safeTarget) * 100),
+              Math.max(0, (displayedBeforeMonth / safeTarget) * 100),
             );
-            const monthPct = Math.min(100, Math.max(0, (monthEinzahlungen / safeTarget) * 100));
-            const entnahmenTotal = plan.saved_entnahmen ?? 0;
-            const entnahmenPct = Math.min(100, Math.max(0, (entnahmenTotal / safeTarget) * 100));
+            const monthPct = Math.min(100, Math.max(0, (displayedMonth / safeTarget) * 100));
+            const verschuldungTotal = plan.saved_verschuldung ?? 0;
+            const verschuldungPct = Math.min(
+              100,
+              Math.max(0, (verschuldungTotal / safeTarget) * 100),
+            );
             const savedTotalPct = Math.min(100, Math.max(0, (savedTotal / safeTarget) * 100));
             const isVisible = plan.is_visible;
             const hasPaymentData = !!(plan.target_recipient_name && plan.target_recipient_iban);
             const requiredRate = plan.required_monthly_rate;
-            const topUp = requiredRate != null ? Math.max(0, requiredRate - thisMonthAmount) : 0;
+            const topUpRaw = requiredRate != null ? Math.max(0, requiredRate - thisMonthAmount) : 0;
             const remainingToSave =
-              targetAmount > 0 ? Math.max(0, targetAmount - savedTotal) : topUp;
+              effectiveTarget > 0 ? Math.max(0, effectiveTarget - savedTotal) : topUpRaw;
+            const topUp = Math.min(topUpRaw, remainingToSave);
             const planPaid = requiredRate != null && topUp <= 0;
             const isCompleted = plan.is_completed;
 
@@ -830,12 +847,12 @@ export function SavingsPlansCard({
                   </Popover>
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="space-y-3">
                   <div className="flex items-baseline justify-between">
                     <span className="text-sm font-semibold tabular-nums">
                       {formatAmount(savedTotal)}{" "}
                       <span className="font-normal text-muted-foreground">
-                        von {formatAmount(targetAmount)}
+                        von {formatAmount(effectiveTarget)}
                       </span>
                     </span>
                     <span className="text-xs font-medium tabular-nums text-muted-foreground">
@@ -857,7 +874,7 @@ export function SavingsPlansCard({
                           />
                         </TooltipTrigger>
                         <TooltipContent side="top">
-                          {formatAmount(beforeMonthEinzahlungen)} eingezahlt (vorherige Monate)
+                          {formatAmount(displayedBeforeMonth)} eingezahlt (vorherige Monate)
                         </TooltipContent>
                       </Tooltip>
                     )}
@@ -875,40 +892,45 @@ export function SavingsPlansCard({
                           />
                         </TooltipTrigger>
                         <TooltipContent side="top">
-                          {formatAmount(monthEinzahlungen)} eingezahlt (diesen Monat)
+                          {formatAmount(displayedMonth)} eingezahlt (diesen Monat)
                         </TooltipContent>
                       </Tooltip>
                     )}
-                    {entnahmenPct > 0 && (
+                    {verschuldungPct > 0 && (
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <div
-                            className="h-full rounded-full bg-orange-500/20 cursor-pointer"
+                            className="h-full rounded-full bg-rose-500/20 cursor-pointer"
                             style={
                               {
-                                width: `${entnahmenPct}%`,
-                                minWidth: entnahmenPct > 0 ? "8px" : undefined,
+                                width: `${verschuldungPct}%`,
+                                minWidth: verschuldungPct > 0 ? "8px" : undefined,
                               } as React.CSSProperties
                             }
                           />
                         </TooltipTrigger>
                         <TooltipContent side="top">
-                          {formatAmount(entnahmenTotal)} entnommen
+                          {formatAmount(verschuldungTotal)} zurückgeholt (wird zurückgezahlt)
                         </TooltipContent>
                       </Tooltip>
                     )}
                     <div className="h-full flex-1 rounded-full bg-muted" />
                   </div>
-                  {monthEinzahlungen > 0 && (
+                  {displayedMonth > 0 && (
                     <p className="text-xs text-muted-foreground">
-                      {formatAmount(monthEinzahlungen)} diesen Monat eingezahlt
+                      {formatAmount(displayedMonth)} diesen Monat eingezahlt
                     </p>
                   )}
-                  {entnahmenTotal > 0 && (
-                    <p className="text-xs text-orange-600 dark:text-orange-400">
-                      {formatAmount(entnahmenTotal)} entnommen
-                      {plan.month_entnahmen > 0 &&
-                        ` (${formatAmount(plan.month_entnahmen)} diesen Monat)`}
+                  {verschuldungTotal > 0 && (
+                    <p className="text-xs text-rose-600 dark:text-rose-400">
+                      {formatAmount(verschuldungTotal)} zurückgeholt, muss wieder eingezahlt werden
+                      {plan.month_verschuldung > 0 &&
+                        ` (${formatAmount(plan.month_verschuldung)} diesen Monat)`}
+                    </p>
+                  )}
+                  {savedTotal < 0 && (
+                    <p className="text-xs font-medium text-destructive">
+                      {formatAmount(-savedTotal)} Rückstand
                     </p>
                   )}
                 </div>
@@ -951,6 +973,26 @@ export function SavingsPlansCard({
                   </div>
                 )}
 
+                {targetAmount !== effectiveTarget && (
+                  <div className="space-y-1 rounded-md bg-muted/60 px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Entnommen für den Zweck des Sparplans
+                    </p>
+                    <p className="flex items-baseline justify-between text-[11px]">
+                      <span className="text-muted-foreground">Ursprüngliches Ziel</span>
+                      <span className="font-medium tabular-nums">{formatAmount(targetAmount)}</span>
+                    </p>
+                    {entnahmenTotal > 0 && (
+                      <p className="flex items-baseline justify-between text-[11px]">
+                        <span className="text-muted-foreground">Entnommen</span>
+                        <span className="font-medium tabular-nums">
+                          −{formatAmount(entnahmenTotal)}
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {hasPaymentData ? (
                   <div className="flex items-center gap-3 rounded-md border bg-muted/50 px-3 py-2.5">
                     <BankLogo
@@ -987,7 +1029,12 @@ export function SavingsPlansCard({
                     {plan.tag?.startsWith("tag.") ? plan.tag : `tag.${plan.tag}`}
                   </span>{" "}
                   muss im Verwendungszweck enthalten sein, damit die Zahlung korrekt zugeordnet
-                  wird. Bei Zahlung über „jetzt zahlen“ wird er automatisch ergänzt.
+                  wird. Bei Zahlung über „jetzt zahlen“ wird er automatisch ergänzt. Für eine
+                  Entnahme (Geld für den Zweck des Plans) den Suffix{" "}
+                  <span className="inline-flex items-start gap-0.5 py-0.5 px-2 bg-muted rounded-full font-mono text-xs font-semibold text-foreground">
+                    {plan.tag?.startsWith("tag.") ? plan.tag : `tag.${plan.tag}`}.entnahme
+                  </span>{" "}
+                  im Verwendungszweck verwenden.
                 </p>
 
                 <div className="mt-auto space-y-3">
@@ -1069,6 +1116,7 @@ export function SavingsPlansCard({
             holidays={holidaySet}
             isFirstMonth={editingPlan?.created_at?.slice(0, 7) === currentMonth}
             savedAmount={editingPlan?.saved_amount ?? 0}
+            entnahmenTotal={editingPlan?.saved_entnahmen ?? 0}
           />
           {editError && (
             <p className="flex items-center gap-1.5 text-sm text-destructive">
