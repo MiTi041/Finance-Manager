@@ -81,6 +81,49 @@ def create_umsaetze_table(connection: sqlite3.Connection) -> None:
     )
 
 
+def create_refund_links_table(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS refund_links (
+            id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+            refund_transaction_id INTEGER NOT NULL,
+            expense_transaction_id INTEGER NOT NULL,
+            amount                REAL NOT NULL CHECK (amount > 0),
+            created_at            TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_refund_links_refund ON refund_links(refund_transaction_id)"
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_refund_links_expense ON refund_links(expense_transaction_id)"
+    )
+
+
+def migrate_refund_links(connection: sqlite3.Connection) -> None:
+    cols = {row[1] for row in connection.execute("PRAGMA table_info(umsaetze)").fetchall()}
+    if "refund_ref_transaction_id" in cols:
+        connection.execute(
+            """
+            INSERT INTO refund_links (refund_transaction_id, expense_transaction_id, amount, created_at)
+            SELECT id, refund_ref_transaction_id, amount, created_at
+            FROM umsaetze
+            WHERE refund_ref_transaction_id IS NOT NULL AND amount > 0
+            """
+        )
+        connection.execute("ALTER TABLE umsaetze DROP COLUMN refund_ref_transaction_id")
+    connection.execute(
+        """
+        UPDATE umsaetze SET refund_total = (
+            SELECT COALESCE(SUM(amount), 0)
+            FROM refund_links
+            WHERE expense_transaction_id = umsaetze.id
+        ) WHERE amount < 0
+        """
+    )
+
+
 def create_bank_credentials_table(connection: sqlite3.Connection) -> None:
     connection.execute(
         """
@@ -501,25 +544,12 @@ def initialize_database(connection: sqlite3.Connection) -> None:
         connection,
         "umsaetze",
         {
-            "refund_ref_transaction_id": "INTEGER",
-        },
-    )
-
-    _ensure_table_columns(
-        connection,
-        "umsaetze",
-        {
             "refund_total": "REAL NOT NULL DEFAULT 0",
         },
     )
 
-    connection.execute("""
-        UPDATE umsaetze SET refund_total = (
-            SELECT COALESCE(SUM(r.amount), 0)
-            FROM umsaetze r
-            WHERE r.refund_ref_transaction_id = umsaetze.id AND r.amount > 0
-        ) WHERE amount < 0
-    """)
+    create_refund_links_table(connection)
+    migrate_refund_links(connection)
 
     create_belege_table(connection)
     create_subscription_identities_table(connection)
