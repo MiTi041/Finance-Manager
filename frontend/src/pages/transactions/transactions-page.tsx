@@ -82,6 +82,7 @@ export default function TransactionsPage() {
   const [subscriptionLinkMap, setSubscriptionLinkMap] = useState<Map<number, { counterpartyName: string; amount: number }>>(new Map());
   const categoryTriggerRefs = useRef(new Map<number, HTMLButtonElement | null>());
   const virtualListRef = useRef<VirtualizedListRef>(null);
+  const pendingRefundScrollRef = useRef<number | null>(null);
 
   const loadZahlungspartnerData = useCallback(async (options?: { forceRefresh?: boolean }) => {
     try {
@@ -365,6 +366,32 @@ export default function TransactionsPage() {
     setExpandedTransactionId((current) => (current === id ? null : id));
   };
 
+  const scrollToRefundSection = useCallback((id: number) => {
+    requestAnimationFrame(() => {
+      document.getElementById(`refund-section-${id}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    });
+  }, []);
+
+  const openRefundSection = (id: number) => {
+    if (expandedTransactionId === id) {
+      scrollToRefundSection(id);
+      return;
+    }
+    pendingRefundScrollRef.current = id;
+    toggleRow(id);
+  };
+
+  useEffect(() => {
+    const pendingId = pendingRefundScrollRef.current;
+    if (pendingId === null) return;
+    if (expandedTransactionId !== pendingId) return;
+    pendingRefundScrollRef.current = null;
+    scrollToRefundSection(pendingId);
+  }, [expandedTransactionId, scrollToRefundSection]);
+
   const handleToggleConfirmSave = async () => {
     if (expandedTransactionId !== null) {
       try {
@@ -640,6 +667,7 @@ export default function TransactionsPage() {
               unknownIban={hasUnknownIban ? partnerIban : null}
               ownerId={ownerId}
               onToggleRow={toggleRow}
+              onOpenRefundSection={openRefundSection}
               onRowKeyDown={handleRowKeyDown}
               onSelectChange={handleSelectChange}
               onSaveCategory={(transactionId, categoryId) => {

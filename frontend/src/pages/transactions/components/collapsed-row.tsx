@@ -27,6 +27,7 @@ type CollapsedRowProps = {
   subscriptionLink: { counterpartyName: string; amount: number } | null;
   unknownIban: string | null;
   onToggleRow: (transactionId: number) => void;
+  onOpenRefundSection: (transactionId: number) => void;
   onRequestClose: (closeAction: () => void) => void;
   onRowKeyDown: (event: KeyboardEvent<Element>, transactionId: number) => void;
   onSelectChange: (transactionId: number, selected: boolean) => void;
@@ -44,6 +45,7 @@ export function CollapsedRow({
   subscriptionLink,
   unknownIban,
   onToggleRow,
+  onOpenRefundSection,
   onRequestClose,
   onRowKeyDown,
   onSelectChange,
@@ -212,10 +214,12 @@ export function CollapsedRow({
 
         <div className="flex shrink-0 items-center gap-3">
           {isUnassigned && !transaction.technisch.splits ? (
-            <span
-              className="size-2 shrink-0 rounded-full bg-orange-500"
-              title="Unkategorisiert"
-            />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="size-2 shrink-0 rounded-full bg-orange-500" />
+              </TooltipTrigger>
+              <TooltipContent side="top">Unkategorisiert</TooltipContent>
+            </Tooltip>
           ) : null}
           {transaction.technisch.splits ? (
             <span className="inline-flex items-center rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
@@ -249,7 +253,22 @@ export function CollapsedRow({
             {(isRefund || hasRefunds) && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400 tabular-nums">
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onOpenRefundSection(transaction.id);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        onOpenRefundSection(transaction.id);
+                      }
+                    }}
+                    className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 hover:bg-amber-500/20 transition-colors dark:text-amber-400 tabular-nums"
+                  >
                     <Undo2 className="size-3" />
                     {formatAmount(
                       isRefund ? transaction.betrag.wert : linkedRefundTotal,

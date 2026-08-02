@@ -40,6 +40,7 @@ type TransactionRowProps = {
   currentCategoryId: number | null;
   unknownIban: string | null;
   onToggleRow: (transactionId: number) => void;
+  onOpenRefundSection: (transactionId: number) => void;
   onRowKeyDown: (event: KeyboardEvent<Element>, transactionId: number) => void;
   onSelectChange: (transactionId: number, selected: boolean) => void;
   onSaveCategory: (transactionId: number, categoryId: number | null) => void;
@@ -73,6 +74,7 @@ export function TransactionRow({
   currentCategoryId,
   unknownIban,
   onToggleRow,
+  onOpenRefundSection,
   onRowKeyDown,
   onSelectChange,
   onSaveCategory,
@@ -165,6 +167,7 @@ export function TransactionRow({
         subscriptionLink={subscriptionLink}
         unknownIban={unknownIban}
         onToggleRow={onToggleRow}
+        onOpenRefundSection={onOpenRefundSection}
         onRequestClose={handleRequestClose}
         onRowKeyDown={onRowKeyDown}
         onSelectChange={onSelectChange}
@@ -215,7 +218,11 @@ export function TransactionRow({
               <NoteSection note={note} showRefundSection={derivations.showRefundSection} />
 
               {derivations.showRefundSection ? (
-                <div className="px-5 py-4" onClick={(event) => event.stopPropagation()}>
+                <div
+                  id={`refund-section-${transaction.id}`}
+                  className="px-5 py-4"
+                  onClick={(event) => event.stopPropagation()}
+                >
                   {transaction.betrag.wert > 0 ? (
                     <RefundSectionIncoming
                       transaction={transaction}
