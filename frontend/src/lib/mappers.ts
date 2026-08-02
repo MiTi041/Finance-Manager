@@ -117,6 +117,9 @@ export function mapTransaction(dto: TransactionDto): Transaction {
       refundTotal: dto.refund_total ?? 0,
     },
 
+    refundLinks: dto.refund_links ?? [],
+    refundAttributed: dto.refund_attributed ?? 0,
+
     technisch: {
       hash: dto.transaction_hash,
 
@@ -132,7 +135,6 @@ export function mapTransaction(dto: TransactionDto): Transaction {
 
       bankDeleted: dto.bank_deleted,
 
-      refundRefTransactionId: dto.refund_ref_transaction_id ?? null,
       isRefund: !!dto.is_refund,
     },
   };

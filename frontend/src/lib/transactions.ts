@@ -63,16 +63,34 @@ export async function updateTransactionSplits(
   await parseJsonResponse(response);
 }
 
-export async function updateRefundLink(
+export async function addRefundLink(
   transactionId: number,
-  refundRefTransactionId: number | null,
+  expenseTransactionId: number,
+  amount: number,
 ): Promise<void> {
   const response = await fetch(
-    `${getApiBaseUrl()}/db/transactions/${transactionId}/refund-link`,
+    `${getApiBaseUrl()}/db/transactions/${transactionId}/refund-links`,
     {
-      method: "PATCH",
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refund_ref_transaction_id: refundRefTransactionId }),
+      body: JSON.stringify({
+        expense_transaction_id: expenseTransactionId,
+        amount,
+      }),
+    },
+  );
+
+  await parseJsonResponse(response);
+}
+
+export async function deleteRefundLink(
+  transactionId: number,
+  linkId: number,
+): Promise<void> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/db/transactions/${transactionId}/refund-links/${linkId}`,
+    {
+      method: "DELETE",
     },
   );
 

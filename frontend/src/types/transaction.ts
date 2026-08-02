@@ -8,6 +8,13 @@ export interface TransactionSplit {
   name?: string | null;
 }
 
+export interface RefundLinkDto {
+  id: number;
+  refund_transaction_id: number;
+  expense_transaction_id: number;
+  amount: number;
+}
+
 export interface TransactionDto {
   id: number;
 
@@ -92,7 +99,8 @@ export interface TransactionDto {
 
   created_at: Date;
   bank_deleted: boolean;
-  refund_ref_transaction_id: number | null;
+  refund_links: RefundLinkDto[];
+  refund_attributed: number;
   refund_total: number;
   is_refund: boolean;
 }
@@ -195,6 +203,9 @@ export interface Transaction {
     refundTotal: number;
   };
 
+  refundLinks: RefundLinkDto[];
+  refundAttributed: number;
+
   technisch: {
     hash: string;
 
@@ -214,7 +225,6 @@ export interface Transaction {
 
     bankDeleted: boolean;
 
-    refundRefTransactionId: number | null;
     isRefund: boolean;
   };
 }
