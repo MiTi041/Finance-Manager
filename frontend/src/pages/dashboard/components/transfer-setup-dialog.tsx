@@ -378,7 +378,7 @@ export function TransferSetupDialog({
             </Button>
             <Button type="button" onClick={handleSubmit} disabled={!canSubmit}>
               <ArrowRightToLine className="size-4" />
-              Ja, bezahlen
+              Jetzt bezahlen
             </Button>
           </div>
         </div>
