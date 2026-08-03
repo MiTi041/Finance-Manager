@@ -44,8 +44,7 @@ export type TransferSetupResult = {
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  senderAccounts: SenderAccount[];
-  defaultSenderIban?: string;
+  senderAccount?: SenderAccount;
   recipientAccounts: RecipientAccountRecord[];
   ownAccounts: OwnAccount[];
   onConfirm: (result: TransferSetupResult) => void;
@@ -60,13 +59,11 @@ const MANUAL = "manual";
 export function TransferSetupDialog({
   open,
   onOpenChange,
-  senderAccounts,
-  defaultSenderIban,
+  senderAccount,
   recipientAccounts,
   ownAccounts,
   onConfirm,
 }: Props) {
-  const [senderIban, setSenderIban] = useState("");
   const [recipientValue, setRecipientValue] = useState<string>("");
   const [manualName, setManualName] = useState("");
   const [manualIban, setManualIban] = useState("");
@@ -78,11 +75,6 @@ export function TransferSetupDialog({
 
   useEffect(() => {
     if (!open) return;
-    setSenderIban(
-      senderAccounts.find((a) => a.iban === defaultSenderIban)?.iban ??
-        senderAccounts[0]?.iban ??
-        "",
-    );
     setRecipientValue(MANUAL);
     setManualName("");
     setManualIban("");
@@ -91,12 +83,9 @@ export function TransferSetupDialog({
     setAccountName("");
     setPurpose("");
     setAmount(0);
-  }, [open, senderAccounts, defaultSenderIban]);
+  }, [open]);
 
-  const sender = useMemo(
-    () => senderAccounts.find((a) => a.iban === senderIban) ?? senderAccounts[0],
-    [senderAccounts, senderIban],
-  );
+  const sender = senderAccount;
   const maxAmount = Math.max(0, sender?.balance ?? 0);
 
   const recipientOptions = useMemo(
@@ -139,16 +128,6 @@ export function TransferSetupDialog({
   const amountValid = amount > 0 && amount <= maxAmount;
   const canSubmit = !!sender && recipientValid && amountValid;
 
-  const handleSenderChange = (iban: string) => {
-    setSenderIban(iban);
-    if (recipientValue === `bank:${iban}`) setRecipientValue(MANUAL);
-    setAmount((prev) => {
-      const next = senderAccounts.find((a) => a.iban === iban);
-      const max = Math.max(0, next?.balance ?? 0);
-      return Math.min(prev, max);
-    });
-  };
-
   const handleSubmit = () => {
     if (!canSubmit || !sender) return;
     onConfirm({
@@ -190,70 +169,30 @@ export function TransferSetupDialog({
             <p className="text-sm text-muted-foreground">Kein Transfer-aktives Konto verfügbar.</p>
           )}
 
-          <div className="space-y-1.5">
-            <Label>Absenderkonto</Label>
-            <SearchableSelect
-              height={15}
-              value={senderIban}
-              onValueChange={handleSenderChange}
-              options={senderAccounts.map((a) => ({
-                value: a.iban,
-                label: `${a.name} ${a.iban}`,
-              }))}
-              placeholder="Konto auswählen"
-              searchPlaceholder="Konto suchen…"
-              emptyText="Kein Konto gefunden"
-              renderOption={(option) => {
-                const a = senderAccounts.find((x) => x.iban === option.value);
-                if (!a) return <span>{option.label}</span>;
-                return (
-                  <div className="flex flex-col gap-0.5 py-1">
-                    <span className="font-medium text-sm leading-tight">{a.name}</span>
-                    <span className="font-mono text-xs text-muted-foreground/70 leading-tight">
-                      {formatIban(a.iban)}
-                    </span>
-                  </div>
-                );
-              }}
-              renderSelected={(option) => {
-                const a = senderAccounts.find((x) => x.iban === option.value);
-                if (!a) return <span className="text-muted-foreground">Kein Konto</span>;
-                return (
-                  <div className="flex w-full flex-col items-start gap-0">
-                    <span className="truncate text-sm leading-tight">{a.name}</span>
-                    <span className="truncate font-mono text-[11px] text-muted-foreground leading-tight">
-                      {formatIban(a.iban)}
-                    </span>
-                  </div>
-                );
-              }}
-            />
-          </div>
+          {sender && (
+            <div className="space-y-1.5">
+              <Label>Absenderkonto</Label>
+              <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2">
+                <div className="flex min-w-0 flex-col items-start gap-0">
+                  <span className="truncate text-sm leading-tight">{sender.name}</span>
+                  <span className="truncate font-mono text-[11px] text-muted-foreground leading-tight">
+                    {formatIban(sender.iban)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label>Empfänger</Label>
             <SearchableSelect
               height={15}
-              value={recipientValue}
-              onValueChange={(v) => {
-                if (v === MANUAL) {
-                  setRecipientValue(MANUAL);
-                  return;
-                }
-                if (v.startsWith("bank:")) {
-                  const a = ownAccounts.find((x) => x.iban === v.slice(5));
-                  if (a) setRecipientValue(v);
-                  return;
-                }
-                setRecipientValue(v);
-              }}
+              value={recipientValue === MANUAL ? "" : recipientValue}
+              onValueChange={(v) => setRecipientValue(v)}
               options={recipientOptions}
               placeholder="Empfänger auswählen"
               searchPlaceholder="Empfänger suchen…"
               emptyText="Kein Empfänger gefunden"
-              showNoneOption
-              noneLabel="Manuelle Eingabe"
-              noneValue={MANUAL}
               renderSelected={(option) => {
                 const isBank = option.value.startsWith("bank:");
                 const a = isBank
@@ -294,43 +233,54 @@ export function TransferSetupDialog({
             />
           </div>
 
-          {recipientValue === MANUAL && (
-            <div className="space-y-3 rounded-lg border p-3">
+          <div className="flex items-center gap-3 py-1">
+            <div className="h-px flex-1 bg-border" />
+            <span className="text-xs text-muted-foreground">oder</span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+
+          <div className="space-y-3 rounded-lg border p-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="manual-name">
+                Empfänger <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="manual-name"
+                value={manualName}
+                onChange={(e) => {
+                  setManualName(e.target.value);
+                  if (recipientValue !== MANUAL) setRecipientValue(MANUAL);
+                }}
+                placeholder="Name des Kontoinhabers"
+              />
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="manual-name">
-                  Empfänger <span className="text-destructive">*</span>
+                <Label htmlFor="manual-iban">
+                  IBAN <span className="text-destructive">*</span>
                 </Label>
                 <Input
-                  id="manual-name"
-                  value={manualName}
-                  onChange={(e) => setManualName(e.target.value)}
-                  placeholder="Name des Kontoinhabers"
+                  id="manual-iban"
+                  value={manualIban}
+                  onChange={(e) => {
+                    setManualIban(e.target.value);
+                    if (recipientValue !== MANUAL) setRecipientValue(MANUAL);
+                  }}
+                  placeholder="DE…"
+                  className="font-mono"
                 />
               </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="manual-iban">
-                    IBAN <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="manual-iban"
-                    value={manualIban}
-                    onChange={(e) => setManualIban(e.target.value)}
-                    placeholder="DE…"
-                    className="font-mono"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="manual-bic">BIC</Label>
-                  <Input
-                    id="manual-bic"
-                    value={manualBic}
-                    onChange={(e) => setManualBic(e.target.value)}
-                    placeholder="optional"
-                    className="font-mono"
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="manual-bic">BIC</Label>
+                <Input
+                  id="manual-bic"
+                  value={manualBic}
+                  onChange={(e) => setManualBic(e.target.value)}
+                  placeholder="optional"
+                  className="font-mono"
+                />
               </div>
+            </div>
               {!manualIbanValid && (
                 <p className="flex items-center gap-1.5 text-xs text-destructive">
                   <TriangleAlert className="size-3 shrink-0" /> IBAN ist ungültig.
@@ -360,7 +310,6 @@ export function TransferSetupDialog({
                 )}
               </div>
             </div>
-          )}
 
           <div className="space-y-1.5">
             <Label htmlFor="purpose">Verwendungszweck</Label>

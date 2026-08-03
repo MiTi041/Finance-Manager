@@ -26,6 +26,7 @@ type BanksProps = {
   linkedBanks: StoredBankCredentials[];
   deletingScope: string | null;
   onDeleteOne: (scope: string) => void | Promise<void>;
+  canTransferByBankKey?: Map<string, boolean>;
 };
 
 type EditingState = {
@@ -66,7 +67,12 @@ function getAccounts(credential: StoredBankCredentials) {
   ];
 }
 
-export function Banks({ linkedBanks, deletingScope, onDeleteOne }: BanksProps) {
+export function Banks({
+  linkedBanks,
+  deletingScope,
+  onDeleteOne,
+  canTransferByBankKey,
+}: BanksProps) {
   const [editing, setEditing] = useState<EditingState>(null);
   const [saving, setSaving] = useState(false);
   const [balanceSaving, setBalanceSaving] = useState(false);
@@ -161,6 +167,20 @@ export function Banks({ linkedBanks, deletingScope, onDeleteOne }: BanksProps) {
                   >
                     Aktiv
                   </Badge>
+                  {canTransferByBankKey?.has(bank.bank_key) ? (
+                    <Badge
+                      variant="secondary"
+                      className={
+                        canTransferByBankKey.get(bank.bank_key)
+                          ? "bg-green-500/10 text-green-600 dark:text-green-400 text-[11px] px-1.5 py-0"
+                          : "bg-muted text-muted-foreground text-[11px] px-1.5 py-0"
+                      }
+                    >
+                      {canTransferByBankKey.get(bank.bank_key)
+                        ? "Überweisungen aktiv"
+                        : "Überweisungen nicht unterstützt"}
+                    </Badge>
+                  ) : null}
                   {bank.username && (
                     <span className="text-xs text-muted-foreground">{bank.username}</span>
                   )}

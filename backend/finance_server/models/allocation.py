@@ -29,6 +29,7 @@ class BafoegConfig(BaseModel):
     monthly_rate: float = 267
     interest_rate: float = 2.0
     current_balance: float = 0
+    anlagezinsen: float = 0
     payout_date: str | None = None
 
 

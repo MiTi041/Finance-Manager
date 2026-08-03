@@ -372,7 +372,7 @@ class TestSavingsPlanBudget:
             return enriched
         return fake_enrich
 
-    def test_completed_plans_excluded_from_savings_total(self):
+    def test_completed_plan_with_rate_due_still_counts_in_savings_total(self):
         plans = [
             {"id": 1, "name": "Aktiv", "tag": "a", "created_at": "2026-01-01", "is_visible": True, "auto_hidden": False},
             {"id": 2, "name": "Fertig", "tag": "b", "created_at": "2026-02-01", "is_visible": True, "auto_hidden": False},
@@ -380,9 +380,19 @@ class TestSavingsPlanBudget:
         result, _, _ = self._run_with_enrich(
             "2026-07", 2000.0, plans, self._enrich_completed({2}, rates={1: 100.0, 2: 200.0})
         )
+        assert result["savings_total"] == 300.0
+
+    def test_completed_plan_without_rate_due_not_counted(self):
+        plans = [
+            {"id": 1, "name": "Aktiv", "tag": "a", "created_at": "2026-01-01", "is_visible": True, "auto_hidden": False},
+            {"id": 2, "name": "Fertig", "tag": "b", "created_at": "2026-02-01", "is_visible": True, "auto_hidden": False},
+        ]
+        result, _, _ = self._run_with_enrich(
+            "2026-07", 2000.0, plans, self._enrich_completed({2}, rates={1: 100.0, 2: 0.0})
+        )
         assert result["savings_total"] == 100.0
 
-    def test_completed_plans_do_not_deplete_bucket_budget(self):
+    def test_completed_plan_with_rate_due_depletes_bucket_budget(self):
         plans = [
             {"id": 1, "name": "Aktiv", "tag": "a", "created_at": "2026-01-01", "is_visible": True, "auto_hidden": False},
             {"id": 2, "name": "Fertig", "tag": "b", "created_at": "2026-02-01", "is_visible": True, "auto_hidden": False},
@@ -395,7 +405,7 @@ class TestSavingsPlanBudget:
         )
 
         calls = [call.args[2] for call in mock_create_bucket.call_args_list]
-        assert calls == [950.0]
+        assert calls == [850.0]
 
     def _run_with_enrich(self, month, net_income, plans, enrich_side_effect, buckets=None):
         service = AllocationService()

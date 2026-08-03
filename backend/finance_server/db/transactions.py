@@ -78,6 +78,54 @@ def to_row_payload(tx: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
+TRANSACTION_IDENTITY_COLUMNS = (
+    "account_iban",
+    "account_bic",
+    "account_accountnumber",
+    "account_subaccount",
+    "account_blz",
+    "date",
+    "entry_date",
+    "transaction_id",
+    "customer_reference",
+    "bank_reference",
+    "transaction_reference",
+    "end_to_end_reference",
+    "prima_nota",
+    "recipient_name",
+    "purpose",
+    "additional_purpose",
+    "posting_text",
+    "transaction_code",
+    "purpose_code",
+    "currency",
+)
+
+
+def _find_equivalent_transaction_id(
+    connection: sqlite3.Connection,
+    payload: dict[str, Any],
+) -> int | None:
+    row = connection.execute(
+        "SELECT id FROM umsaetze WHERE transaction_hash = ?",
+        (payload["transaction_hash"],),
+    ).fetchone()
+    if row:
+        return int(row["id"])
+
+    where = ["ABS(amount - ?) < 0.0001"]
+    values: list[Any] = [payload["amount"]]
+    for col in TRANSACTION_IDENTITY_COLUMNS:
+        where.append(f"COALESCE({col}, '') = COALESCE(?, '')")
+        values.append(payload.get(col))
+
+    row = connection.execute(
+        f"SELECT id FROM umsaetze WHERE {' AND '.join(where)} ORDER BY id LIMIT 1",
+        values,
+    ).fetchone()
+    return int(row["id"]) if row else None
+
+
 def insert_transactions(rows: Iterable[dict[str, Any]]) -> dict[str, int]:
     normalized_rows = [to_row_payload(row) for row in rows]
     normalized_rows = [row for row in normalized_rows if abs(row["amount"]) > 0.0001]
@@ -85,7 +133,16 @@ def insert_transactions(rows: Iterable[dict[str, Any]]) -> dict[str, int]:
     if not normalized_rows:
         return {"received": 0, "inserted": 0, "ignored": 0}
 
+    received = len(normalized_rows)
+
     with get_connection() as connection:
+        normalized_rows = [
+            row for row in normalized_rows
+            if _find_equivalent_transaction_id(connection, row) is None
+        ]
+        if not normalized_rows:
+            return {"received": received, "inserted": 0, "ignored": received}
+
         before_max = connection.execute("SELECT COALESCE(MAX(id), 0) FROM umsaetze").fetchone()[0]
 
         cursor = connection.executemany(
@@ -134,7 +191,6 @@ def insert_transactions(rows: Iterable[dict[str, Any]]) -> dict[str, int]:
         for new_row in new_rows:
             _log("umsaetze", new_row["id"], "INSERT", dict(new_row))
 
-    received = len(normalized_rows)
     return {
         "received": received,
         "inserted": inserted,

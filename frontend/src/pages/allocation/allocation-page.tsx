@@ -295,7 +295,7 @@ export default function AllocationPage() {
                 {balanced
                   ? "Netto-Einkommen ist vollständig verteilt"
                   : diff < 0
-                    ? `Mehr verteilt als Netto-Einkommen (${formatAmount(Math.abs(diff))} aus Kontoguthaben finanziert)`
+                    ? `Mehr verteilt als Netto-Einkommen`
                     : `Differenz von ${formatAmount(diff)} zum Netto-Einkommen`}
               </p>
             </div>

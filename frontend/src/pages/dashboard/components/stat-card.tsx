@@ -2,6 +2,7 @@ import type { ComponentType, ReactNode } from "react";
 import { ArrowUpRight, ArrowDownRight } from "lucide-react";
 import NumberFlow, { type Format } from "@number-flow/react";
 import { BankLogo } from "@/components/bank-logo";
+import { Button } from "@/components/ui/button";
 
 type AccountBalance = {
   bankLogo?: string;
@@ -23,6 +24,8 @@ type StatCardProps = {
   footer?: string;
   accountBalances?: AccountBalance[];
   action?: ReactNode;
+  transferableIbans?: Set<string>;
+  onAccountTransfer?: (iban: string) => void;
 };
 
 export function StatCard({
@@ -37,6 +40,8 @@ export function StatCard({
   footer,
   accountBalances,
   action,
+  transferableIbans,
+  onAccountTransfer,
 }: StatCardProps) {
   return (
     <div className="flex cursor-default flex-col gap-3 rounded-panel border border-border bg-card p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/15">
@@ -76,29 +81,41 @@ export function StatCard({
           {accountBalances.map((acc) => (
             <div
               key={acc.accountIban}
-              className="flex items-center justify-start gap-2 p-1 pr-4 bg-muted rounded-sm"
+              className="flex flex-col gap-2 p-2 bg-muted rounded-sm"
             >
-              <BankLogo
-                src={acc.bankLogo || undefined}
-                alt={acc.accountName || acc.bankName || "Bank"}
-                sizeClassName="size-10 shrink-0 p-1 rounded border-0 bg-muted"
-                kind="company"
-              />
-              <div className="flex items-start flex-col justify-start">
-                <span
-                  className={`font-mono text-xs text-muted-foreground tabular-nums text-foreground`}
-                >
-                  {acc.accountName}
-                </span>
-                <span
-                  className={`font-mono text-xs tabular-nums ${acc.balance >= 0 ? "text-emerald-500" : "text-red-500"}`}
-                >
-                  {new Intl.NumberFormat("de-DE", {
-                    style: "currency",
-                    currency: "EUR",
-                  }).format(acc.balance)}
-                </span>
+              <div className="flex items-center gap-2">
+                <BankLogo
+                  src={acc.bankLogo || undefined}
+                  alt={acc.accountName || acc.bankName || "Bank"}
+                  sizeClassName="size-10 shrink-0 p-1 rounded border-0 bg-muted"
+                  kind="company"
+                />
+                <div className="flex items-start flex-col justify-start">
+                  <span
+                    className={`font-mono text-xs text-muted-foreground tabular-nums text-foreground`}
+                  >
+                    {acc.accountName}
+                  </span>
+                  <span
+                    className={`font-mono text-xs tabular-nums ${acc.balance >= 0 ? "text-emerald-500" : "text-red-500"}`}
+                  >
+                    {new Intl.NumberFormat("de-DE", {
+                      style: "currency",
+                      currency: "EUR",
+                    }).format(acc.balance)}
+                  </span>
+                </div>
               </div>
+              {transferableIbans?.has(acc.accountIban) && (
+                <Button
+                  size="sm"
+                  className="w-full gap-1"
+                  onClick={() => onAccountTransfer?.(acc.accountIban)}
+                >
+                  <ArrowUpRight className="size-3.5" />
+                  Überweisen
+                </Button>
+              )}
             </div>
           ))}
         </div>

@@ -158,7 +158,7 @@ export function SubscriptionRow({
           : "bg-background hover:bg-muted/40",
       )}>
         <div
-          className="flex w-full items-center gap-4 px-4 py-3"
+          className={cn("flex w-full items-center gap-4 px-4 py-3", !isDismissed && "cursor-pointer")}
           onClick={isDismissed ? undefined : handleRowClick}
           role={isDismissed ? undefined : "button"}
           tabIndex={isDismissed ? -1 : 0}

@@ -48,6 +48,9 @@ def build_transaction_hash(payload: dict[str, Any]) -> str:
     amt = payload.get("amount")
     orig_amt = payload.get("original_amount")
 
+    # Some FinTS parsers report placeholder values such as "-" for applicant_iban,
+    # while others later expose the real IBAN or fold it into applicant_name. These
+    # fields are not stable enough to identify a bank transaction across devices.
     stable_parts = [
         str(payload.get("account_iban") or ""),
         str(payload.get("account_bic") or ""),
@@ -65,9 +68,6 @@ def build_transaction_hash(payload: dict[str, Any]) -> str:
         str(payload.get("transaction_reference") or ""),
         str(payload.get("end_to_end_reference") or ""),
         str(payload.get("prima_nota") or ""),
-        str(payload.get("applicant_iban") or ""),
-        str(payload.get("applicant_bic") or ""),
-        str(payload.get("applicant_name") or ""),
         str(payload.get("recipient_name") or ""),
         str(payload.get("purpose") or ""),
         str(payload.get("additional_purpose") or ""),

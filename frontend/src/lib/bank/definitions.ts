@@ -6,6 +6,7 @@ export type BankDefinition = {
   blz: string;
   fints_url: string;
   bank_logo: string;
+  can_transfer: boolean;
 };
 
 export async function fetchAvailableBanks(): Promise<BankDefinition[]> {

@@ -568,6 +568,7 @@ def initialize_database(connection: sqlite3.Connection) -> None:
         "allocation_bafoeg_config",
         {
             "current_balance": "REAL NOT NULL DEFAULT 0",
+            "anlagezinsen": "REAL NOT NULL DEFAULT 0",
         },
     )
     _ensure_table_columns(

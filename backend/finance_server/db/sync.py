@@ -107,7 +107,7 @@ VALID_SYNC_COLUMNS: dict[str, set[str]] = {
     "subscription_identities": {"id", "counterparty_name", "amount", "display_name", "f_zahlungspartner_id", "dismissed", "updated_at"},
     "ibans": {"iban", "f_zahlungspartner_id"},
     "allocation_buckets": {"id", "bucket_type", "percentage", "recipient_account_id", "sender_iban", "is_active", "sort_order", "target_amount", "target_months", "recipient_iban", "created_at", "updated_at"},
-    "allocation_bafoeg_config": {"id", "total_debt", "monthly_rate", "interest_rate", "payout_date", "current_balance", "created_at", "updated_at"},
+    "allocation_bafoeg_config": {"id", "total_debt", "monthly_rate", "interest_rate", "payout_date", "current_balance", "anlagezinsen", "created_at", "updated_at"},
     "savings_plans": {"id", "name", "tag", "target_amount", "target_date", "target_recipient_name", "target_recipient_iban", "target_recipient_bic", "is_visible", "sender_iban", "created_at", "updated_at"},
     "budgets": {"id", "name", "category_ids", "amount", "period", "created_at", "updated_at"},
     "app_settings": {"key", "value", "updated_at"},
@@ -130,6 +130,87 @@ def _resolve_lookup(
     if table == "app_settings" and data and data.get("key"):
         return "key", data["key"], None
     return "id", row_id, row_id
+
+
+SYNCED_APP_SETTING_KEYS = {
+    "bafoeg_enabled",
+}
+
+
+TRANSACTION_IDENTITY_COLUMNS = (
+    "account_iban",
+    "account_bic",
+    "account_accountnumber",
+    "account_subaccount",
+    "account_blz",
+    "date",
+    "entry_date",
+    "transaction_id",
+    "customer_reference",
+    "bank_reference",
+    "transaction_reference",
+    "end_to_end_reference",
+    "prima_nota",
+    "recipient_name",
+    "purpose",
+    "additional_purpose",
+    "posting_text",
+    "transaction_code",
+    "purpose_code",
+    "currency",
+)
+
+
+def _find_equivalent_transaction_id(
+    connection: Any,
+    data: dict[str, Any],
+) -> int | None:
+    if data.get("transaction_hash"):
+        row = connection.execute(
+            "SELECT id FROM umsaetze WHERE transaction_hash = ?",
+            (data["transaction_hash"],),
+        ).fetchone()
+        if row:
+            return int(row["id"])
+
+    amount = data.get("amount")
+    try:
+        amount = float(amount)
+    except (TypeError, ValueError):
+        return None
+
+    where = ["ABS(amount - ?) < 0.0001"]
+    values: list[Any] = [amount]
+    for col in TRANSACTION_IDENTITY_COLUMNS:
+        if col in data:
+            where.append(f"COALESCE({col}, '') = COALESCE(?, '')")
+            values.append(data.get(col))
+
+    if len(where) <= 1:
+        return None
+
+    row = connection.execute(
+        f"SELECT id FROM umsaetze WHERE {' AND '.join(where)} ORDER BY id LIMIT 1",
+        values,
+    ).fetchone()
+    return int(row["id"]) if row else None
+
+
+def _is_default_allocation_bucket(row: Any) -> bool:
+    defaults = {
+        "bafoeg": {"percentage": 0.0, "recipient_account_id": None, "sender_iban": None, "is_active": 0, "sort_order": 0},
+        "emergency": {"percentage": 30.0, "recipient_account_id": None, "sender_iban": None, "is_active": 1, "sort_order": 1},
+        "invest": {"percentage": 30.0, "recipient_account_id": None, "sender_iban": None, "is_active": 1, "sort_order": 2},
+        "donation": {"percentage": 10.0, "recipient_account_id": None, "sender_iban": None, "is_active": 1, "sort_order": 3},
+        "spending": {"percentage": 30.0, "recipient_account_id": None, "sender_iban": None, "is_active": 1, "sort_order": 4},
+    }
+    expected = defaults.get(row["bucket_type"])
+    if not expected:
+        return False
+    for key, value in expected.items():
+        if row[key] != value:
+            return False
+    return row["target_amount"] is None and row["target_months"] is None and row["recipient_iban"] is None
 
 
 def apply_sync_op(op: dict[str, Any]) -> bool:
@@ -164,7 +245,7 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
         if pk == "id" and "id" not in filtered_data:
             return False
 
-        if table == "app_settings" and filtered_data.get("key") != "bafoeg_enabled":
+        if table == "app_settings" and filtered_data.get("key") not in SYNCED_APP_SETTING_KEYS:
             return False
 
         if table == "umsaetze" and "splits" in filtered_data and isinstance(filtered_data["splits"], (dict, list)):
@@ -177,9 +258,16 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
         placeholders = [f"{k} = ?" for k in columns]
         values = [filtered_data[k] for k in columns]
 
-        if table == "allocation_buckets":
+        existing_transaction_id = None
+        if table == "umsaetze":
+            existing_transaction_id = _find_equivalent_transaction_id(connection, filtered_data)
+            if existing_transaction_id is None and pk == "id" and pk_value is not None:
+                row = connection.execute("SELECT id FROM umsaetze WHERE id = ?", (pk_value,)).fetchone()
+                existing_transaction_id = int(row["id"]) if row else None
+            existing = {"id": existing_transaction_id} if existing_transaction_id is not None else None
+        elif table == "allocation_buckets":
             existing = connection.execute(
-                "SELECT id FROM allocation_buckets WHERE bucket_type = ?", (pk_value,)
+                "SELECT * FROM allocation_buckets WHERE bucket_type = ?", (pk_value,)
             ).fetchone()
         else:
             existing = connection.execute(
@@ -187,22 +275,29 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
             ).fetchone()
         if table == "allocation_buckets" and existing:
             use_id = existing["id"]
+        if table == "umsaetze" and existing and "transaction_hash" in filtered_data and "transaction_hash" not in columns:
+            columns.append("transaction_hash")
+            placeholders = [f"{k} = ?" for k in columns]
+            values = [filtered_data[k] for k in columns]
 
-        if table == "empfaengerkonten" and existing and "id" in columns:
+        if table in {"empfaengerkonten", "umsaetze"} and existing and "id" in columns:
             columns = [c for c in columns if c != "id"]
             placeholders = [f"{k} = ?" for k in columns]
             values = [filtered_data[k] for k in columns]
 
-        if existing and "updated_at" in valid_cols and op_type != "INSERT":
+        existing_is_default_bucket = table == "allocation_buckets" and existing and _is_default_allocation_bucket(existing)
+
+        if existing and "updated_at" in valid_cols and op_type != "INSERT" and not existing_is_default_bucket:
             current_updated = connection.execute(
-                f"SELECT updated_at FROM {table} WHERE {pk} = ?", (pk_value,)
+                f"SELECT updated_at FROM {table} WHERE {'id' if table == 'umsaetze' else pk} = ?",
+                (existing_transaction_id if table == "umsaetze" else pk_value,),
             ).fetchone()["updated_at"]
             if data.get("updated_at") and current_updated and current_updated >= data["updated_at"]:
                 return False
 
         if existing:
-            where_pk = "id" if table == "allocation_buckets" else pk
-            where_val = use_id if table == "allocation_buckets" else pk_value
+            where_pk = "id" if table in {"allocation_buckets", "umsaetze"} else pk
+            where_val = use_id if table == "allocation_buckets" else existing_transaction_id if table == "umsaetze" else pk_value
             sql = f"UPDATE {table} SET {', '.join(placeholders)} WHERE {where_pk} = ?"
             values.append(where_val)
             cursor = connection.execute(sql, values)
@@ -216,11 +311,11 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
             all_placeholders = ["?"] * len(all_columns)
             sql = f"INSERT OR IGNORE INTO {table} ({', '.join(all_columns)}) VALUES ({', '.join(all_placeholders)})"
             cursor = connection.execute(sql, all_values)
-            # ponytail: incoming id taken by a different account on this device ->
-            # retry without id so the account still arrives with an auto-increment id
+            # Incoming id is already used locally; retry without it so the row can
+            # still arrive with a local auto-increment id.
             if (
                 cursor.rowcount == 0
-                and table == "empfaengerkonten"
+                and table in {"empfaengerkonten", "umsaetze"}
                 and "id" in all_columns
             ):
                 retry_cols = [c for c in all_columns if c != "id"]

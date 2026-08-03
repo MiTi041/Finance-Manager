@@ -340,6 +340,7 @@ export function BankAccessTab() {
         linkedBanks={linkedAccounts}
         deletingScope={deletingScope}
         onDeleteOne={handleDeleteOne}
+        canTransferByBankKey={new Map(availableBanks.map((bank) => [bank.key, bank.can_transfer]))}
       />
     </div>
   );

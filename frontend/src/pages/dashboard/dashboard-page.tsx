@@ -72,6 +72,7 @@ export default function DashboardPage() {
   const [canTransferMap, setCanTransferMap] = useState<Map<string, boolean>>(new Map());
   const [recipientAccounts, setRecipientAccounts] = useState<RecipientAccountRecord[]>([]);
   const [setupOpen, setSetupOpen] = useState(false);
+  const [presetSenderIban, setPresetSenderIban] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     void fetchAvailableBanks().then((banks) =>
@@ -102,14 +103,31 @@ export default function DashboardPage() {
   const senderAccounts: SenderAccount[] = useMemo(
     () =>
       accountBalances
-        .filter((a) => canTransferMap.get(bankKeyByIban.get(a.accountIban) ?? "") === true)
+        .filter(
+          (a) =>
+            (activeAccountIban === "all" || a.accountIban === activeAccountIban) &&
+            canTransferMap.get(bankKeyByIban.get(a.accountIban) ?? "") === true,
+        )
         .map((a) => ({
           iban: a.accountIban,
           name: a.accountName,
           bankName: a.bankName,
           balance: a.balance,
         })),
-    [accountBalances, canTransferMap, bankKeyByIban],
+    [accountBalances, canTransferMap, bankKeyByIban, activeAccountIban],
+  );
+
+  const transferableIbanSet = useMemo(
+    () => new Set(senderAccounts.map((a) => a.iban)),
+    [senderAccounts],
+  );
+
+  const activeSenderAccount = useMemo(
+    () =>
+      senderAccounts.find((a) => a.iban === presetSenderIban) ??
+      senderAccounts.find((a) => a.iban === activeAccountIban) ??
+      senderAccounts[0],
+    [senderAccounts, presetSenderIban, activeAccountIban],
   );
 
   const ownAccounts: OwnAccount[] = useMemo(
@@ -190,11 +208,19 @@ export default function DashboardPage() {
               icon={Wallet}
               footer={dateFooter ?? undefined}
               accountBalances={activeAccountIban === "all" ? accountBalances : undefined}
+              transferableIbans={activeAccountIban === "all" ? transferableIbanSet : undefined}
+              onAccountTransfer={(iban) => {
+                setPresetSenderIban(iban);
+                setSetupOpen(true);
+              }}
               action={
-                senderAccounts.length > 0 ? (
+                activeAccountIban !== "all" && senderAccounts.length > 0 ? (
                   <Button
                     className="w-full gap-1"
-                    onClick={() => setSetupOpen(true)}
+                    onClick={() => {
+                      setPresetSenderIban(undefined);
+                      setSetupOpen(true);
+                    }}
                   >
                     <ArrowUpRight className="size-4" />
                     Überweisen
@@ -244,8 +270,7 @@ export default function DashboardPage() {
       <TransferSetupDialog
         open={setupOpen}
         onOpenChange={setSetupOpen}
-        senderAccounts={senderAccounts}
-        defaultSenderIban={activeAccountIban !== "all" ? activeAccountIban : undefined}
+        senderAccount={activeSenderAccount}
         recipientAccounts={recipientAccounts}
         ownAccounts={ownAccounts}
         onConfirm={confirmSetup}

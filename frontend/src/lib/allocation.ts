@@ -206,6 +206,7 @@ export type BafoegConfig = {
   monthly_rate: number;
   interest_rate: number;
   current_balance: number;
+  anlagezinsen: number;
   payout_date: string | null;
 };
 

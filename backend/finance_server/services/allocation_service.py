@@ -11,6 +11,7 @@ from finance_server.core.database import get_connection
 from finance_server.core.feiertage import BUNDESLAENDER, holiday_dates
 from finance_server.db import allocation as db
 from finance_server.db.references import get_zahlungspartner_by_iban
+from finance_server.services.zins_service import berechne_monatsrate
 from finance_server.db.savings import (
     list_plans, create_plan, update_plan, delete_plan, get_plan,
     get_saved_amount, get_month_amount,
@@ -143,8 +144,10 @@ class AllocationService:
         available_for_savings = effective - donation_target
         all_plans = sorted(list_plans(), key=lambda p: p["created_at"])
         enriched_plans = [self._enrich_savings_plan(p, month) for p in all_plans]
+        # ponytail: count by rate due this month, not completion — a plan completed
+        # via this month's rate already spent that money and stays in the distribution
         savings_total = sum(
-            p["monthly_rate"] for p in enriched_plans if p["is_visible"] and not p["is_completed"]
+            p["monthly_rate"] for p in enriched_plans if p["is_visible"] and p["monthly_rate"] > 0
         )
 
         # Remaining after donation and savings plans → invest, emergency.
@@ -212,7 +215,6 @@ class AllocationService:
                             bucket["months_left"] = math.ceil(remaining / monthly_rate)
                 if bucket["bucket_type"] == "bafoeg":
                     from datetime import date
-                    from finance_server.services.zins_service import berechne_monatsrate
                     breakdown = get_bafoeg_breakdown()
                     with get_connection() as conn:
                         month_rows = conn.execute(
@@ -225,7 +227,8 @@ class AllocationService:
                     month_einz = sum(abs(r["amount"]) for r in month_rows)
                     bafoeg_cfg = db.get_bafoeg_config()
                     seed = bafoeg_cfg.get("current_balance", 0) if bafoeg_cfg else 0
-                    bucket["saved_total"] = round(seed + breakdown["einzahlungen"], 2)
+                    anlagezinsen = bafoeg_cfg.get("anlagezinsen", 0) if bafoeg_cfg else 0
+                    bucket["saved_total"] = round(seed + breakdown["einzahlungen"] + anlagezinsen, 2)
                     bucket["saved_einzahlungen"] = round(breakdown["einzahlungen"], 2)
                     bucket["saved_entnahmen"] = round(breakdown["entnahmen"], 2)
                     bucket["saved_tilgungen"] = round(breakdown.get("tilgungen", 0), 2)
@@ -300,7 +303,7 @@ class AllocationService:
         plans = list_plans()
         savings_plans = [self._enrich_savings_plan(p, run["month"]) for p in plans]
         savings_total = sum(
-            p["monthly_rate"] for p in savings_plans if p["is_visible"] and not p["is_completed"]
+            p["monthly_rate"] for p in savings_plans if p["is_visible"] and p["monthly_rate"] > 0
         )
         total_bucket_sum = round(sum(b["target_amount"] for b in buckets if b["bucket_type"] != "spending"), 2)
         allocated = round(total_bucket_sum + savings_total, 2)

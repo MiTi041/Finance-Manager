@@ -74,16 +74,26 @@ export function BucketProgress(props: Props) {
 
       {isInfoOnly && bucket.bucket_type === "spending" && bucket.spent !== undefined ? (
         <>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-            <div
-              className={`h-full rounded-full transition-all duration-500 ease-out ${bucket.spent > bucket.target_amount ? "bg-red-500" : accent.bar}`}
-              style={
-                {
-                  width: `${spendingPct}%`,
-                  minWidth: bucket.spent > 0 ? "8px" : undefined,
-                } as React.CSSProperties
-              }
-            />
+          <div className="flex h-2 w-full gap-1">
+            {spendingPct > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div
+                    className={`h-full rounded-full cursor-pointer ${bucket.spent > bucket.target_amount ? "bg-red-500" : accent.bar}`}
+                    style={
+                      {
+                        width: `${spendingPct}%`,
+                        minWidth: spendingPct > 0 ? "8px" : undefined,
+                      } as React.CSSProperties
+                    }
+                  />
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {formatAmount(bucket.spent)} ausgegeben (diesen Monat)
+                </TooltipContent>
+              </Tooltip>
+            )}
+            <div className="h-full flex-1 rounded-full bg-muted" />
           </div>
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>{formatAmount(bucket.spent)} ausgegeben</span>
@@ -199,6 +209,30 @@ export function BucketProgress(props: Props) {
           )}
           <div className="h-full flex-1 rounded-full bg-muted" />
         </div>
+      ) : bucket.bucket_type === "donation" ? (
+        <>
+          <div className="flex h-2 w-full gap-1">
+            {progress > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div
+                    className={`h-full rounded-full cursor-pointer ${accent.bar}`}
+                    style={
+                      {
+                        width: `${progress}%`,
+                        minWidth: progress > 0 ? "8px" : undefined,
+                      } as React.CSSProperties
+                    }
+                  />
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {formatAmount(bucket.transferred)} überwiesen (diesen Monat)
+                </TooltipContent>
+              </Tooltip>
+            )}
+            <div className="h-full flex-1 rounded-full bg-muted" />
+          </div>
+        </>
       ) : (() => {
         const barPct = hasEmergencyGoal && bucket.goal_amount
           ? Math.min(100, Math.round(((bucket.saved_total ?? 0) / bucket.goal_amount) * 100))

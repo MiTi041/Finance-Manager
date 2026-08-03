@@ -82,11 +82,13 @@ export function BucketSettingsPopover(props: Props) {
 
   const [bafoegConfig, setBafoegConfig] = useState<{
     current_balance: number;
+    anlagezinsen: number;
     interest_rate: number;
     payout_date: string | null;
     total_debt: number;
   } | null>(null);
   const [localBafoegBalance, setLocalBafoegBalance] = useState("");
+  const [zinsInput, setZinsInput] = useState("");
   const [localBafoegRate, setLocalBafoegRate] = useState("");
   const [localBafoegPayoutDate, setLocalBafoegPayoutDate] = useState("");
   const bafoegConfigFetched = useRef(false);
@@ -102,13 +104,37 @@ export function BucketSettingsPopover(props: Props) {
     });
   }, [bucket.bucket_type]);
 
-  const commitBafoegConfig = () => {
+  const commitBafoegConfig = (nextPayoutDate = localBafoegPayoutDate) => {
     const balance = parseFloat(localBafoegBalance.replace(",", ".")) || 0;
     const rate = parseFloat(localBafoegRate.replace(",", ".")) || 2.0;
-    const payout = localBafoegPayoutDate.trim() || null;
-    updateBafoegConfig({ current_balance: balance, interest_rate: rate, payout_date: payout }).then(
-      () => onRefresh?.(),
-    );
+    const payout = nextPayoutDate.trim() || null;
+    if (
+      bafoegConfig &&
+      balance === bafoegConfig.current_balance &&
+      rate === bafoegConfig.interest_rate &&
+      payout === bafoegConfig.payout_date
+    ) {
+      return;
+    }
+    updateBafoegConfig({
+      current_balance: balance,
+      interest_rate: rate,
+      payout_date: payout,
+    }).then((cfg) => {
+      setBafoegConfig(cfg);
+      onRefresh?.();
+    });
+  };
+
+  const addZins = () => {
+    const amt = parseFloat(zinsInput.replace(",", "."));
+    if (!bafoegConfig || isNaN(amt) || amt <= 0) return;
+    const next = Math.round((bafoegConfig.anlagezinsen + amt) * 100) / 100;
+    setZinsInput("");
+    updateBafoegConfig({ anlagezinsen: next }).then((cfg) => {
+      setBafoegConfig(cfg);
+      onRefresh?.();
+    });
   };
 
   const commitGoal = () => {
@@ -155,7 +181,19 @@ export function BucketSettingsPopover(props: Props) {
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent align="end" className="w-80 overflow-hidden p-0">
+      <PopoverContent
+        align="end"
+        className="w-96 max-w-[calc(100vw-2rem)] overflow-hidden p-0"
+        onInteractOutside={(event) => {
+          const target = event.target;
+          if (
+            target instanceof HTMLElement &&
+            target.closest("[data-searchable-select-content]")
+          ) {
+            event.preventDefault();
+          }
+        }}
+      >
         <div className="flex items-center gap-2.5 border-b bg-muted/40 px-4 py-3">
           <span
             className={`flex size-7 shrink-0 items-center justify-center rounded-full ${accent.icon}`}
@@ -244,7 +282,7 @@ export function BucketSettingsPopover(props: Props) {
                       onChange={(d) => {
                         const s = d ? d.toISOString().slice(0, 10) : "";
                         setLocalBafoegPayoutDate(s);
-                        commitBafoegConfig();
+                        commitBafoegConfig(s);
                       }}
                     />
                   </div>
@@ -258,6 +296,54 @@ export function BucketSettingsPopover(props: Props) {
                         : "offen"}
                     </p>
                   )}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/80">
+                  Zinsen
+                </p>
+                <div className="space-y-2 rounded-lg border bg-muted/20 px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <Label className="text-sm font-normal text-foreground">
+                      Bisher erhaltene Zinsen
+                    </Label>
+                    <span className="text-sm tabular-nums">
+                      {formatAmount(bafoegConfig?.anlagezinsen ?? 0)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <Label
+                      htmlFor={`bafoeg-zins-add-${bucket.id}`}
+                      className="text-sm font-normal text-foreground"
+                    >
+                      Neue Zinszahlung
+                    </Label>
+                    <div className="flex items-center gap-1.5">
+                      <div className="relative shrink-0">
+                        <Input
+                          id={`bafoeg-zins-add-${bucket.id}`}
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="0"
+                          value={zinsInput}
+                          onChange={(e) => setZinsInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              addZins();
+                            }
+                          }}
+                          className="h-8 w-24 bg-background pr-7 text-right text-sm tabular-nums"
+                        />
+                        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                          €
+                        </span>
+                      </div>
+                      <Button variant="outline" size="sm" className="h-8 px-2.5" onClick={addZins}>
+                        + Hinzufügen
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
               <div className="h-px bg-border" />
