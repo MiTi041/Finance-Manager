@@ -201,10 +201,15 @@ export function TransferSetupDialog({
                 const a = senderAccounts.find((x) => x.iban === option.value);
                 if (!a) return <span className="text-muted-foreground">Kein Konto</span>;
                 return (
-                  <div className="flex w-full items-center justify-between gap-2">
-                    <span className="truncate">{a.name}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                      {formatAmount(a.balance)}
+                  <div className="flex w-full flex-col items-start gap-0">
+                    <div className="flex w-full items-center justify-between gap-2">
+                      <span className="truncate text-sm leading-tight">{a.name}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                        {formatAmount(a.balance)}
+                      </span>
+                    </div>
+                    <span className="truncate font-mono text-[11px] text-muted-foreground leading-tight">
+                      {formatIban(a.iban)}
                     </span>
                   </div>
                 );
@@ -236,6 +241,23 @@ export function TransferSetupDialog({
               showNoneOption
               noneLabel="Manuelle Eingabe"
               noneValue={MANUAL}
+              renderSelected={(option) => {
+                const isBank = option.value.startsWith("bank:");
+                const a = isBank
+                  ? ownAccounts.find((x) => x.iban === option.value.slice(5))
+                  : recipientAccounts.find((x) => x.id === Number(option.value.slice(5)));
+                if (!a) return <span className="truncate">{option.label}</span>;
+                return (
+                  <div className="flex w-full flex-col items-start gap-0">
+                    <span className="truncate text-sm leading-tight">
+                      {isBank ? a.name : (a as RecipientAccountRecord).account_name}
+                    </span>
+                    <span className="truncate font-mono text-[11px] text-muted-foreground leading-tight">
+                      {formatIban(a.iban)}
+                    </span>
+                  </div>
+                );
+              }}
               renderOption={(option) => {
                 const isBank = option.value.startsWith("bank:");
                 const a = isBank
