@@ -176,6 +176,7 @@ export function TransferSetupDialog({
           <div className="space-y-1.5">
             <Label>Absenderkonto</Label>
             <SearchableSelect
+              height={15}
               value={senderIban}
               onValueChange={handleSenderChange}
               options={senderAccounts.map((a) => ({
