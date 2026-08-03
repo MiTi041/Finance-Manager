@@ -87,7 +87,13 @@ export function EditBudgetDialog({
         <DialogHeader>
           <DialogTitle>Budget bearbeiten</DialogTitle>
         </DialogHeader>
-        <PeriodToggle value={period} onChange={setPeriod} />
+        <PeriodToggle
+          value={period}
+          onChange={(p) => {
+            setPeriod(p);
+            setSelected(new Set());
+          }}
+        />
         <Input
           placeholder="Name des Budgets"
           value={name}
