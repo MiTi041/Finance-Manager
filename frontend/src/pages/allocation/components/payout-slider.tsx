@@ -122,7 +122,7 @@ export function PayoutSlider({
   return (
     <div className="space-y-2.5">
       {bigValue ? (
-        <div className="flex items-center justify-center gap-1.5">
+        <div className="flex items-center justify-center gap-1">
           {bigCents != null ? (
             <input
               type="text"
@@ -133,6 +133,7 @@ export function PayoutSlider({
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               }).format(bigCents / 100)}
+              style={{ width: `${new Intl.NumberFormat("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(bigCents / 100).length}ch` }}
               onKeyDown={(e) => {
                 if (/^[0-9]$/.test(e.key)) {
                   e.preventDefault();
@@ -153,7 +154,7 @@ export function PayoutSlider({
                 setOutOfRange(false);
               }}
               autoFocus
-              className={`h-12 w-56 bg-transparent text-center text-5xl font-bold leading-none tabular-nums tracking-tight text-foreground outline-none ${outOfRange ? "text-orange-500" : ""}`}
+              className={`h-12 bg-transparent px-0 text-center text-5xl font-mono font-bold leading-none text-foreground outline-none ${outOfRange ? "text-orange-500" : ""}`}
             />
           ) : (
             <button
@@ -163,13 +164,13 @@ export function PayoutSlider({
                 setBigCents(Math.round(value * 100));
                 setOutOfRange(false);
               }}
-              className="flex h-12 w-56 cursor-pointer items-center justify-center leading-none"
+              className="inline-flex h-12 cursor-pointer items-center justify-center leading-none"
             >
               <NumberFlow
                 value={value}
                 format={{ style: "decimal", minimumFractionDigits: 2, maximumFractionDigits: 2 }}
                 locales="de-DE"
-                className="text-5xl font-bold tabular-nums tracking-tight text-foreground"
+                className="text-5xl font-mono font-bold leading-none text-foreground"
               />
             </button>
           )}
