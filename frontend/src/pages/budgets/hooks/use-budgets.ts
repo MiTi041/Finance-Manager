@@ -6,6 +6,7 @@ import {
   updateBudget as updateBudgetApi,
   deleteBudget as deleteBudgetApi,
   type Budget,
+  type BudgetPeriod,
 } from "@/lib/budgets";
 import { fetchCategories } from "@/lib/categories/api";
 import { currentMonth } from "../utils";
@@ -36,16 +37,22 @@ export function useBudgets() {
   }, [load]);
 
   const create = useCallback(
-    async (name: string, categoryIds: number[], amount: number) => {
-      await createBudgetApi(name, categoryIds, amount);
+    async (name: string, categoryIds: number[], amount: number, period: BudgetPeriod) => {
+      await createBudgetApi(name, categoryIds, amount, period);
       await load();
     },
     [load],
   );
 
   const update = useCallback(
-    async (id: number, name: string, categoryIds: number[], amount: number) => {
-      await updateBudgetApi(id, name, categoryIds, amount);
+    async (
+      id: number,
+      name: string,
+      categoryIds: number[],
+      amount: number,
+      period: BudgetPeriod,
+    ) => {
+      await updateBudgetApi(id, name, categoryIds, amount, period);
       await load();
     },
     [load],

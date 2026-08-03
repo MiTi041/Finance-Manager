@@ -19,7 +19,7 @@ export function BudgetCard({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const ratio =
-    budget.monthly_amount > 0 ? budget.spent / budget.monthly_amount : budget.spent > 0 ? 1 : 0;
+    budget.amount > 0 ? budget.spent / budget.amount : budget.spent > 0 ? 1 : 0;
   const color = ratio > 1 ? "bg-red-500" : ratio >= 0.7 ? "bg-amber-500" : "bg-emerald-500";
   const status =
     ratio > 1
@@ -36,6 +36,11 @@ export function BudgetCard({
             {budget.name}
           </span>
           <div className="flex shrink-0 items-center gap-1">
+            {budget.period === "yearly" && (
+              <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                Jahr
+              </span>
+            )}
             <span
               className={cn(
                 "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
@@ -100,13 +105,13 @@ export function BudgetCard({
 
         <p className="text-sm font-semibold tabular-nums">
           {formatAmount(budget.spent)} <span className="font-normal text-muted-foreground">/</span>{" "}
-          {formatAmount(budget.monthly_amount)}
+          {formatAmount(budget.amount)}
         </p>
 
         <div className="flex flex-col gap-1">
           <Progress value={ratio * 100} indicatorClassName={color} className="h-2.5 w-full" />
           <p className={"text-xs font-medium text-muted-foreground"}>
-            {Math.round(ratio * 100)} % vom Budget genutzt
+            {Math.round(ratio * 100)} % vom {budget.period === "yearly" ? "Jahresbudget" : "Budget"} genutzt
           </p>
         </div>
       </CardContent>

@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
-import type { Budget } from "@/lib/budgets";
+import type { Budget, BudgetPeriod } from "@/lib/budgets";
 import type { FinanceCategory } from "@/lib/categories/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { CategoryMultiSelect } from "./category-multi-select";
+import { PeriodToggle } from "./period-toggle";
 
 export function EditBudgetDialog({
   open,
@@ -18,10 +19,17 @@ export function EditBudgetDialog({
   open: boolean;
   budget: Budget | null;
   categories: FinanceCategory[];
-  existingCategoryIds: Set<number>;
+  existingCategoryIds: Record<BudgetPeriod, Set<number>>;
   onOpenChange: (open: boolean) => void;
-  onSave: (id: number, name: string, categoryIds: number[], amount: number) => Promise<void>;
+  onSave: (
+    id: number,
+    name: string,
+    categoryIds: number[],
+    amount: number,
+    period: BudgetPeriod,
+  ) => Promise<void>;
 }) {
+  const [period, setPeriod] = useState<BudgetPeriod>("monthly");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
@@ -31,12 +39,13 @@ export function EditBudgetDialog({
     if (open && budget) {
       setSelected(new Set(budget.category_ids));
       setName(budget.name);
-      setAmount(String(budget.monthly_amount));
+      setAmount(String(budget.amount));
+      setPeriod(budget.period);
     }
   }, [open, budget]);
 
   const available = budget
-    ? categories.filter((c) => !existingCategoryIds.has(c.id))
+    ? categories.filter((c) => !existingCategoryIds[period].has(c.id))
     : [];
 
   const toggle = (id: number) => {
@@ -58,7 +67,7 @@ export function EditBudgetDialog({
     if (!budget || !valid) return;
     setSaving(true);
     try {
-      await onSave(budget.id, name.trim(), [...selected], parsed);
+      await onSave(budget.id, name.trim(), [...selected], parsed, period);
       onOpenChange(false);
     } catch {
       // Fehler wurde bereits im Page-Handler getoastet; Dialog bleibt offen
@@ -78,6 +87,7 @@ export function EditBudgetDialog({
         <DialogHeader>
           <DialogTitle>Budget bearbeiten</DialogTitle>
         </DialogHeader>
+        <PeriodToggle value={period} onChange={setPeriod} />
         <Input
           placeholder="Name des Budgets"
           value={name}

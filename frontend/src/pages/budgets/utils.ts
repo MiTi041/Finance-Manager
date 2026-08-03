@@ -1,3 +1,17 @@
+import type { Budget, BudgetPeriod } from "@/lib/budgets";
+
+export function categoryIdsForPeriod(
+  budgets: Budget[],
+  period: BudgetPeriod,
+  excludeId?: number,
+): Set<number> {
+  return new Set(
+    budgets
+      .filter((b) => b.period === period && b.id !== excludeId)
+      .flatMap((b) => b.category_ids),
+  );
+}
+
 export function currentMonth(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;

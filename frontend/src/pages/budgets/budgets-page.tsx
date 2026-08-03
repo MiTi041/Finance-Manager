@@ -1,9 +1,7 @@
-import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Loader2, PiggyBank, Plus, Receipt, Wallet } from "lucide-react";
+import { useState } from "react";
+import { ChevronLeft, ChevronRight, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
-import type { Budget } from "@/lib/budgets";
-import { formatAmount } from "@/lib/utils/format";
-import { cn } from "@/lib/utils";
+import type { Budget, BudgetPeriod } from "@/lib/budgets";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,7 +9,7 @@ import { useBudgets } from "./hooks/use-budgets";
 import { BudgetCard } from "./components/budget-card";
 import { AddBudgetDialog } from "./components/add-budget-dialog";
 import { EditBudgetDialog } from "./components/edit-budget-dialog";
-import { currentMonth, formatMonthLabel, shiftMonth } from "./utils";
+import { categoryIdsForPeriod, currentMonth, formatMonthLabel, shiftMonth } from "./utils";
 
 export default function BudgetsPage() {
   const { month, setMonth, budgets, categories, loading, error, create, update, remove } =
@@ -19,18 +17,24 @@ export default function BudgetsPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
 
-  const totals = useMemo(
-    () => ({
-      budget: budgets.reduce((sum, b) => sum + b.monthly_amount, 0),
-      spent: budgets.reduce((sum, b) => sum + b.spent, 0),
-      remaining: budgets.reduce((sum, b) => sum + b.remaining, 0),
-    }),
-    [budgets],
-  );
+  const existingByPeriod: Record<BudgetPeriod, Set<number>> = {
+    monthly: categoryIdsForPeriod(budgets, "monthly"),
+    yearly: categoryIdsForPeriod(budgets, "yearly"),
+  };
 
-  const handleCreate = async (name: string, categoryIds: number[], amount: number) => {
+  const existingForEdit: Record<BudgetPeriod, Set<number>> = {
+    monthly: categoryIdsForPeriod(budgets, "monthly", editingBudget?.id),
+    yearly: categoryIdsForPeriod(budgets, "yearly", editingBudget?.id),
+  };
+
+  const handleCreate = async (
+    name: string,
+    categoryIds: number[],
+    amount: number,
+    period: BudgetPeriod,
+  ) => {
     try {
-      await create(name, categoryIds, amount);
+      await create(name, categoryIds, amount, period);
       toast.success("Budget angelegt");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Fehler");
@@ -46,21 +50,21 @@ export default function BudgetsPage() {
     }
   };
 
-  const handleSaveEdit = async (id: number, name: string, categoryIds: number[], amount: number) => {
+  const handleSaveEdit = async (
+    id: number,
+    name: string,
+    categoryIds: number[],
+    amount: number,
+    period: BudgetPeriod,
+  ) => {
     try {
-      await update(id, name, categoryIds, amount);
+      await update(id, name, categoryIds, amount, period);
       toast.success("Budget aktualisiert");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Fehler");
       throw e;
     }
   };
-
-  const statBlocks: { label: string; value: number; Icon: typeof Wallet }[] = [
-    { label: "Budget", value: totals.budget, Icon: Wallet },
-    { label: "Ausgegeben", value: totals.spent, Icon: Receipt },
-    { label: "Übrig", value: totals.remaining, Icon: PiggyBank },
-  ];
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 py-6">
@@ -123,7 +127,7 @@ export default function BudgetsPage() {
       ) : budgets.length === 0 ? (
         <EmptyState
           title="Keine Budgets"
-          text="Lege ein Budget für eine Kategorie an, um deine monatlichen Ausgaben im Blick zu behalten."
+          text="Lege ein Budget für eine Kategorie an, um deine monatlichen oder jährlichen Ausgaben im Blick zu behalten."
         />
       ) : (
         <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3">
@@ -137,7 +141,7 @@ export default function BudgetsPage() {
         open={addOpen}
         onOpenChange={setAddOpen}
         categories={categories}
-        existingCategoryIds={new Set(budgets.flatMap((b) => b.category_ids))}
+        existingCategoryIds={existingByPeriod}
         onCreate={handleCreate}
       />
 
@@ -145,13 +149,7 @@ export default function BudgetsPage() {
         open={editingBudget != null}
         budget={editingBudget}
         categories={categories}
-        existingCategoryIds={
-          new Set(
-            budgets
-              .filter((b) => b.id !== editingBudget?.id)
-              .flatMap((b) => b.category_ids),
-          )
-        }
+        existingCategoryIds={existingForEdit}
         onOpenChange={(open) => {
           if (!open) setEditingBudget(null);
         }}

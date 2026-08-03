@@ -1,9 +1,11 @@
 import { useState } from "react";
+import type { BudgetPeriod } from "@/lib/budgets";
 import type { FinanceCategory } from "@/lib/categories/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { CategoryMultiSelect } from "./category-multi-select";
+import { PeriodToggle } from "./period-toggle";
 
 export function AddBudgetDialog({
   open,
@@ -15,13 +17,14 @@ export function AddBudgetDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   categories: FinanceCategory[];
-  existingCategoryIds: Set<number>;
-  onCreate: (name: string, categoryIds: number[], amount: number) => void;
+  existingCategoryIds: Record<BudgetPeriod, Set<number>>;
+  onCreate: (name: string, categoryIds: number[], amount: number, period: BudgetPeriod) => void;
 }) {
+  const [period, setPeriod] = useState<BudgetPeriod>("monthly");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
-  const available = categories.filter((c) => !existingCategoryIds.has(c.id));
+  const available = categories.filter((c) => !existingCategoryIds[period].has(c.id));
 
   const toggle = (id: number) => {
     setSelected((prev) => {
@@ -37,10 +40,11 @@ export function AddBudgetDialog({
 
   const submit = () => {
     if (selected.size === 0 || !(Number(amount) > 0) || !name.trim()) return;
-    onCreate(name.trim(), [...selected], Number(amount));
+    onCreate(name.trim(), [...selected], Number(amount), period);
     setSelected(new Set());
     setName("");
     setAmount("");
+    setPeriod("monthly");
     onOpenChange(false);
   };
 
@@ -52,6 +56,7 @@ export function AddBudgetDialog({
         <DialogHeader>
           <DialogTitle>Budget hinzufügen</DialogTitle>
         </DialogHeader>
+        <PeriodToggle value={period} onChange={setPeriod} />
         <Input
           placeholder="Name des Budgets"
           value={name}
@@ -62,7 +67,7 @@ export function AddBudgetDialog({
           <Input
             type="number"
             min={0}
-            placeholder="Monatsbudget"
+            placeholder={period === "monthly" ? "Monatsbudget" : "Jahresbudget"}
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             onKeyDown={(e) => {
