@@ -163,7 +163,7 @@ export function PayoutSlider({
                 setBigCents(Math.round(value * 100));
                 setOutOfRange(false);
               }}
-              className="cursor-pointer"
+              className="flex w-56 cursor-pointer items-center justify-center"
             >
               <NumberFlow
                 value={value}
