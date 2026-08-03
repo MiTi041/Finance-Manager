@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { format } from "date-fns";
 import {
   CircleX,
@@ -8,12 +8,31 @@ import {
   TrendingDown,
   Receipt,
   CircleDashed,
+  Send,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import DateFilter from "@/components/date-filter";
 import { EmptyState } from "@/components/empty-state";
+import { Button } from "@/components/ui/button";
 import { useGlobalDateFilter } from "@/hooks/use-global-date-filter";
 import { useFinanceData } from "@/hooks/use-finance-data";
+import { useRefresh } from "@/hooks/use-refresh";
+import { normalizeIban } from "@/lib/iban";
+import { fetchAvailableBanks } from "@/lib/bank/credentials";
+import {
+  fetchRecipientAccountsReferenceData,
+  createRecipientAccount,
+  type RecipientAccountRecord,
+} from "@/lib/recipient-accounts";
+import { executeDirectTransfer } from "@/lib/direct-transfer";
+import { TransferDialog } from "@/pages/allocation/components/transfer-dialog";
+import {
+  TransferSetupDialog,
+  type TransferSetupResult,
+  type SenderAccount,
+  type OwnAccount,
+} from "./components/transfer-setup-dialog";
 import { getTimeSpanForRange } from "@/types/time-range";
 import type { DateFilterValue } from "@/types/date-filter";
 
@@ -35,6 +54,7 @@ function computeDateFooter(dateFilter: DateFilterValue) {
 
 export default function DashboardPage() {
   const { dateFilter, setDateFilter } = useGlobalDateFilter();
+  const { triggerRefresh } = useRefresh();
   const {
     balance,
     incomes,
@@ -46,13 +66,101 @@ export default function DashboardPage() {
     transactions,
     activeAccountIban,
     accountBalances,
+    linkedAccounts,
+    linkedBanks,
   } = useFinanceData(dateFilter);
+
+  const [canTransferMap, setCanTransferMap] = useState<Map<string, boolean>>(new Map());
+  const [recipientAccounts, setRecipientAccounts] = useState<RecipientAccountRecord[]>([]);
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [pendingTransfer, setPendingTransfer] = useState<TransferSetupResult | null>(null);
+
+  useEffect(() => {
+    void fetchAvailableBanks().then((banks) =>
+      setCanTransferMap(new Map(banks.map((b) => [b.key, b.can_transfer]))),
+    );
+    void fetchRecipientAccountsReferenceData().then((data) =>
+      setRecipientAccounts(data.recipient_accounts ?? []),
+    );
+  }, []);
 
   const dateFooter = useMemo(() => computeDateFooter(dateFilter), [dateFilter]);
 
   const savingsRate = incomes > 0 ? (((incomes - expenses) / incomes) * 100).toFixed(0) : "0";
   const expensePct = ((expenses / (incomes + expenses || 1)) * 100).toFixed(0);
   const incomePct = ((incomes / (incomes + expenses || 1)) * 100).toFixed(0);
+
+  const bankKeyByIban = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const bank of linkedBanks) {
+      for (const acc of bank.accounts ?? []) {
+        const iban = normalizeIban(acc.iban);
+        if (iban) map.set(iban, bank.bank_key);
+      }
+    }
+    return map;
+  }, [linkedBanks]);
+
+  const senderAccounts: SenderAccount[] = useMemo(
+    () =>
+      linkedAccounts
+        .filter((a) => canTransferMap.get(bankKeyByIban.get(a.accountIban) ?? "") === true)
+        .map((a) => ({
+          iban: a.accountIban,
+          name: a.accountName,
+          bankName: a.bankName,
+          balance: a.balanceCorrection ?? 0,
+        })),
+    [linkedAccounts, canTransferMap, bankKeyByIban],
+  );
+
+  const ownAccounts: OwnAccount[] = useMemo(
+    () =>
+      linkedAccounts.map((a) => ({
+        iban: a.accountIban,
+        name: a.accountName,
+        bankName: a.bankName,
+      })),
+    [linkedAccounts],
+  );
+
+  const confirmSetup = useCallback((result: TransferSetupResult) => {
+    if (result.saveRecipient) {
+      createRecipientAccount({
+        account_name: result.accountName || result.recipientName,
+        iban: result.recipientIban,
+        bic: result.recipientBic,
+        recipient_name: result.recipientName,
+      }).catch(() => toast.error("Empfängerkonto konnte nicht gespeichert werden."));
+    }
+    setPendingTransfer(result);
+  }, []);
+
+  const confirmTransfer = useCallback(
+    async (tan?: string) => {
+      if (!pendingTransfer) return;
+      const tid = toast.loading("Überweisung wird durchgeführt…");
+      try {
+        await executeDirectTransfer(
+          {
+            senderIban: pendingTransfer.senderIban,
+            recipientName: pendingTransfer.recipientName,
+            recipientIban: pendingTransfer.recipientIban,
+            recipientBic: pendingTransfer.recipientBic,
+            amount: pendingTransfer.amount,
+            reason: pendingTransfer.purpose || "Überweisung",
+          },
+          tan,
+        );
+        toast.success("Überweisung erfolgreich!", { id: tid });
+        triggerRefresh();
+      } catch (e) {
+        toast.dismiss(tid);
+        throw e;
+      }
+    },
+    [pendingTransfer, triggerRefresh],
+  );
 
   if (error) {
     return (
@@ -92,6 +200,19 @@ export default function DashboardPage() {
               icon={Wallet}
               footer={dateFooter ?? undefined}
               accountBalances={activeAccountIban === "all" ? accountBalances : undefined}
+              action={
+                senderAccounts.length > 0 ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-6 gap-1 px-2 text-[11px]"
+                    onClick={() => setSetupOpen(true)}
+                  >
+                    <Send className="size-3" />
+                    Überweisen
+                  </Button>
+                ) : undefined
+              }
             />
             <StatCard
               title="Einnahmen"
@@ -131,6 +252,33 @@ export default function DashboardPage() {
           <MonthlyChart transactions={transactions} />
         </>
       )}
+
+      <TransferSetupDialog
+        open={setupOpen}
+        onOpenChange={setSetupOpen}
+        senderAccounts={senderAccounts}
+        defaultSenderIban={activeAccountIban !== "all" ? activeAccountIban : undefined}
+        recipientAccounts={recipientAccounts}
+        ownAccounts={ownAccounts}
+        onConfirm={confirmSetup}
+      />
+
+      <TransferDialog
+        open={!!pendingTransfer}
+        onOpenChange={(open) => {
+          if (!open) setPendingTransfer(null);
+        }}
+        amount={pendingTransfer?.amount ?? 0}
+        accountName={
+          pendingTransfer
+            ? (senderAccounts.find((s) => s.iban === pendingTransfer.senderIban)?.name ?? "")
+            : ""
+        }
+        recipientName={pendingTransfer?.recipientName ?? ""}
+        recipientIban={pendingTransfer?.recipientIban ?? ""}
+        purpose={pendingTransfer?.purpose}
+        onConfirm={confirmTransfer}
+      />
     </div>
   );
 }

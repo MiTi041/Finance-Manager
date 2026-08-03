@@ -272,6 +272,7 @@ export function useFinanceData(
     expenses,
     expensesFormatted,
     linkedAccounts: accountOptions,
+    linkedBanks,
     selectedBank: activeAccount,
     activeAccountIban,
     accountBalances,
