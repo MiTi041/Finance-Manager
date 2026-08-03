@@ -103,12 +103,14 @@ export function TransferSetupDialog({
         value: `empf:${r.id}`,
         label: `${r.account_name} ${r.recipient_name} ${r.iban}`,
       })),
-      ...ownAccounts.map((a) => ({
-        value: `bank:${a.iban}`,
-        label: `${a.name} ${a.iban}`,
-      })),
+      ...ownAccounts
+        .filter((a) => a.iban !== sender?.iban)
+        .map((a) => ({
+          value: `bank:${a.iban}`,
+          label: `${a.name} ${a.iban}`,
+        })),
     ],
-    [recipientAccounts, ownAccounts],
+    [recipientAccounts, ownAccounts, sender],
   );
 
   const selectedRecipient = useMemo(() => {
@@ -128,13 +130,16 @@ export function TransferSetupDialog({
   const recipientIban = selectedRecipient?.iban ?? manualIban.trim();
   const recipientBic = selectedRecipient?.bic || manualBic.trim() || undefined;
 
-  const manualIbanValid = recipientIban === "" || isValidIban(recipientIban);
-  const recipientValid = recipientName !== "" && isValidIban(recipientIban);
+  const manualIbanValid =
+    recipientIban === "" ||
+    (isValidIban(recipientIban) && recipientIban.toUpperCase() !== sender?.iban);
+  const recipientValid = recipientName !== "" && manualIbanValid && recipientIban !== "";
   const amountValid = amount > 0 && amount <= maxAmount;
   const canSubmit = !!sender && recipientValid && amountValid;
 
   const handleSenderChange = (iban: string) => {
     setSenderIban(iban);
+    if (recipientValue === `bank:${iban}`) setRecipientValue(MANUAL);
     setAmount((prev) => {
       const next = senderAccounts.find((a) => a.iban === iban);
       const max = Math.max(0, next?.balance ?? 0);
