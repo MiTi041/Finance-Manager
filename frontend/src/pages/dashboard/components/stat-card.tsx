@@ -41,12 +41,9 @@ export function StatCard({
   return (
     <div className="flex cursor-default flex-col gap-3 rounded-panel border border-border bg-card p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/15">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium tracking-[0.06em] uppercase text-muted-foreground">
-            {title}
-          </span>
-          {action}
-        </div>
+        <span className="text-xs font-medium tracking-[0.06em] uppercase text-muted-foreground">
+          {title}
+        </span>
         <div
           className="flex size-8 items-center justify-center rounded-lg"
           style={{ background: `${accent}20`, color: accent }}
@@ -107,6 +104,7 @@ export function StatCard({
         </div>
       )}
       {footer && <div className="text-[11px] text-muted-foreground/50">{footer}</div>}
+      {action && <div className="mt-auto">{action}</div>}
     </div>
   );
 }

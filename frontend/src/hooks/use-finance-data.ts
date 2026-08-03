@@ -103,7 +103,14 @@ export function useFinanceData(
     reload: loadTransactions,
   } = useTransactions(queryParams, refreshVersion);
   const { summary } = useSummary(queryParams, refreshVersion);
-  const { balances: accountBalancesApi } = useAccountBalances(queryParams, refreshVersion);
+  const { balances: accountBalancesApi } = useAccountBalances(
+    useMemo(() => {
+      const params = new URLSearchParams(queryParams);
+      params.delete("iban");
+      return params.toString();
+    }, [queryParams]),
+    refreshVersion,
+  );
 
   useEffect(() => {
     const onSelectionChange = (event: Event) => {
@@ -227,8 +234,6 @@ export function useFinanceData(
   const expensesFormatted = useMemo(() => formatBalance(-expenses), [expenses]);
 
   const accountBalances = useMemo(() => {
-    if (selectedAccountIban) return [];
-
     const source = needsCorrection ? cleanedTransactions : filteredTransactions;
     const byIban = new Map<string, number>();
     for (const t of source) {
@@ -252,7 +257,7 @@ export function useFinanceData(
           (apiBalance?.balance ?? byIban.get(account.accountIban) ?? 0),
       };
     });
-  }, [accountOptions, cleanedTransactions, filteredTransactions, selectedAccountIban, needsCorrection, accountBalancesApi]);
+  }, [accountOptions, cleanedTransactions, filteredTransactions, needsCorrection, accountBalancesApi]);
 
   const error = txError;
   const transactions = filteredTransactions;

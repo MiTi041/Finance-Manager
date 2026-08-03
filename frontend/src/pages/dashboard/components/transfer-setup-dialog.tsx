@@ -81,7 +81,7 @@ export function TransferSetupDialog({
     setSenderIban(
       senderAccounts.find((a) => a.iban === defaultSenderIban)?.iban ?? senderAccounts[0]?.iban ?? "",
     );
-    setRecipientValue(recipientAccounts.length > 0 ? `empf:${recipientAccounts[0].id}` : MANUAL);
+    setRecipientValue(MANUAL);
     setManualName("");
     setManualIban("");
     setManualBic("");
@@ -89,7 +89,7 @@ export function TransferSetupDialog({
     setAccountName("");
     setPurpose("");
     setAmount(0);
-  }, [open, senderAccounts, defaultSenderIban, recipientAccounts]);
+  }, [open, senderAccounts, defaultSenderIban]);
 
   const sender = useMemo(
     () => senderAccounts.find((a) => a.iban === senderIban) ?? senderAccounts[0],

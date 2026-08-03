@@ -103,15 +103,15 @@ export default function DashboardPage() {
 
   const senderAccounts: SenderAccount[] = useMemo(
     () =>
-      linkedAccounts
+      accountBalances
         .filter((a) => canTransferMap.get(bankKeyByIban.get(a.accountIban) ?? "") === true)
         .map((a) => ({
           iban: a.accountIban,
           name: a.accountName,
           bankName: a.bankName,
-          balance: a.balanceCorrection ?? 0,
+          balance: a.balance,
         })),
-    [linkedAccounts, canTransferMap, bankKeyByIban],
+    [accountBalances, canTransferMap, bankKeyByIban],
   );
 
   const ownAccounts: OwnAccount[] = useMemo(
@@ -203,12 +203,10 @@ export default function DashboardPage() {
               action={
                 senderAccounts.length > 0 ? (
                   <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-6 gap-1 px-2 text-[11px]"
+                    className="w-full gap-1"
                     onClick={() => setSetupOpen(true)}
                   >
-                    <Send className="size-3" />
+                    <Send className="size-4" />
                     Überweisen
                   </Button>
                 ) : undefined
