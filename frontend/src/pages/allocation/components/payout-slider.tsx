@@ -121,13 +121,41 @@ export function PayoutSlider({
   return (
     <div className="space-y-2.5">
       {bigValue ? (
-        <div className="flex justify-center">
-          <NumberFlow
-            value={value}
-            format={{ style: "currency", currency: "EUR" }}
-            locales="de-DE"
-            className="text-3xl font-bold tabular-nums tracking-tight text-foreground"
-          />
+        <div className="flex items-center justify-center gap-1.5">
+          {editing != null ? (
+            <input
+              type="text"
+              inputMode="decimal"
+              aria-label="Betrag"
+              aria-invalid={outOfRange}
+              value={editing}
+              onChange={(e) => handleInputChange(e.target.value)}
+              onBlur={() => {
+                setEditing(null);
+                setOutOfRange(false);
+              }}
+              autoFocus
+              className={`w-52 bg-transparent text-right text-4xl font-bold tabular-nums tracking-tight text-foreground outline-none ${outOfRange ? "text-orange-500" : ""}`}
+            />
+          ) : (
+            <button
+              type="button"
+              aria-label="Betrag bearbeiten"
+              onClick={() => {
+                setEditing(value.toFixed(2).replace(".", ","));
+                setOutOfRange(false);
+              }}
+              className="cursor-pointer"
+            >
+              <NumberFlow
+                value={value}
+                format={{ style: "decimal", minimumFractionDigits: 2, maximumFractionDigits: 2 }}
+                locales="de-DE"
+                className="text-4xl font-bold tabular-nums tracking-tight text-foreground"
+              />
+            </button>
+          )}
+          <span className="text-3xl font-bold text-foreground">€</span>
         </div>
       ) : (
         <div className="flex items-baseline justify-between">
