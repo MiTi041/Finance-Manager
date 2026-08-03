@@ -40,6 +40,7 @@ export function PayoutSlider({
   const [dragging, setDragging] = useState(false);
   const [focused, setFocused] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
+  const [bigCents, setBigCents] = useState<number | null>(null);
   const [outOfRange, setOutOfRange] = useState(false);
   const active = dragging || focused;
 
@@ -122,27 +123,44 @@ export function PayoutSlider({
     <div className="space-y-2.5">
       {bigValue ? (
         <div className="flex items-center justify-center gap-1.5">
-          {editing != null ? (
+          {bigCents != null ? (
             <input
               type="text"
               inputMode="decimal"
               aria-label="Betrag"
               aria-invalid={outOfRange}
-              value={editing}
-              onChange={(e) => handleInputChange(e.target.value)}
+              value={new Intl.NumberFormat("de-DE", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              }).format(bigCents / 100)}
+              onKeyDown={(e) => {
+                if (/^[0-9]$/.test(e.key)) {
+                  e.preventDefault();
+                  const next = bigCents * 10 + Number(e.key);
+                  if (next / 100 <= max) {
+                    setBigCents(next);
+                    onChange(next / 100);
+                  }
+                } else if (e.key === "Backspace") {
+                  e.preventDefault();
+                  const next = Math.floor(bigCents / 10);
+                  setBigCents(next);
+                  onChange(next / 100);
+                }
+              }}
               onBlur={() => {
-                setEditing(null);
+                setBigCents(null);
                 setOutOfRange(false);
               }}
               autoFocus
-              className={`w-52 bg-transparent text-right text-4xl font-bold tabular-nums tracking-tight text-foreground outline-none ${outOfRange ? "text-orange-500" : ""}`}
+              className={`w-56 bg-transparent text-center text-5xl font-bold tabular-nums tracking-tight text-foreground outline-none ${outOfRange ? "text-orange-500" : ""}`}
             />
           ) : (
             <button
               type="button"
               aria-label="Betrag bearbeiten"
               onClick={() => {
-                setEditing(value.toFixed(2).replace(".", ","));
+                setBigCents(Math.round(value * 100));
                 setOutOfRange(false);
               }}
               className="cursor-pointer"
@@ -151,11 +169,11 @@ export function PayoutSlider({
                 value={value}
                 format={{ style: "decimal", minimumFractionDigits: 2, maximumFractionDigits: 2 }}
                 locales="de-DE"
-                className="text-4xl font-bold tabular-nums tracking-tight text-foreground"
+                className="text-5xl font-bold tabular-nums tracking-tight text-foreground"
               />
             </button>
           )}
-          <span className="text-3xl font-bold text-foreground">€</span>
+          <span className="text-4xl font-bold text-foreground">€</span>
         </div>
       ) : (
         <div className="flex items-baseline justify-between">
