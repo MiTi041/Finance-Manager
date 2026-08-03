@@ -33,7 +33,7 @@ class TestBudgets:
                     "id": 1,
                     "name": "Essen",
                     "category_ids": [2, 3],
-                    "monthly_amount": 100.0,
+                    "amount": 100.0,
                     "created_at": "2026-01-01T00:00:00+00:00",
                     "updated_at": "2026-01-01T00:00:00+00:00",
                 },
@@ -55,7 +55,7 @@ class TestBudgets:
                     "id": 1,
                     "name": "Essen",
                     "category_ids": [2, 3],
-                    "monthly_amount": 100.0,
+                    "amount": 100.0,
                     "updated_at": "2026-01-01T00:00:00+00:00",
                 },
             ),
@@ -70,7 +70,7 @@ class TestBudgets:
                     "id": 1,
                     "name": "Essen",
                     "category_ids": [5],
-                    "monthly_amount": 50.0,
+                    "amount": 50.0,
                     "updated_at": "2026-02-01T00:00:00+00:00",
                 },
             ),
@@ -78,7 +78,7 @@ class TestBudgets:
         assert ok
         row = test_db.execute("SELECT * FROM budgets WHERE id = 1").fetchone()
         assert row["category_ids"] == "[5]"
-        assert row["monthly_amount"] == 50.0
+        assert row["amount"] == 50.0
 
 
 class TestAllocationBuckets:
