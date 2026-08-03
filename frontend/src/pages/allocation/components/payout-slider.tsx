@@ -153,7 +153,7 @@ export function PayoutSlider({
                 setOutOfRange(false);
               }}
               autoFocus
-              className={`w-56 bg-transparent text-center text-5xl font-bold tabular-nums tracking-tight text-foreground outline-none ${outOfRange ? "text-orange-500" : ""}`}
+              className={`h-12 w-56 bg-transparent text-center text-5xl font-bold leading-none tabular-nums tracking-tight text-foreground outline-none ${outOfRange ? "text-orange-500" : ""}`}
             />
           ) : (
             <button
@@ -163,7 +163,7 @@ export function PayoutSlider({
                 setBigCents(Math.round(value * 100));
                 setOutOfRange(false);
               }}
-              className="flex w-56 cursor-pointer items-center justify-center"
+              className="flex h-12 w-56 cursor-pointer items-center justify-center leading-none"
             >
               <NumberFlow
                 value={value}
