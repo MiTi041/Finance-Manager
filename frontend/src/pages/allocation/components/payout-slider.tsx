@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { RotateCcw } from "lucide-react";
+import NumberFlow from "@number-flow/react";
 import { formatAmount } from "@/lib/utils/format";
 
 const parseEuros = (s: string): number | null => {
@@ -24,6 +25,7 @@ export function PayoutSlider({
   anchorValue,
   hideAnchor,
   variant = "default",
+  bigValue = false,
   onChange,
 }: {
   value: number;
@@ -31,6 +33,7 @@ export function PayoutSlider({
   anchorValue?: number;
   hideAnchor?: boolean;
   variant?: "default" | "destructive";
+  bigValue?: boolean;
   onChange: (v: number) => void;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
@@ -117,36 +120,47 @@ export function PayoutSlider({
 
   return (
     <div className="space-y-2.5">
-      <div className="flex items-baseline justify-between">
-        <span className="text-xs text-muted-foreground">Betrag anpassen</span>
-        <span className="relative">
-          <input
-            type="text"
-            inputMode="decimal"
-            aria-label="Betrag"
-            aria-invalid={outOfRange}
-            value={editing ?? formatAmount(value).replace(/\s*€.*$/, "")}
-            onChange={(e) => handleInputChange(e.target.value)}
-            onFocus={(e) => {
-              setEditing(value.toFixed(2).replace(".", ","));
-              setOutOfRange(false);
-              e.target.select();
-            }}
-            onBlur={() => {
-              setEditing(null);
-              setOutOfRange(false);
-            }}
-            className={`w-28 pr-6 text-right text-sm font-semibold tabular-nums rounded-md border px-1.5 py-0.5 outline-none transition-colors ${
-              outOfRange
-                ? "border-orange-500 bg-orange-500/5 text-orange-600 focus:ring-2 focus:ring-orange-500/40"
-                : "border-input bg-muted/40 text-foreground hover:bg-muted/70 focus:border-ring focus:bg-background focus:ring-2 focus:ring-ring/40"
-            }`}
+      {bigValue ? (
+        <div className="flex justify-center">
+          <NumberFlow
+            value={value}
+            format={{ style: "currency", currency: "EUR" }}
+            locales="de-DE"
+            className="text-3xl font-bold tabular-nums tracking-tight text-foreground"
           />
-          <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-muted-foreground">
-            €
+        </div>
+      ) : (
+        <div className="flex items-baseline justify-between">
+          <span className="text-xs text-muted-foreground">Betrag anpassen</span>
+          <span className="relative">
+            <input
+              type="text"
+              inputMode="decimal"
+              aria-label="Betrag"
+              aria-invalid={outOfRange}
+              value={editing ?? formatAmount(value).replace(/\s*€.*$/, "")}
+              onChange={(e) => handleInputChange(e.target.value)}
+              onFocus={(e) => {
+                setEditing(value.toFixed(2).replace(".", ","));
+                setOutOfRange(false);
+                e.target.select();
+              }}
+              onBlur={() => {
+                setEditing(null);
+                setOutOfRange(false);
+              }}
+              className={`w-28 pr-6 text-right text-sm font-semibold tabular-nums rounded-md border px-1.5 py-0.5 outline-none transition-colors ${
+                outOfRange
+                  ? "border-orange-500 bg-orange-500/5 text-orange-600 focus:ring-2 focus:ring-orange-500/40"
+                  : "border-input bg-muted/40 text-foreground hover:bg-muted/70 focus:border-ring focus:bg-background focus:ring-2 focus:ring-ring/40"
+              }`}
+            />
+            <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-muted-foreground">
+              €
+            </span>
           </span>
-        </span>
-      </div>
+        </div>
+      )}
       {outOfRange && (
         <p className="text-right text-[11px] font-medium text-orange-500">
           Betrag muss zwischen 0 und {formatAmount(max)} liegen
