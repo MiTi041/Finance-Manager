@@ -79,7 +79,9 @@ export function TransferSetupDialog({
   useEffect(() => {
     if (!open) return;
     setSenderIban(
-      senderAccounts.find((a) => a.iban === defaultSenderIban)?.iban ?? senderAccounts[0]?.iban ?? "",
+      senderAccounts.find((a) => a.iban === defaultSenderIban)?.iban ??
+        senderAccounts[0]?.iban ??
+        "",
     );
     setRecipientValue(MANUAL);
     setManualName("");
@@ -167,9 +169,7 @@ export function TransferSetupDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Überweisung</DialogTitle>
-          <DialogDescription>
-            Wähle Empfänger, Verwendungszweck und Betrag.
-          </DialogDescription>
+          <DialogDescription>Wähle Empfänger, Verwendungszweck und Betrag.</DialogDescription>
         </DialogHeader>
 
         <div className="min-w-0 space-y-4">
@@ -357,16 +357,13 @@ export function TransferSetupDialog({
 
           {sender ? (
             maxAmount > 0 ? (
-              <div className="space-y-1.5 rounded-lg border p-3">
-                <PayoutSlider value={amount} max={maxAmount} onChange={setAmount} />
-                <p className="text-[11px] text-muted-foreground">
-                  Verfügbar: {formatAmount(maxAmount)}
-                </p>
-              </div>
+              <PayoutSlider value={amount} max={maxAmount} onChange={setAmount} />
             ) : (
               <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
                 <Info className="mt-0.5 size-4 shrink-0" />
-                <span>Kontostand ist 0 oder unbekannt – von diesem Konto kann nicht überwiesen werden.</span>
+                <span>
+                  Kontostand ist 0 oder unbekannt – von diesem Konto kann nicht überwiesen werden.
+                </span>
               </div>
             )
           ) : (
