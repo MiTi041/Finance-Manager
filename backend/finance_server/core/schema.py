@@ -403,7 +403,8 @@ def create_budgets_table(connection: sqlite3.Connection) -> None:
             id             INTEGER PRIMARY KEY AUTOINCREMENT,
             name           TEXT NOT NULL DEFAULT '',
             category_ids   TEXT NOT NULL,
-            monthly_amount REAL NOT NULL CHECK(monthly_amount >= 0),
+            amount         REAL NOT NULL CHECK(amount >= 0),
+            period         TEXT NOT NULL DEFAULT 'monthly' CHECK(period IN ('monthly', 'yearly')),
             created_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
@@ -411,27 +412,32 @@ def create_budgets_table(connection: sqlite3.Connection) -> None:
     _ensure_table_columns(
         connection,
         "budgets",
-        {"name": "TEXT NOT NULL DEFAULT ''"},
+        {"name": "TEXT NOT NULL DEFAULT ''", "period": "TEXT NOT NULL DEFAULT 'monthly'"},
     )
     existing = {row[1] for row in connection.execute("PRAGMA table_info(budgets)")}
-    if "category_id" in existing:
+    if "category_id" in existing or "monthly_amount" in existing:
         connection.execute("ALTER TABLE budgets RENAME TO budgets_old")
         connection.execute("""
             CREATE TABLE budgets (
                 id             INTEGER PRIMARY KEY AUTOINCREMENT,
                 name           TEXT NOT NULL DEFAULT '',
                 category_ids   TEXT NOT NULL,
-                monthly_amount REAL NOT NULL CHECK(monthly_amount >= 0),
+                amount         REAL NOT NULL CHECK(amount >= 0),
+                period         TEXT NOT NULL DEFAULT 'monthly' CHECK(period IN ('monthly', 'yearly')),
                 created_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        connection.execute("""
-            INSERT INTO budgets (id, category_ids, monthly_amount, created_at, updated_at)
-            SELECT id, '[' || category_id || ']', monthly_amount,
+        old_cols = {row[1] for row in connection.execute("PRAGMA table_info(budgets_old)")}
+        cat_expr = "'[' || category_id || ']'" if "category_id" in old_cols else "category_ids"
+        connection.execute(
+            f"""
+            INSERT INTO budgets (id, category_ids, amount, period, created_at, updated_at)
+            SELECT id, {cat_expr}, monthly_amount, 'monthly',
                    COALESCE(created_at, CURRENT_TIMESTAMP), COALESCE(updated_at, CURRENT_TIMESTAMP)
             FROM budgets_old
-        """)
+            """
+        )
         connection.execute("DROP TABLE budgets_old")
 
 

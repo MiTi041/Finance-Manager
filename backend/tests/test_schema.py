@@ -8,7 +8,7 @@ def test_initialize_database_creates_budgets_table():
     conn.row_factory = sqlite3.Row
     initialize_database(conn)
     cols = {row[1] for row in conn.execute("PRAGMA table_info(budgets)")}
-    assert {"id", "category_ids", "monthly_amount", "created_at", "updated_at"} <= cols
+    assert {"id", "category_ids", "amount", "period", "created_at", "updated_at"} <= cols
     conn.close()
 
 
@@ -26,13 +26,39 @@ def test_initialize_database_migrates_legacy_budgets():
         )
         """
     )
+    conn.execute("INSERT INTO budgets (category_id, monthly_amount) VALUES (?, ?)", (7, 50.0))
+    initialize_database(conn)
+    row = conn.execute("SELECT category_ids, amount, period FROM budgets").fetchone()
+    assert row["category_ids"] == "[7]"
+    assert row["amount"] == 50.0
+    assert row["period"] == "monthly"
+    conn.close()
+
+
+def test_initialize_database_migrates_current_budgets_monthly_amount():
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
     conn.execute(
-        "INSERT INTO budgets (category_id, monthly_amount) VALUES (?, ?)", (7, 50.0)
+        """
+        CREATE TABLE budgets (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            name           TEXT NOT NULL DEFAULT '',
+            category_ids   TEXT NOT NULL,
+            monthly_amount REAL NOT NULL,
+            created_at     TEXT,
+            updated_at     TEXT
+        )
+        """
+    )
+    conn.execute(
+        "INSERT INTO budgets (name, category_ids, monthly_amount) VALUES (?, ?, ?)",
+        ("Test", "[1, 2]", 120.0),
     )
     initialize_database(conn)
-    row = conn.execute("SELECT category_ids, monthly_amount FROM budgets").fetchone()
-    assert row["category_ids"] == "[7]"
-    assert row["monthly_amount"] == 50.0
+    row = conn.execute("SELECT category_ids, amount, period FROM budgets").fetchone()
+    assert row["category_ids"] == "[1, 2]"
+    assert row["amount"] == 120.0
+    assert row["period"] == "monthly"
     conn.close()
 
 
