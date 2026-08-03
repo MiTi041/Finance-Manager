@@ -174,7 +174,7 @@ export function PayoutSlider({
               />
             </button>
           )}
-          <span className="text-4xl font-bold text-foreground">€</span>
+          <span className="text-4xl font-bold text-muted-foreground">€</span>
         </div>
       ) : (
         <div className="flex items-baseline justify-between">
