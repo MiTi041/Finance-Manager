@@ -8,7 +8,7 @@ import {
   TrendingDown,
   Receipt,
   CircleDashed,
-  Send,
+  ArrowUpRight,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -196,7 +196,7 @@ export default function DashboardPage() {
                     className="w-full gap-1"
                     onClick={() => setSetupOpen(true)}
                   >
-                    <Send className="size-4" />
+                    <ArrowUpRight className="size-4" />
                     Überweisen
                   </Button>
                 ) : undefined
