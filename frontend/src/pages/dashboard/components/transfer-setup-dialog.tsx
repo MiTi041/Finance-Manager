@@ -357,7 +357,7 @@ export function TransferSetupDialog({
 
           {sender ? (
             maxAmount > 0 ? (
-              <div className="mt-2">
+              <div className="mt-5">
                 <PayoutSlider value={amount} max={maxAmount} onChange={setAmount} />
               </div>
             ) : (
