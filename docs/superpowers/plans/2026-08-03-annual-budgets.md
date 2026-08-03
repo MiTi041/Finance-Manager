@@ -508,11 +508,19 @@ git commit -m "feat(budgets): support yearly period with YTD spent"
 
 ---
 
-### Task 3: Frontend — Budget-Typ, API-Calls, Utils
+### Task 3: Frontend — Budget-Typ, API-Calls, Utils, Seite, Karte, Dialoge, Hook
+
+> Hinweis: Task 3 und 4 des ursprünglichen Plans sind zusammengelegt (Pre-Flight-Entscheidung: Typ-Umstellung und alle Nutzungsstellen in einem Commit, damit jeder Commit grün ist). Der zusammengelegte Task ersetzt die ursprünglichen Tasks 3 und 4.
 
 **Files:**
 - Modify: `frontend/src/lib/budgets.ts`
 - Modify: `frontend/src/pages/budgets/utils.ts`
+- Modify: `frontend/src/pages/budgets/budgets-page.tsx`
+- Modify: `frontend/src/pages/budgets/components/budget-card.tsx`
+- Modify: `frontend/src/pages/budgets/components/add-budget-dialog.tsx`
+- Modify: `frontend/src/pages/budgets/components/edit-budget-dialog.tsx`
+- Modify: `frontend/src/pages/budgets/hooks/use-budgets.ts`
+- Create: `frontend/src/pages/budgets/components/period-toggle.tsx`
 
 **Interfaces:**
 - Consumes: Task 2 API (Felder `amount`, `period`).
@@ -520,6 +528,7 @@ git commit -m "feat(budgets): support yearly period with YTD spent"
   - `type BudgetPeriod = "monthly" | "yearly"`, `Budget` mit `amount`/`period`.
   - `createBudget(name, category_ids, amount, period = "monthly")`, `updateBudget(budgetId, name, category_ids, amount, period)`.
   - `categoryIdsForPeriod(budgets: Budget[], period: BudgetPeriod, excludeId?: number): Set<number>`.
+  - Seite zeigt Monats- und Jahresbudgets im selben Raster; Dialoge mit Monat/Jahr-Umschalter; Karte mit „Jahr"-Badge.
 
 - [ ] **Step 1: `lib/budgets.ts` umbauen**
 
@@ -596,35 +605,7 @@ export function categoryIdsForPeriod(
 }
 ```
 
-- [ ] **Step 3: Typcheck + Build**
-
-Run: `pnpm --dir frontend exec tsc --noEmit && pnpm --dir frontend build`
-Expected: beide grün (Keine Fehler, da `monthly_amount`-Referenzen erst in Task 4 entfernt werden, wird tsc nur über ungenutzte `BudgetStub`-Änderung klagen → prüfen, dass mindestens keine Fehler in `lib/budgets.ts`/`utils.ts`).
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add frontend/src/lib/budgets.ts frontend/src/pages/budgets/utils.ts
-git commit -m "feat(budgets): add period to frontend budget types and API calls"
-```
-
----
-
-### Task 4: Frontend — Seite, Karte, Dialoge, Hook
-
-**Files:**
-- Modify: `frontend/src/pages/budgets/budgets-page.tsx`
-- Modify: `frontend/src/pages/budgets/components/budget-card.tsx`
-- Modify: `frontend/src/pages/budgets/components/add-budget-dialog.tsx`
-- Modify: `frontend/src/pages/budgets/components/edit-budget-dialog.tsx`
-- Modify: `frontend/src/pages/budgets/hooks/use-budgets.ts`
-- Create: `frontend/src/pages/budgets/components/period-toggle.tsx`
-
-**Interfaces:**
-- Consumes: Task 3 (`Budget`, `BudgetPeriod`, `categoryIdsForPeriod`).
-- Produces: Seite zeigt Monats- und Jahresbudgets im selben Raster; Dialoge mit Monat/Jahr-Umschalter; Karte mit „Jahr"-Badge.
-
-- [ ] **Step 1: `period-toggle.tsx` anlegen**
+- [ ] **Step 3: `period-toggle.tsx` anlegen**
 
 ```tsx
 import type { BudgetPeriod } from "@/lib/budgets";
@@ -662,7 +643,7 @@ export function PeriodToggle({
 }
 ```
 
-- [ ] **Step 2: `add-budget-dialog.tsx` — period state + Umschalter**
+- [ ] **Step 4: `add-budget-dialog.tsx` — period state + Umschalter**
 
 ```tsx
 export function AddBudgetDialog({
@@ -687,7 +668,7 @@ export function AddBudgetDialog({
 
 Zusätzlich: `<PeriodToggle value={period} onChange={setPeriod} />` zwischen Titel und Namens-Input einfügen; `onCreate(name.trim(), [...selected], Number(amount), period)`; `placeholder="Monatsbudget"` → `placeholder={period === "monthly" ? "Monatsbudget" : "Jahresbudget"}`; `import { useState }` + Import von `PeriodToggle` und `BudgetPeriod` ergänzen. Beim erfolgreichen Submit `setPeriod("monthly")` zurücksetzen.
 
-- [ ] **Step 3: `edit-budget-dialog.tsx` — period state + Umschalter**
+- [ ] **Step 5: `edit-budget-dialog.tsx` — period state + Umschalter**
 
 ```tsx
 export function EditBudgetDialog({
@@ -716,7 +697,7 @@ export function EditBudgetDialog({
 
 Im `useEffect` (`if (open && budget)`): zusätzlich `setPeriod(budget.period)`. `setAmount(String(budget.monthly_amount))` → `setAmount(String(budget.amount))`. `available` nutzt `existingCategoryIds[period]`. Im `save()`: `onSave(budget.id, name.trim(), [...selected], parsed, period)`. `<PeriodToggle value={period} onChange={setPeriod} />` nach dem Titel einfügen. Import `PeriodToggle`, `BudgetPeriod` ergänzen.
 
-- [ ] **Step 4: `budget-card.tsx` — amount + Jahr-Badge**
+- [ ] **Step 6: `budget-card.tsx` — amount + Jahr-Badge**
 
 - `budget.monthly_amount` → `budget.amount` (Zeile 22 und 103).
 - Über der Status-Pille (im rechten `div`, Zeile 38-47) bei `budget.period === "yearly"` eine Badge ergänzen:
@@ -732,7 +713,7 @@ Im `useEffect` (`if (open && budget)`): zusätzlich `setPeriod(budget.period)`. 
 - `formatAmount(budget.monthly_amount)` → `formatAmount(budget.amount)`.
 - Fortschritts-Label Zeile 109: `% vom Budget genutzt` → `% vom {budget.period === "yearly" ? "Jahresbudget" : "Budget"} genutzt`.
 
-- [ ] **Step 5: `use-budgets.ts` — period durchreichen**
+- [ ] **Step 7: `use-budgets.ts` — period durchreichen**
 
 ```typescript
 const create = useCallback(
@@ -760,7 +741,7 @@ const update = useCallback(
 
 `import type { Budget, BudgetPeriod } from "@/lib/budgets";` anpassen.
 
-- [ ] **Step 6: `budgets-page.tsx` — amounts, per-period Sets, Handler**
+- [ ] **Step 8: `budgets-page.tsx` — amounts, per-period Sets, Handler**
 
 - Totals (Zeile 24-26): `b.monthly_amount` → `b.amount`.
 - Oben (nach `totals`) das per-period Mapping:
@@ -782,7 +763,7 @@ const existingForEdit: Record<BudgetPeriod, Set<number>> = {
 - Leerer Zustand (Zeile 126): Text → „Lege ein Budget für eine Kategorie an, um deine monatlichen oder jährlichen Ausgaben im Blick zu behalten."
 - Imports: `BudgetPeriod` und `categoryIdsForPeriod` ergänzen.
 
-- [ ] **Step 7: Build + Lint**
+- [ ] **Step 9: Build + Lint**
 
 Run: `pnpm --dir frontend exec tsc --noEmit && pnpm --dir frontend build`
 Expected: grün (keine `monthly_amount`-Referenzen mehr in `frontend/src`).
@@ -790,10 +771,10 @@ Expected: grün (keine `monthly_amount`-Referenzen mehr in `frontend/src`).
 Run: `pnpm --dir frontend exec eslint src/pages/budgets --max-warnings 0`
 Expected: keine Fehler/Warnungen.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
-git add frontend/src/pages/budgets
+git add frontend/src/lib/budgets.ts frontend/src/pages/budgets/utils.ts frontend/src/pages/budgets
 git commit -m "feat(budgets): add yearly period to budgets page, cards and dialogs"
 ```
 
@@ -801,6 +782,7 @@ git commit -m "feat(budgets): add yearly period to budgets page, cards and dialo
 
 ## Self-Review Notizen
 
-- Spec-Coverage: Schema+Sync (Task 1) ✓, Spent YTD (Task 2) ✓, API amount/period (Task 2) ✓, Kategorie pro Period exklusiv (Task 2) ✓, Frontend Raster+Badge+Dialogs (Task 4) ✓, leerer Zustand (Task 4) ✓. YAGNI-Punkte (Jahres-Picker, Rollover, Drilldown) sind bewusst nicht enthalten.
+- Spec-Coverage: Schema+Sync (Task 1) ✓, Spent YTD (Task 2) ✓, API amount/period (Task 2) ✓, Kategorie pro Period exklusiv (Task 2) ✓, Frontend Raster+Badge+Dialogs (Task 3) ✓, leerer Zustand (Task 3) ✓. YAGNI-Punkte (Jahres-Picker, Rollover, Drilldown) sind bewusst nicht enthalten.
 - Typ-Konsistenz: `amount`/`period` durchgängig in Backend-Response, `Budget`, Dialogen; `categoryIdsForPeriod`-Signature in Task 3 definiert, Task 4 nutzt sie identisch.
 - Keine Platzhalter, alle Code-Steps komplett.
+- Pre-Flight: Task 3+4 wurden zu einem Frontend-Task zusammengelegt (Typ-Umstellung und Nutzungsstellen in einem Commit), um einen typfehlerhaften Zwischenstand zu vermeiden.
