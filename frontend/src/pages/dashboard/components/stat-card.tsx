@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { ArrowUpRight, ArrowDownRight } from "lucide-react";
 import NumberFlow, { type Format } from "@number-flow/react";
 import { BankLogo } from "@/components/bank-logo";
@@ -22,6 +22,7 @@ type StatCardProps = {
   icon: ComponentType<{ size?: number }>;
   footer?: string;
   accountBalances?: AccountBalance[];
+  action?: ReactNode;
 };
 
 export function StatCard({
@@ -35,13 +36,17 @@ export function StatCard({
   icon: Icon,
   footer,
   accountBalances,
+  action,
 }: StatCardProps) {
   return (
     <div className="flex cursor-default flex-col gap-3 rounded-panel border border-border bg-card p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/15">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium tracking-[0.06em] uppercase text-muted-foreground">
-          {title}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium tracking-[0.06em] uppercase text-muted-foreground">
+            {title}
+          </span>
+          {action}
+        </div>
         <div
           className="flex size-8 items-center justify-center rounded-lg"
           style={{ background: `${accent}20`, color: accent }}
