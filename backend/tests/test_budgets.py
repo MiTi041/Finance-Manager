@@ -28,7 +28,8 @@ def _make_db() -> sqlite3.Connection:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL DEFAULT '',
             category_ids TEXT NOT NULL,
-            monthly_amount REAL NOT NULL,
+            amount REAL NOT NULL,
+            period TEXT NOT NULL DEFAULT 'monthly',
             created_at TEXT,
             updated_at TEXT
         );
@@ -214,7 +215,8 @@ class TestCreateBudget:
         assert len(rows) == 1
         assert rows[0]["name"] == "Test"
         assert rows[0]["category_ids"] == "[2, 5]"
-        assert rows[0]["monthly_amount"] == 40.0
+        assert rows[0]["amount"] == 40.0
+        assert rows[0]["period"] == "monthly"
 
 
 class TestUpdateBudget:
@@ -223,10 +225,10 @@ class TestUpdateBudget:
         _run(conn, lambda: create_budget("Test", [2], 40.0))
         bid = conn.execute("SELECT id FROM budgets").fetchone()["id"]
 
-        result = _run(conn, lambda: update_budget(bid, monthly_amount=60.0))
+        result = _run(conn, lambda: update_budget(bid, amount=60.0))
 
         assert result is not None
-        assert result["monthly_amount"] == 60.0
+        assert result["amount"] == 60.0
 
     def test_updates_name_and_categories(self):
         conn = _make_db()
@@ -250,7 +252,7 @@ class TestUpdateBudget:
     def test_missing_budget_returns_none(self):
         conn = _make_db()
 
-        assert _run(conn, lambda: update_budget(123, monthly_amount=60.0)) is None
+        assert _run(conn, lambda: update_budget(123, amount=60.0)) is None
 
 
 class TestDeleteBudget:
@@ -266,3 +268,63 @@ class TestDeleteBudget:
         conn = _make_db()
 
         assert _run(conn, lambda: delete_budget(123)) is False
+
+
+class TestYearlyBudgets:
+    def test_yearly_spent_is_ytd_up_to_selected_month(self):
+        conn = _make_db()
+        _run(conn, lambda: create_budget("Versicherung", [1], 600.0, period="yearly"))
+        _tx(conn, "2026-01", -100.0, 2)
+        _tx(conn, "2026-07", -200.0, 2)
+        _tx(conn, "2026-08", -300.0, 2)  # nach dem Stichtag, zählt nicht
+
+        july = _run(conn, lambda: list_budgets("2026-07"))
+        assert july[0]["period"] == "yearly"
+        assert july[0]["spent"] == 300.0
+        assert july[0]["remaining"] == 300.0
+        assert july[0]["is_over"] is False
+
+        august = _run(conn, lambda: list_budgets("2026-08"))
+        assert august[0]["spent"] == 600.0
+        assert august[0]["is_over"] is True
+
+    def test_yearly_ignores_income_and_previous_year(self):
+        conn = _make_db()
+        _run(conn, lambda: create_budget("Test", [1], 100.0, period="yearly"))
+        _tx(conn, "2025-12", -50.0, 2)
+        _tx(conn, "2026-01", -20.0, 2)
+        _tx(conn, "2026-03", 500.0, 2)  # income, zählt nicht
+        _tx(conn, "2026-03", -30.0, 2, refund_total=10.0)  # netto -20
+
+        result = _run(conn, lambda: list_budgets("2026-03"))
+        assert result[0]["spent"] == 40.0
+
+    def test_same_category_allowed_in_monthly_and_yearly(self):
+        conn = _make_db()
+        _run(conn, lambda: create_budget("Monatlich", [1], 50.0, period="monthly"))
+        yearly = _run(conn, lambda: create_budget("Jährlich", [1], 600.0, period="yearly"))
+        assert yearly["period"] == "yearly"
+        assert len(_run(conn, lambda: list_budgets("2026-07"))) == 2
+
+    def test_same_category_twice_in_same_period_raises(self):
+        conn = _make_db()
+        _run(conn, lambda: create_budget("Monatlich", [1], 50.0, period="monthly"))
+        _run(conn, lambda: create_budget("Jährlich", [1], 600.0, period="yearly"))
+
+        with pytest.raises(ValueError, match="bereits in einem anderen Budget"):
+            _run(conn, lambda: create_budget("NochMonat", [1], 50.0, period="monthly"))
+
+    def test_rejects_invalid_period(self):
+        conn = _make_db()
+
+        with pytest.raises(ValueError, match="Zeitraum"):
+            _run(conn, lambda: create_budget("Test", [1], 100.0, period="weekly"))
+
+    def test_update_can_change_period(self):
+        conn = _make_db()
+        _run(conn, lambda: create_budget("Test", [1], 50.0))
+        bid = conn.execute("SELECT id FROM budgets").fetchone()["id"]
+
+        result = _run(conn, lambda: update_budget(bid, period="yearly", amount=600.0))
+        assert result["period"] == "yearly"
+        assert result["amount"] == 600.0
