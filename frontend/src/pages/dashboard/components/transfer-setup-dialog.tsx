@@ -203,12 +203,7 @@ export function TransferSetupDialog({
                 if (!a) return <span className="text-muted-foreground">Kein Konto</span>;
                 return (
                   <div className="flex w-full flex-col items-start gap-0">
-                    <div className="flex w-full items-center justify-between gap-2">
-                      <span className="truncate text-sm leading-tight">{a.name}</span>
-                      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                        {formatAmount(a.balance)}
-                      </span>
-                    </div>
+                    <span className="truncate text-sm leading-tight">{a.name}</span>
                     <span className="truncate font-mono text-[11px] text-muted-foreground leading-tight">
                       {formatIban(a.iban)}
                     </span>
