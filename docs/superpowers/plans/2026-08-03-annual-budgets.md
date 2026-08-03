@@ -15,7 +15,7 @@
 - Kategorie-Exklusivität **pro Period**: gleiche Kategorie in einem Monats- UND einem Jahresbudget erlaubt, nicht in zwei gleichen Period-Typen.
 - Jährliche Spent = YTD: `strftime('%Y', …) = :year AND Monat <= :month` des selektierten Monats.
 - Spent-Logik refund-bereinigt (`u.amount + COALESCE(u.refund_total, 0)`, nur `u.amount < 0`) unverändert.
-- Backend-Tests: `cd backend && .venv/bin/pytest` (venv existiert).
+- Backend-Tests: `cd backend && .venv/bin/python -m pytest` (venv existiert).
 - Frontend-Check: `pnpm --dir frontend build` und `pnpm --dir frontend exec tsc --noEmit`.
 
 ---
@@ -97,7 +97,7 @@ def test_initialize_database_migrates_current_budgets_monthly_amount():
 
 - [ ] **Step 2: Test läuft und scheitert**
 
-Run: `cd backend && .venv/bin/pytest tests/test_schema.py -v`
+Run: `cd backend && .venv/bin/python -m pytest tests/test_schema.py -v`
 Expected: FAIL — `monthly_amount`/`period` fehlen bzw. `amount` existiert nicht.
 
 - [ ] **Step 3: Schema implementieren**
@@ -159,7 +159,7 @@ def create_budgets_table(connection: sqlite3.Connection) -> None:
 
 - [ ] **Step 5: Tests laufen lassen**
 
-Run: `cd backend && .venv/bin/pytest tests/test_schema.py -v`
+Run: `cd backend && .venv/bin/python -m pytest tests/test_schema.py -v`
 Expected: PASS (alle 3 Tests; die übrigen Schema-Tests weiterhin grün).
 
 - [ ] **Step 6: Commit**
@@ -276,7 +276,7 @@ class TestYearlyBudgets:
 
 - [ ] **Step 2: Test läuft und scheitert**
 
-Run: `cd backend && .venv/bin/pytest tests/test_budgets.py -v`
+Run: `cd backend && .venv/bin/python -m pytest tests/test_budgets.py -v`
 Expected: FAIL — `period`/`amount`/`monthly_amount`-Missmatch, `create_budget` kennt kein `period`.
 
 - [ ] **Step 3: DB-Layer umbauen**
@@ -491,12 +491,12 @@ def update_budget_endpoint(budget_id: int, request: BudgetUpdateRequest) -> dict
 
 - [ ] **Step 5: Tests laufen lassen**
 
-Run: `cd backend && .venv/bin/pytest tests/test_budgets.py -v`
+Run: `cd backend && .venv/bin/python -m pytest tests/test_budgets.py -v`
 Expected: PASS (alle Klassen, inkl. neuer `TestYearlyBudgets`).
 
 - [ ] **Step 6: Gesamte Backend-Testsuite**
 
-Run: `cd backend && .venv/bin/pytest -q`
+Run: `cd backend && .venv/bin/python -m pytest -q`
 Expected: PASS.
 
 - [ ] **Step 7: Commit**
