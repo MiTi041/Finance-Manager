@@ -154,7 +154,7 @@ export function PayoutSlider({
                 setOutOfRange(false);
               }}
               autoFocus
-              className={`h-12 bg-transparent px-0 text-center text-5xl font-mono font-bold leading-none text-foreground outline-none ${outOfRange ? "text-orange-500" : ""}`}
+              className={`h-12 bg-transparent px-0 text-center text-5xl font-bold leading-none text-foreground outline-none ${outOfRange ? "text-orange-500" : ""}`}
             />
           ) : (
             <button
@@ -170,7 +170,7 @@ export function PayoutSlider({
                 value={value}
                 format={{ style: "decimal", minimumFractionDigits: 2, maximumFractionDigits: 2 }}
                 locales="de-DE"
-                className="text-5xl font-mono font-bold leading-none text-foreground"
+                className="text-5xl font-bold leading-none text-foreground"
               />
             </button>
           )}
