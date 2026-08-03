@@ -26,7 +26,6 @@ import {
   type RecipientAccountRecord,
 } from "@/lib/recipient-accounts";
 import { executeDirectTransfer } from "@/lib/direct-transfer";
-import { TransferDialog } from "@/pages/allocation/components/transfer-dialog";
 import {
   TransferSetupDialog,
   type TransferSetupResult,
@@ -73,7 +72,6 @@ export default function DashboardPage() {
   const [canTransferMap, setCanTransferMap] = useState<Map<string, boolean>>(new Map());
   const [recipientAccounts, setRecipientAccounts] = useState<RecipientAccountRecord[]>([]);
   const [setupOpen, setSetupOpen] = useState(false);
-  const [pendingTransfer, setPendingTransfer] = useState<TransferSetupResult | null>(null);
 
   useEffect(() => {
     void fetchAvailableBanks().then((banks) =>
@@ -124,42 +122,34 @@ export default function DashboardPage() {
     [linkedAccounts],
   );
 
-  const confirmSetup = useCallback((result: TransferSetupResult) => {
-    if (result.saveRecipient) {
-      createRecipientAccount({
-        account_name: result.accountName || result.recipientName,
-        iban: result.recipientIban,
-        bic: result.recipientBic,
-        recipient_name: result.recipientName,
-      }).catch(() => toast.error("Empfängerkonto konnte nicht gespeichert werden."));
-    }
-    setPendingTransfer(result);
-  }, []);
-
-  const confirmTransfer = useCallback(
-    async (tan?: string) => {
-      if (!pendingTransfer) return;
+  const confirmSetup = useCallback(
+    async (result: TransferSetupResult) => {
+      if (result.saveRecipient) {
+        createRecipientAccount({
+          account_name: result.accountName || result.recipientName,
+          iban: result.recipientIban,
+          bic: result.recipientBic,
+          recipient_name: result.recipientName,
+        }).catch(() => toast.error("Empfängerkonto konnte nicht gespeichert werden."));
+      }
       const tid = toast.loading("Überweisung wird durchgeführt…");
       try {
-        await executeDirectTransfer(
-          {
-            senderIban: pendingTransfer.senderIban,
-            recipientName: pendingTransfer.recipientName,
-            recipientIban: pendingTransfer.recipientIban,
-            recipientBic: pendingTransfer.recipientBic,
-            amount: pendingTransfer.amount,
-            reason: pendingTransfer.purpose || "Überweisung",
-          },
-          tan,
-        );
+        await executeDirectTransfer({
+          senderIban: result.senderIban,
+          recipientName: result.recipientName,
+          recipientIban: result.recipientIban,
+          recipientBic: result.recipientBic,
+          amount: result.amount,
+          reason: result.purpose || "Überweisung",
+        });
         toast.success("Überweisung erfolgreich!", { id: tid });
         triggerRefresh();
-      } catch (e) {
+      } catch {
         toast.dismiss(tid);
-        throw e;
+        toast.error("Überweisung fehlgeschlagen.");
       }
     },
-    [pendingTransfer, triggerRefresh],
+    [triggerRefresh],
   );
 
   if (error) {
@@ -259,23 +249,6 @@ export default function DashboardPage() {
         recipientAccounts={recipientAccounts}
         ownAccounts={ownAccounts}
         onConfirm={confirmSetup}
-      />
-
-      <TransferDialog
-        open={!!pendingTransfer}
-        onOpenChange={(open) => {
-          if (!open) setPendingTransfer(null);
-        }}
-        amount={pendingTransfer?.amount ?? 0}
-        accountName={
-          pendingTransfer
-            ? (senderAccounts.find((s) => s.iban === pendingTransfer.senderIban)?.name ?? "")
-            : ""
-        }
-        recipientName={pendingTransfer?.recipientName ?? ""}
-        recipientIban={pendingTransfer?.recipientIban ?? ""}
-        purpose={pendingTransfer?.purpose}
-        onConfirm={confirmTransfer}
       />
     </div>
   );
