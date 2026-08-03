@@ -83,11 +83,26 @@ export function SearchableSelect({
             triggerClassName,
           )}
         >
-          {selected ? (renderSelected ? renderSelected(selected) : selected.label) : placeholder}
+          {selected ? (
+            <span className="min-w-0 flex-1">
+              {renderSelected ? (
+                renderSelected(selected)
+              ) : (
+                <span className="block truncate">{selected.label}</span>
+              )}
+            </span>
+          ) : (
+            <span className="min-w-0 flex-1 truncate">{placeholder}</span>
+          )}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className={cn("p-0", contentClassName)} align="start" sideOffset={4}>
+      <PopoverContent
+        data-searchable-select-content
+        className={cn("p-0", contentClassName)}
+        align="start"
+        sideOffset={4}
+      >
         <Command className="overflow-visible">
           <CommandInput placeholder={searchPlaceholder} />
           <CommandList
