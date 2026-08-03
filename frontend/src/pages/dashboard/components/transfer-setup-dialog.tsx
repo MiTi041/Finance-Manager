@@ -173,6 +173,23 @@ export function TransferSetupDialog({
         </DialogHeader>
 
         <div className="min-w-0 space-y-4">
+          {sender ? (
+            maxAmount > 0 ? (
+              <div className="pt-4">
+                <PayoutSlider value={amount} max={maxAmount} bigValue onChange={setAmount} />
+              </div>
+            ) : (
+              <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+                <Info className="mt-0.5 size-4 shrink-0" />
+                <span>
+                  Kontostand ist 0 oder unbekannt – von diesem Konto kann nicht überwiesen werden.
+                </span>
+              </div>
+            )
+          ) : (
+            <p className="text-sm text-muted-foreground">Kein Transfer-aktives Konto verfügbar.</p>
+          )}
+
           <div className="space-y-1.5">
             <Label>Absenderkonto</Label>
             <SearchableSelect
@@ -354,23 +371,6 @@ export function TransferSetupDialog({
               placeholder="optional"
             />
           </div>
-
-          {sender ? (
-            maxAmount > 0 ? (
-              <div className="mt-5">
-                <PayoutSlider value={amount} max={maxAmount} bigValue onChange={setAmount} />
-              </div>
-            ) : (
-              <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
-                <Info className="mt-0.5 size-4 shrink-0" />
-                <span>
-                  Kontostand ist 0 oder unbekannt – von diesem Konto kann nicht überwiesen werden.
-                </span>
-              </div>
-            )
-          ) : (
-            <p className="text-sm text-muted-foreground">Kein Transfer-aktives Konto verfügbar.</p>
-          )}
 
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
