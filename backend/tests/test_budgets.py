@@ -286,7 +286,18 @@ class TestYearlyBudgets:
 
         august = _run(conn, lambda: list_budgets("2026-08"))
         assert august[0]["spent"] == 600.0
-        assert august[0]["is_over"] is True
+        assert august[0]["is_over"] is False
+
+    def test_yearly_is_over_when_ytd_exceeds_amount(self):
+        conn = _make_db()
+        _run(conn, lambda: create_budget("Test", [1], 100.0, period="yearly"))
+        _tx(conn, "2026-01", -60.0, 2)
+        _tx(conn, "2026-02", -60.0, 2)
+
+        result = _run(conn, lambda: list_budgets("2026-02"))
+
+        assert result[0]["spent"] == 120.0
+        assert result[0]["is_over"] is True
 
     def test_yearly_ignores_income_and_previous_year(self):
         conn = _make_db()

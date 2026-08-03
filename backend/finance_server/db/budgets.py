@@ -85,7 +85,7 @@ def _serialize_budget(row: Any, spent: float, cats: list[dict[str, Any]]) -> dic
         "period": row["period"],
         "spent": spent_r,
         "remaining": round(amount_r - spent_r, 2),
-        "is_over": spent_r >= amount_r,
+        "is_over": spent_r > amount_r,
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
