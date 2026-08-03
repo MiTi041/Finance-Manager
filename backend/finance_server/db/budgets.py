@@ -196,6 +196,12 @@ def update_budget(
             period_for_check = period if period is not None else (current["period"] if current else "monthly")
             sets.append("category_ids = ?")
             params.append(json.dumps(_validate_categories(conn, category_ids, budget_id, period_for_check)))
+        elif period is not None:
+            existing = conn.execute("SELECT category_ids FROM budgets WHERE id = ?", (budget_id,)).fetchone()
+            if existing is not None:
+                existing_ids = _parse_category_ids(existing["category_ids"])
+                if existing_ids:
+                    _validate_categories(conn, existing_ids, budget_id, period)
         if not sets:
             return _get_budget(budget_id)
         params.extend([_now(), budget_id])

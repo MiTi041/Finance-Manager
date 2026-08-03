@@ -249,6 +249,24 @@ class TestUpdateBudget:
         with pytest.raises(ValueError, match="bereits in einem anderen Budget"):
             _run(conn, lambda: update_budget(bid, category_ids=[1, 2]))
 
+    def test_period_change_alone_revalidates_categories(self):
+        conn = _make_db()
+        _run(conn, lambda: create_budget("Monatlich", [1], 50.0, period="monthly"))
+        _run(conn, lambda: create_budget("Jährlich", [1], 600.0, period="yearly"))
+        a_id = conn.execute("SELECT id FROM budgets WHERE name = 'Monatlich'").fetchone()["id"]
+
+        with pytest.raises(ValueError, match="bereits in einem anderen Budget"):
+            _run(conn, lambda: update_budget(a_id, period="yearly"))
+
+    def test_period_change_alone_without_conflict(self):
+        conn = _make_db()
+        _run(conn, lambda: create_budget("Test", [1], 50.0, period="monthly"))
+        bid = conn.execute("SELECT id FROM budgets").fetchone()["id"]
+
+        result = _run(conn, lambda: update_budget(bid, period="yearly"))
+
+        assert result["period"] == "yearly"
+
     def test_missing_budget_returns_none(self):
         conn = _make_db()
 
