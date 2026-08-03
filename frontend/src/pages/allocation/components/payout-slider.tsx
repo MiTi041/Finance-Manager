@@ -116,7 +116,7 @@ export function PayoutSlider({
     }
   };
 
-  const presets = [0.25, 0.5, 0.75, 1];
+  const presets = bigValue ? [1] : [0.25, 0.5, 0.75, 1];
   const ticks = Array.from({ length: 21 }, (_, i) => i * 5);
 
   return (
