@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRightToLine, Info, TriangleAlert } from "lucide-react";
+import { ArrowRightToLine, Info, TriangleAlert, Zap } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SearchableSelect } from "@/components/searchable-select";
+import { ToggleRow } from "@/components/toggle-row";
 import { PayoutSlider } from "@/pages/allocation/components/payout-slider";
 import { formatAmount } from "@/lib/utils/format";
 import { isValidIban } from "@/lib/transfer-utils";
@@ -39,6 +40,7 @@ export type TransferSetupResult = {
   amount: number;
   saveRecipient: boolean;
   accountName?: string;
+  instant: boolean;
 };
 
 type Props = {
@@ -72,6 +74,7 @@ export function TransferSetupDialog({
   const [accountName, setAccountName] = useState("");
   const [purpose, setPurpose] = useState("");
   const [amount, setAmount] = useState(0);
+  const [instant, setInstant] = useState(true);
 
   useEffect(() => {
     if (!open) return;
@@ -83,6 +86,7 @@ export function TransferSetupDialog({
     setAccountName("");
     setPurpose("");
     setAmount(0);
+    setInstant(true);
   }, [open]);
 
   const sender = senderAccount;
@@ -139,6 +143,7 @@ export function TransferSetupDialog({
       amount,
       saveRecipient: recipientValue === MANUAL && saveRecipient,
       accountName: accountName.trim() || undefined,
+      instant,
     });
     onOpenChange(false);
   };
@@ -320,6 +325,15 @@ export function TransferSetupDialog({
               placeholder="optional"
             />
           </div>
+
+          <ToggleRow
+            title="Echtzeit (SEPA Instant)"
+            description="Geld kommt sofort an, falls deine Bank SEPA-Instant unterstützt."
+            icon={<Zap className="size-4" />}
+            size="sm"
+            checked={instant}
+            onCheckedChange={setInstant}
+          />
 
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="outline" onClick={() => onOpenChange(false)}>

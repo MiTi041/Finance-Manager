@@ -93,6 +93,13 @@ export function TransactionRow({
   const note = useNote(transaction, isExpanded, onSaveNote, onNoteDraftChange);
   const splits = useSplits(transaction, isExpanded, onSaveSplits);
 
+  const refundTargetId =
+    transaction.refundLinks.length > 0
+      ? transaction.refundLinks[0].expense_transaction_id
+      : allTransactions.find((t) =>
+          t.refundLinks.some((l) => l.expense_transaction_id === transaction.id),
+        )?.id ?? null;
+
   const [confirmCloseDialogOpen, setConfirmCloseDialogOpen] = useState(false);
   const pendingToggleAction = useRef<(() => void) | null>(null);
 
@@ -171,6 +178,7 @@ export function TransactionRow({
         onRequestClose={handleRequestClose}
         onRowKeyDown={onRowKeyDown}
         onSelectChange={onSelectChange}
+        refundTargetId={refundTargetId}
       />
 
       {isExpanded ? (

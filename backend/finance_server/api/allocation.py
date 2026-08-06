@@ -71,7 +71,7 @@ def update_bafoeg_config(
     payload: BafoegConfig = Body(...),
     service: AllocationService = Depends(get_allocation_service),
 ) -> dict[str, Any]:
-    return service.update_bafoeg_config(payload.model_dump(exclude_none=True))
+    return service.update_bafoeg_config(payload.model_dump(exclude_unset=True, exclude_none=True))
 
 
 @router.post("/allocation/bafoeg/berechne-rate")
@@ -150,6 +150,7 @@ def execute_transfer(
         sender_iban=transfer_data.get("sender_iban") or "",
         sender_name="Finance-Manager",
         tan=tan,
+        instant_payment=(body or {}).get("instant", True),
     )
     try:
         result = send_transfer(req)
@@ -239,6 +240,7 @@ def execute_savings_plan_transfer(
         sender_iban=transfer_data.get("sender_iban") or "",
         sender_name=transfer_data.get("sender_name") or "Finance-Manager",
         tan=tan,
+        instant_payment=(body or {}).get("instant", True),
     )
     try:
         result = send_transfer(req)

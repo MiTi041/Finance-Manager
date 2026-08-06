@@ -44,27 +44,27 @@ export async function fetchZahlungspartnerReferenceData(options?: {
   );
 }
 
-export async function createZahlungspartner(payload: {
-  name: string;
-  website?: string | null;
-  logo_url?: string | null;
-  logo_white_background?: boolean;
-  logo_padding?: boolean;
-  is_company: boolean;
-}): Promise<ZahlungspartnerRecord> {
-  const response = await fetch(
-    `${getApiBaseUrl()}/db/reference-data/zahlungspartner`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
+export async function createZahlungspartner(
+  payload: {
+    name: string;
+    website?: string | null;
+    logo_url?: string | null;
+    logo_white_background?: boolean;
+    logo_padding?: boolean;
+    is_company: boolean;
+  },
+  sourceId?: string,
+): Promise<ZahlungspartnerRecord> {
+  const response = await fetch(`${getApiBaseUrl()}/db/reference-data/zahlungspartner`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
     },
-  );
+    body: JSON.stringify(payload),
+  });
 
   const result = await parseJsonResponse(response);
-  await emitReferenceChange();
+  await emitReferenceChange(sourceId);
   return result;
 }
 
@@ -96,6 +96,7 @@ export async function updateZahlungspartner(
     logo_padding: boolean;
     is_company: boolean;
   }>,
+  sourceId?: string,
 ): Promise<ZahlungspartnerRecord> {
   const response = await fetch(
     `${getApiBaseUrl()}/db/reference-data/zahlungspartner/${zahlungspartnerId}`,
@@ -109,7 +110,7 @@ export async function updateZahlungspartner(
   );
 
   const result = await parseJsonResponse(response);
-  await emitReferenceChange();
+  await emitReferenceChange(sourceId);
   return result;
 }
 
@@ -166,9 +167,7 @@ export async function deleteZahlungspartnerLocalLogo(
   return result;
 }
 
-export async function deleteZahlungspartner(
-  zahlungspartnerId: number,
-): Promise<void> {
+export async function deleteZahlungspartner(zahlungspartnerId: number): Promise<void> {
   const response = await fetch(
     `${getApiBaseUrl()}/db/reference-data/zahlungspartner/${zahlungspartnerId}`,
     {

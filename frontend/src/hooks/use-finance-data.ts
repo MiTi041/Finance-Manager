@@ -97,6 +97,7 @@ export function useFinanceData(
   const { references: ibanReferences } = useIbanReferences(refreshVersion);
   const {
     transactions: rawTransactions,
+    pendingTransactions: rawPendingTransactions,
     loading,
     refreshing,
     error: txError,
@@ -154,6 +155,14 @@ export function useFinanceData(
       return kontoIban === selectedAccountIban;
     });
   }, [activeAccountIban, selectedAccountIban, rawTransactions]);
+
+  const pendingTransactions = useMemo(() => {
+    if (activeAccountIban === "all" || !selectedAccountIban) return rawPendingTransactions;
+    return rawPendingTransactions.filter((transaction) => {
+      const kontoIban = normalizeIban(transaction.konto?.iban);
+      return kontoIban === selectedAccountIban;
+    });
+  }, [activeAccountIban, selectedAccountIban, rawPendingTransactions]);
 
   const resolvedTransactions = useMemo(() => {
     const lookup = buildIbanReferenceLookup(ibanReferences);
@@ -269,6 +278,7 @@ export function useFinanceData(
     error,
     reload: loadTransactions,
     transactions,
+    pendingTransactions,
     transactionCount,
     balance,
     balanceFormatted,

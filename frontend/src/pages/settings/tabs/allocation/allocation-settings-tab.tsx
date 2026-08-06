@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { PiggyBank, Loader2, CalendarDays } from "lucide-react";
+import { ToggleRow } from "@/components/toggle-row";
 import {
   fetchAllocationSettings,
   updateAllocationSettings,
@@ -112,37 +113,15 @@ export function AllocationSettingsTab() {
         </Select>
       </div>
 
-      <button
-        type="button"
-        role="switch"
-        aria-checked={settings?.bafoeg_enabled ?? false}
+      <ToggleRow
+        title="BAföG-Rückzahlung"
+        description="BAföG-Bucket in der Allokation anzeigen und verwalten."
+        icon={<PiggyBank className="size-5" />}
+        checked={settings?.bafoeg_enabled ?? false}
+        onCheckedChange={() => void toggleBafoeg()}
         disabled={saving}
-        className={
-          settings?.bafoeg_enabled
-            ? "cursor-pointer flex w-full items-center justify-between rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-left transition-colors hover:bg-emerald-500/15 disabled:opacity-50"
-            : "cursor-pointer flex w-full items-center justify-between rounded-lg border border-muted bg-muted/70 px-4 py-3 text-left transition-colors hover:bg-muted/40 disabled:opacity-50"
-        }
-        onClick={toggleBafoeg}
-      >
-        <div className="flex items-center gap-3">
-          <PiggyBank className="size-5 text-muted-foreground" />
-          <div>
-            <div className="text-sm font-medium">BAföG-Rückzahlung</div>
-            <div className="text-xs text-muted-foreground">
-              BAföG-Bucket in der Allokation anzeigen und verwalten.
-            </div>
-          </div>
-        </div>
-        <span
-          className={
-            settings?.bafoeg_enabled
-              ? "inline-flex items-center rounded-full bg-emerald-500 px-3 py-1 text-xs font-medium text-white"
-              : "inline-flex items-center rounded-full px-3 py-1 text-xs font-medium text-muted-foreground"
-          }
-        >
-          {saving ? "..." : settings?.bafoeg_enabled ? "Ja" : "Nein"}
-        </span>
-      </button>
+        pill={saving ? "..." : undefined}
+      />
     </div>
   );
 }

@@ -28,6 +28,7 @@ type CollapsedRowProps = {
   unknownIban: string | null;
   onToggleRow: (transactionId: number) => void;
   onOpenRefundSection: (transactionId: number) => void;
+  refundTargetId: number | null;
   onRequestClose: (closeAction: () => void) => void;
   onRowKeyDown: (event: KeyboardEvent<Element>, transactionId: number) => void;
   onSelectChange: (transactionId: number, selected: boolean) => void;
@@ -46,6 +47,7 @@ export function CollapsedRow({
   unknownIban,
   onToggleRow,
   onOpenRefundSection,
+  refundTargetId,
   onRequestClose,
   onRowKeyDown,
   onSelectChange,
@@ -258,13 +260,13 @@ export function CollapsedRow({
                     tabIndex={0}
                     onClick={(event) => {
                       event.stopPropagation();
-                      onOpenRefundSection(transaction.id);
+                      onOpenRefundSection(refundTargetId ?? transaction.id);
                     }}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
                         event.stopPropagation();
-                        onOpenRefundSection(transaction.id);
+                        onOpenRefundSection(refundTargetId ?? transaction.id);
                       }
                     }}
                     className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 hover:bg-amber-500/20 transition-colors dark:text-amber-400 tabular-nums"

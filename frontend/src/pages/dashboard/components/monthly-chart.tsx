@@ -15,8 +15,9 @@ function buildMonthlyBreakdown(transactions: Transaction[]) {
     if (!t.daten.buchungsdatum) continue;
     const key = format(new Date(t.daten.buchungsdatum), "yyyy-MM");
     if (!months[key]) months[key] = { einnahmen: 0, ausgaben: 0 };
-    if (t.betrag.wert > 0) months[key].einnahmen += t.betrag.wert;
-    else months[key].ausgaben += Math.abs(t.betrag.wert);
+    if (t.betrag.wert > 0)
+      months[key].einnahmen += Math.max(0, t.betrag.wert - t.refundAttributed);
+    else months[key].ausgaben += Math.max(0, Math.abs(t.betrag.wert) - t.betrag.refundTotal);
   }
   return Object.entries(months)
     .sort(([a], [b]) => a.localeCompare(b))

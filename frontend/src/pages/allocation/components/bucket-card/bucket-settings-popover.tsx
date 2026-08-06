@@ -80,6 +80,26 @@ export function BucketSettingsPopover(props: Props) {
     );
   }, [config.target_amount, config.target_months]);
 
+  const [localRecipient, setLocalRecipient] = useState(() =>
+    config.recipient_account_id != null
+      ? `empf:${config.recipient_account_id}`
+      : config.recipient_iban != null
+        ? `bank:${config.recipient_iban}`
+        : "none",
+  );
+  useEffect(() => {
+    setLocalRecipient(
+      config.recipient_account_id != null
+        ? `empf:${config.recipient_account_id}`
+        : config.recipient_iban != null
+          ? `bank:${config.recipient_iban}`
+          : "none",
+    );
+  }, [config.recipient_account_id, config.recipient_iban]);
+
+  const [localSender, setLocalSender] = useState(config.sender_iban ?? "");
+  useEffect(() => setLocalSender(config.sender_iban ?? ""), [config.sender_iban]);
+
   const [bafoegConfig, setBafoegConfig] = useState<{
     current_balance: number;
     anlagezinsen: number;
@@ -105,11 +125,11 @@ export function BucketSettingsPopover(props: Props) {
   }, [bucket.bucket_type]);
 
   const commitBafoegConfig = (nextPayoutDate = localBafoegPayoutDate) => {
+    if (!bafoegConfig) return;
     const balance = parseFloat(localBafoegBalance.replace(",", ".")) || 0;
     const rate = parseFloat(localBafoegRate.replace(",", ".")) || 2.0;
     const payout = nextPayoutDate.trim() || null;
     if (
-      bafoegConfig &&
       balance === bafoegConfig.current_balance &&
       rate === bafoegConfig.interest_rate &&
       payout === bafoegConfig.payout_date
@@ -130,8 +150,9 @@ export function BucketSettingsPopover(props: Props) {
     const amt = parseFloat(zinsInput.replace(",", "."));
     if (!bafoegConfig || isNaN(amt) || amt <= 0) return;
     const next = Math.round((bafoegConfig.anlagezinsen + amt) * 100) / 100;
+    const nextBalance = Math.round((bafoegConfig.current_balance + amt) * 100) / 100;
     setZinsInput("");
-    updateBafoegConfig({ anlagezinsen: next }).then((cfg) => {
+    updateBafoegConfig({ anlagezinsen: next, current_balance: nextBalance }).then((cfg) => {
       setBafoegConfig(cfg);
       onRefresh?.();
     });
@@ -140,12 +161,39 @@ export function BucketSettingsPopover(props: Props) {
   const commitGoal = () => {
     const amt = localGoalAmount.trim() ? parseFloat(localGoalAmount.replace(",", ".")) : 0;
     const mos = localGoalMonths.trim() ? parseFloat(localGoalMonths.replace(",", ".")) : 0;
+    const currentAmount = config.target_amount != null && config.target_amount > 0 ? config.target_amount : 0;
+    const currentMonths = config.target_months != null && config.target_months > 0 ? config.target_months : 0;
+    if (amt === currentAmount && mos === currentMonths) return;
     if (amt > 0) {
       void onUpdateConfig(bucket.bucket_id, { target_amount: amt, target_months: null });
     } else if (mos > 0) {
       void onUpdateConfig(bucket.bucket_id, { target_months: mos, target_amount: null });
     } else {
       void onUpdateConfig(bucket.bucket_id, { target_amount: null, target_months: null });
+    }
+  };
+
+  const commitRecipient = () => {
+    if (localRecipient === "none") {
+      if (config.recipient_account_id != null || config.recipient_iban != null) {
+        void onUpdateConfig(bucket.bucket_id, { recipient_account_id: null, recipient_iban: null });
+      }
+    } else if (localRecipient.startsWith("bank:")) {
+      const iban = localRecipient.slice(5);
+      if (config.recipient_iban !== iban) {
+        void onUpdateConfig(bucket.bucket_id, { recipient_iban: iban, recipient_account_id: null });
+      }
+    } else if (localRecipient.startsWith("empf:")) {
+      const id = Number(localRecipient.slice(5));
+      if (config.recipient_account_id !== id) {
+        void onUpdateConfig(bucket.bucket_id, { recipient_account_id: id, recipient_iban: null });
+      }
+    }
+  };
+
+  const commitSender = () => {
+    if ((config.sender_iban ?? "") !== localSender) {
+      void onUpdateConfig(bucket.bucket_id, { sender_iban: localSender || null });
     }
   };
 
@@ -167,7 +215,13 @@ export function BucketSettingsPopover(props: Props) {
   return (
     <Popover
       onOpenChange={(open) => {
-        if (!open) commitPercentage(localPct);
+        if (!open) {
+          commitPercentage(localPct);
+          commitGoal();
+          commitRecipient();
+          commitSender();
+          commitBafoegConfig();
+        }
       }}
     >
       <PopoverTrigger asChild>
@@ -239,7 +293,6 @@ export function BucketSettingsPopover(props: Props) {
                         placeholder="0"
                         value={localBafoegBalance}
                         onChange={(e) => setLocalBafoegBalance(e.target.value)}
-                        onBlur={() => commitBafoegConfig()}
                         className="h-8 w-28 bg-background pr-7 text-right text-sm tabular-nums"
                       />
                       <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
@@ -262,7 +315,6 @@ export function BucketSettingsPopover(props: Props) {
                         placeholder="2.0"
                         value={localBafoegRate}
                         onChange={(e) => setLocalBafoegRate(e.target.value)}
-                        onBlur={() => commitBafoegConfig()}
                         className="h-8 w-20 bg-background pr-7 text-right text-sm tabular-nums"
                       />
                       <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
@@ -282,7 +334,6 @@ export function BucketSettingsPopover(props: Props) {
                       onChange={(d) => {
                         const s = d ? d.toISOString().slice(0, 10) : "";
                         setLocalBafoegPayoutDate(s);
-                        commitBafoegConfig(s);
                       }}
                     />
                   </div>
@@ -411,7 +462,6 @@ export function BucketSettingsPopover(props: Props) {
                               setLocalGoalAmount(e.target.value);
                               setLocalGoalMonths("");
                             }}
-                            onBlur={() => commitGoal()}
                             className="h-8 w-28 bg-background pr-7 text-right text-sm tabular-nums"
                           />
                           <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
@@ -444,7 +494,6 @@ export function BucketSettingsPopover(props: Props) {
                               setLocalGoalMonths(e.target.value);
                               setLocalGoalAmount("");
                             }}
-                            onBlur={() => commitGoal()}
                             className="h-8 w-20 bg-background pr-7 text-right text-sm tabular-nums"
                           />
                           <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
@@ -481,22 +530,8 @@ export function BucketSettingsPopover(props: Props) {
               ) : (
                 <SearchableSelect
                   height={15}
-                  value={
-                    config.recipient_account_id != null
-                      ? `empf:${config.recipient_account_id}`
-                      : config.recipient_iban != null
-                        ? `bank:${config.recipient_iban}`
-                        : "none"
-                  }
-                  onValueChange={(v) => {
-                    if (v === "none") {
-                      onUpdateConfig(bucket.bucket_id, { recipient_account_id: null, recipient_iban: null });
-                    } else if (v.startsWith("bank:")) {
-                      onUpdateConfig(bucket.bucket_id, { recipient_iban: v.slice(5), recipient_account_id: null });
-                    } else if (v.startsWith("empf:")) {
-                      onUpdateConfig(bucket.bucket_id, { recipient_account_id: Number(v.slice(5)), recipient_iban: null });
-                    }
-                  }}
+                  value={localRecipient}
+                  onValueChange={setLocalRecipient}
                   options={[
                     ...recipientAccounts.map((r) => ({
                       value: `empf:${r.id}`,
@@ -584,10 +619,8 @@ export function BucketSettingsPopover(props: Props) {
               </Label>
               <SearchableSelect
                 height={15}
-                value={config.sender_iban ?? ""}
-                onValueChange={(v) => {
-                  onUpdateConfig(bucket.bucket_id, { sender_iban: v || null });
-                }}
+                value={localSender}
+                onValueChange={setLocalSender}
                 options={bankAccounts
                   .filter((a) => canTransferMap.get(a.bankKey) !== false && a.iban !== config.recipient_iban)
                   .map((a) => ({

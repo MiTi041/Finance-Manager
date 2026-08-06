@@ -62,7 +62,7 @@ def send_transfer(req: TransferRequest) -> dict[str, Any]:
             account=sender_account, iban=req.recipient_iban, bic=req.recipient_bic or "",
             recipient_name=req.recipient_name, amount=req.amount,
             account_name=req.sender_name,
-            reason=f"{req.reason} {datetime.now():%d.%m.%Y %H:%M:%S}", instant_payment=True, endtoend_id="NOTPROVIDED",
+            reason=f"{req.reason} {datetime.now():%d.%m.%Y %H:%M:%S}", instant_payment=req.instant_payment, endtoend_id="NOTPROVIDED",
         )
 
         needs_vop = NeedVOPResponse is not None and isinstance(result, NeedVOPResponse)

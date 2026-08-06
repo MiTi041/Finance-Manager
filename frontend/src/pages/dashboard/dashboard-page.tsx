@@ -19,6 +19,7 @@ import { useGlobalDateFilter } from "@/hooks/use-global-date-filter";
 import { useFinanceData } from "@/hooks/use-finance-data";
 import { useRefresh } from "@/hooks/use-refresh";
 import { normalizeIban } from "@/lib/iban";
+import { getErrorMessage } from "@/lib/utils/error";
 import { fetchAvailableBanks } from "@/lib/bank/credentials";
 import {
   fetchRecipientAccountsReferenceData,
@@ -159,12 +160,13 @@ export default function DashboardPage() {
           recipientBic: result.recipientBic,
           amount: result.amount,
           reason: result.purpose || "Überweisung",
+          instant: result.instant,
         });
         toast.success("Überweisung erfolgreich!", { id: tid });
         triggerRefresh();
-      } catch {
+      } catch (e) {
         toast.dismiss(tid);
-        toast.error("Überweisung fehlgeschlagen.");
+        toast.error(getErrorMessage(e, "Überweisung fehlgeschlagen."));
       }
     },
     [triggerRefresh],

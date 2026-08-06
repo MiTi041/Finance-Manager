@@ -81,6 +81,66 @@ def create_umsaetze_table(connection: sqlite3.Connection) -> None:
     )
 
 
+def create_vorgemerkte_table(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS vorgemerkte_umsaetze (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            account_iban TEXT NOT NULL,
+            account_bic TEXT,
+            account_accountnumber TEXT,
+            account_subaccount TEXT,
+            account_blz TEXT,
+            status TEXT,
+            funds_code TEXT,
+            transaction_id TEXT,
+            customer_reference TEXT,
+            bank_reference TEXT,
+            extra_details TEXT,
+            date TEXT,
+            entry_date TEXT,
+            guessed_entry_date TEXT,
+            transaction_reference TEXT,
+            transaction_code TEXT,
+            posting_text TEXT,
+            prima_nota TEXT,
+            purpose TEXT,
+            additional_purpose TEXT,
+            end_to_end_reference TEXT,
+            additional_position_reference TEXT,
+            additional_position_date TEXT,
+            applicant_bic TEXT,
+            applicant_iban TEXT,
+            applicant_name TEXT,
+            recipient_name TEXT,
+            deviate_applicant TEXT,
+            deviate_recipient TEXT,
+            gvc_applicant_iban TEXT,
+            gvc_applicant_bic TEXT,
+            applicant_creditor_id TEXT,
+            debitor_identifier TEXT,
+            return_debit_notes TEXT,
+            purpose_code TEXT,
+            FRST_ONE_OFF_RECC TEXT,
+            old_SEPA_CI TEXT,
+            old_SEPA_additional_position_reference TEXT,
+            settlement_tag TEXT,
+            original_amount REAL,
+            amount REAL NOT NULL,
+            currency TEXT,
+            transaction_hash TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_vorgemerkte_konto
+        ON vorgemerkte_umsaetze (account_iban)
+        """
+    )
+
+
 def create_refund_links_table(connection: sqlite3.Connection) -> None:
     connection.execute(
         """
@@ -556,6 +616,7 @@ def initialize_database(connection: sqlite3.Connection) -> None:
 
     create_refund_links_table(connection)
     migrate_refund_links(connection)
+    create_vorgemerkte_table(connection)
 
     create_belege_table(connection)
     create_subscription_identities_table(connection)

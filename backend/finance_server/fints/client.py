@@ -214,7 +214,17 @@ def validate_transfer_result(result: Any) -> None:
         raise TanRequired(challenge="Erforderliche TAN fehlt.", decoupled=False)
     if any(isinstance(r["code"], str) and r["code"].startswith("9") for r in responses):
         from fastapi import HTTPException
-        raise HTTPException(status_code=502, detail={"code": "FINTS_TRANSFER_FAILED", "message": "Bank meldet Fehler bei der Ueberweisung.", "responses": responses})
+        error_texts = [
+            r["text"]
+            for r in responses
+            if isinstance(r["code"], str) and r["code"][:1] in ("3", "9") and r["text"]
+        ]
+        message = (
+            "Die Überweisung wurde von der Bank abgelehnt: " + "; ".join(error_texts)
+            if error_texts
+            else "Die Überweisung wurde von der Bank abgelehnt."
+        )
+        raise HTTPException(status_code=502, detail={"code": "FINTS_TRANSFER_FAILED", "message": message, "responses": responses})
 
 
 def resolve_tan(client: FinTS3PinTanClient, response: NeedTANResponse, tan: str | None) -> Any:

@@ -8,6 +8,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/searchable-select";
+import { ToggleRow } from "@/components/toggle-row";
 import { Trash2 } from "lucide-react";
 import { type FinanceCategory } from "@/lib/categories/types";
 
@@ -149,41 +150,16 @@ export function CategoryForm({
           </div>
 
           {form.typ === "Ausgabe" && (
-            <button
-              type="button"
-              role="switch"
-              aria-checked={form.personal_expense}
-              className={
-                form.personal_expense
-                  ? "flex w-full items-center justify-between rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-left transition-colors hover:bg-amber-500/15"
-                  : "flex w-full items-center justify-between rounded-lg border border-muted/60 bg-background px-4 py-3 text-left transition-colors hover:bg-muted/40"
+            <ToggleRow
+              title="Persönliche Ausgabe"
+              description="Wird für die bessere Analyse benötigt"
+              color="amber"
+              checked={form.personal_expense}
+              onCheckedChange={(personal_expense) =>
+                setForm((current) => ({ ...current, personal_expense }))
               }
-              onClick={(event) => {
-                event.stopPropagation();
-                setForm((current) => ({
-                  ...current,
-                  personal_expense: !current.personal_expense,
-                }));
-              }}
-            >
-              <div>
-                <div className="text-sm font-medium">
-                  Persönliche Ausgabe
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Wird für die bessere Analyse benötigt
-                </div>
-              </div>
-              <span
-                className={
-                  form.personal_expense
-                    ? "inline-flex items-center rounded-full bg-amber-500 px-3 py-1 text-xs font-medium text-white"
-                    : "inline-flex items-center rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground"
-                }
-              >
-                {form.personal_expense ? "Ja" : "Nein"}
-              </span>
-            </button>
+              stopPropagation
+            />
           )}
         </div>
         <div className="flex flex-wrap gap-2 justify-end px-4 py-2">

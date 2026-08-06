@@ -550,12 +550,29 @@ class FinTS3Client:
                     transactions += [Transaction(t) for t in camt053_to_dict(s)]
                 if include_pending:
                     for s in pending_streams:
-                        transactions += [Transaction(t) for t in camt053_to_dict(s)]
+                        for t in camt053_to_dict(s):
+                            t['is_pending'] = True
+                            transactions.append(Transaction(t))
                 return transactions
 
 
     def _get_transactions_mt940(self, dialog, hkkaz, account: SEPAAccount, start_date, end_date, include_pending):
         logger.info('Start fetching from {} to {}'.format(start_date, end_date))
+
+        # Note 1: Some banks send the HIKAZ data in arbitrary splits.
+        # So better concatenate them before MT940 parsing.
+        # Note 2: MT940 messages are encoded in the S.W.I.F.T character set,
+        # which is a subset of ISO 8859. There are no character in it that
+        # differ between ISO 8859 variants, so we'll arbitrarily chose 8859-1.
+        def parse_and_tag(blobs, is_pending=False):
+            if not blobs:
+                return []
+            transactions = mt940_to_array(''.join(b.decode('iso-8859-1') for b in blobs))
+            for tx in transactions:
+                if is_pending:
+                    tx.data['is_pending'] = True
+            return list(transactions)
+
         response = self._fetch_with_touchdowns(
             dialog,
             lambda touchdown: hkkaz(
@@ -565,16 +582,13 @@ class FinTS3Client:
                 date_end=end_date,
                 touchdown_point=touchdown,
             ),
-            lambda responses: mt940_to_array(''.join(
-                [seg.statement_booked.decode('iso-8859-1') for seg in responses] +
-                ([seg.statement_pending.decode('iso-8859-1') for seg in responses if seg.statement_pending] if include_pending else [])
-        )),
+            lambda responses: parse_and_tag(
+                [seg.statement_booked for seg in responses]
+            ) + parse_and_tag(
+                [seg.statement_pending for seg in responses if seg.statement_pending],
+                is_pending=include_pending,
+            ),
             'HIKAZ',
-            # Note 1: Some banks send the HIKAZ data in arbitrary splits.
-            # So better concatenate them before MT940 parsing.
-            # Note 2: MT940 messages are encoded in the S.W.I.F.T character set,
-            # which is a subset of ISO 8859. There are no character in it that
-            # differ between ISO 8859 variants, so we'll arbitrarily chose 8859-1.
         )
         logger.info('Fetching done.')
         return response
@@ -1457,7 +1471,6 @@ class FinTS3PinTanClient(FinTS3Client):
                 segments = vop_seg + [command_seg, tan_seg]
 
                 response = dialog.send(*segments)
-                print(123456789)
 
                 if vop_standard:
                     hivpp = response.find_segment_first(HIVPP1, throw=True)
@@ -1590,8 +1603,11 @@ class FinTS3PinTanClient(FinTS3Client):
                     self.set_tan_mechanism('999')
 
         if response.code == '9010':
-            raise FinTSClientError("Error during dialog initialization, could not fetch BPD. Please check that you "
-                                   "passed the correct bank identifier to the HBCI URL of the correct bank.")
+            raise FinTSClientError(
+                "Der Auftrag wurde von der Bank nicht ausgeführt "
+                f"({response.code}: {response.text}). Bitte pruefen, ob die Bank den Auftrag "
+                "(z. B. eine Echtzeit-Ueberweisung) unterstuetzt."
+            )
 
         if ((not dialog.open and response.code.startswith('9')) and not self._bootstrap_mode)  or response.code in ('9340', '9910', '9930', '9931', '9942'):
             # Assume all 9xxx errors in a not-yet-open dialog refer to the PIN or authentication
@@ -1600,7 +1616,7 @@ class FinTS3PinTanClient(FinTS3Client):
             # Fail-safe block all further attempts with this PIN
             if self.pin:
                 self.pin.block()
-            raise FinTSClientPINError("Error during dialog initialization, PIN wrong?")
+            raise FinTSClientPINError(f"Authentifizierung fehlgeschlagen ({response.code}: {response.text}). Bitte PIN pruefen.")
 
         if response.code == '3938':
             # Account locked, e.g. after three wrong password attempts. Theoretically, the bank might allow us to
@@ -1608,14 +1624,14 @@ class FinTS3PinTanClient(FinTS3Client):
             # one chance to get it right, let's rather error iout.
             if self.pin:
                 self.pin.block()
-            raise FinTSClientTemporaryAuthError("Account is temporarily locked.")
+            raise FinTSClientTemporaryAuthError(f"Konto voruebergehend gesperrt ({response.code}: {response.text}).")
 
         if response.code == '9075':
             if self._bootstrap_mode:
                 if self._standing_dialog:
                     self._standing_dialog.open = False
             else:
-                raise FinTSSCARequiredError("This operation requires strong customer authentication.")
+                raise FinTSSCARequiredError(f"Starke Kundenauthentifizierung erforderlich ({response.code}: {response.text}).")
 
     def get_tan_mechanisms(self):
         """

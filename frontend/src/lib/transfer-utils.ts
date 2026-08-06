@@ -5,6 +5,7 @@ export type DirectTransferPayload = {
   recipientBic?: string;
   amount: number;
   reason: string;
+  instant?: boolean;
 };
 
 export function isValidIban(value: string): boolean {
@@ -33,5 +34,6 @@ export function buildTransferRequestBody(payload: DirectTransferPayload): Record
     sender_name: "Finance-Manager",
   };
   if (payload.recipientBic) body.recipient_bic = payload.recipientBic;
+  if (payload.instant != null) body.instant_payment = payload.instant;
   return body;
 }

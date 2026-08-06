@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ToggleRow } from "@/components/toggle-row";
 import {
   Dialog,
   DialogContent,
@@ -122,38 +123,15 @@ export function RecipientAccountCreateDialog({
             />
           </div>
 
-          <button
-            type="button"
-            role="switch"
-            aria-checked={form.is_donation_account}
-            className={
-              form.is_donation_account
-                ? "flex items-center justify-between rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-left transition-colors hover:bg-emerald-500/15"
-                : "flex items-center justify-between rounded-lg border border-muted/60 bg-background px-4 py-3 text-left transition-colors hover:bg-muted/40"
+          <ToggleRow
+            title="Spendenkonto"
+            description="Wird für Spenden-Überweisungen genutzt."
+            fullWidth={false}
+            checked={form.is_donation_account}
+            onCheckedChange={(is_donation_account) =>
+              setForm((current) => ({ ...current, is_donation_account }))
             }
-            onClick={() =>
-              setForm((current) => ({
-                ...current,
-                is_donation_account: !current.is_donation_account,
-              }))
-            }
-          >
-            <div>
-              <div className="text-sm font-medium">Spendenkonto</div>
-              <div className="text-xs text-muted-foreground">
-                Wird für Spenden-Überweisungen genutzt.
-              </div>
-            </div>
-            <span
-              className={
-                form.is_donation_account
-                  ? "inline-flex items-center rounded-full bg-emerald-500 px-3 py-1 text-xs font-medium text-white"
-                  : "inline-flex items-center rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground"
-              }
-            >
-              {form.is_donation_account ? "Ja" : "Nein"}
-            </span>
-          </button>
+          />
 
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Button

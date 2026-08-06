@@ -32,6 +32,10 @@ def store_transactions_in_local_db(transactions: list[dict[str, Any]]) -> int:
     return int(result.get("inserted", 0))
 
 
+def store_pending_in_local_db(pending: list[dict[str, Any]]) -> int:
+    return replace_local_pending_transactions(pending)
+
+
 def list_transactions_from_local_db(days: int | None, iban: str | None) -> list[dict[str, Any]]:
     effective_days = MAX_DAYS if days is None else days
     return fetch_local_transactions(days=effective_days, account_iban=iban)
@@ -75,7 +79,7 @@ def fetch_transactions(
     def _run(from_data: bytes | None, tan_value: str | None) -> dict[str, Any]:
         client = make_client(creds, from_data)
         bootstrap_client(client)
-        all_columns, transactions, balances = set(), [], []
+        all_columns, transactions, balances, pending_transactions = set(), [], [], []
         end = datetime.date.today()
 
         with client:
@@ -121,7 +125,7 @@ def fetch_transactions(
                     else:
                         start_date = datetime.date.today() - datetime.timedelta(days=INITIAL_SYNC_DAYS)
 
-                result = client.get_transactions(account, start_date=start_date, end_date=end)
+                result = client.get_transactions(account, start_date=start_date, end_date=end, include_pending=True)
 
                 if start_date is not None:
                     if min_start_date is None or start_date < min_start_date:
@@ -198,7 +202,7 @@ def fetch_transactions(
 
                     enrich_paypal_merchant(transaction_data)
 
-                    transactions.append({
+                    entry = {
                         "account": {
                             "iban": account.iban,
                             "bic":   account.bic,
@@ -208,7 +212,12 @@ def fetch_transactions(
                         },
                         "date": transaction_data["date"],
                         "data": transaction_data,
-                    })
+                    }
+
+                    if data.get("is_pending"):
+                        pending_transactions.append(entry)
+                    else:
+                        transactions.append(entry)
 
             if days is not None:
                 overall_start = datetime.date.today() - datetime.timedelta(days=days)
@@ -219,6 +228,7 @@ def fetch_transactions(
                 "range": {"start": str(overall_start), "end": str(end), "days": days},
                 "balances": balances, "all_columns": sorted(all_columns),
                 "count": len(transactions), "transactions": transactions,
+                "pending_count": len(pending_transactions), "pending": pending_transactions,
             }
 
     return with_state_retry(creds, _run, tan)
@@ -228,7 +238,7 @@ def fetch_and_store_transactions(
     creds: BankCredentials, days: int, tan: str | None, iban: str | None, scope: str | None = None
 ) -> dict[str, Any]:
     cache_key = build_transactions_cache_key(creds.username, days=days, iban=iban)
-    synced_count, sync_error, rows_error = 0, None, None
+    synced_count, sync_error, rows_error, pending_error = 0, None, None, None
 
     if tan is None:
         cached_payload = get_cached_transactions(cache_key)
@@ -247,6 +257,7 @@ def fetch_and_store_transactions(
                 "local_db_enabled": True,
                 "local_db_sync_error": None,
                 "local_db_rows_error": rows_error,
+                "local_db_pending_error": None,
             }
 
     payload = fetch_transactions(creds, days=days, tan=tan, iban=iban)
@@ -255,6 +266,11 @@ def fetch_and_store_transactions(
     except Exception as err:
         logging.exception("Lokale DB-Synchronisation fehlgeschlagen")
         sync_error = str(err)
+    try:
+        store_pending_in_local_db(payload.get("pending", []))
+    except Exception as err:
+        logging.exception("Lokale DB-Synchronisation vorgemerkter Umsätze fehlgeschlagen")
+        pending_error = str(err)
     set_cached_transactions(cache_key, payload)
 
     try:
@@ -281,4 +297,5 @@ def fetch_and_store_transactions(
         "local_db_enabled": True,
         "local_db_sync_error": sync_error,
         "local_db_rows_error": rows_error,
+        "local_db_pending_error": pending_error,
     }

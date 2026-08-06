@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ChevronDown, Plus, Store, User } from "lucide-react";
 import { toast } from "sonner";
@@ -18,10 +18,7 @@ import {
   updateZahlungspartner,
 } from "@/lib/zahlungspartner";
 import { resolveZahlungspartnerLogoSrc } from "@/lib/bank/zahlungspartner-logo";
-import {
-  VirtualizedList,
-  type VirtualizedListRef,
-} from "@/components/virtualized-list";
+import { VirtualizedList, type VirtualizedListRef } from "@/components/virtualized-list";
 import { DiscardChangesDialog, useSettingsTab } from "@/pages/settings/hooks/use-settings-tab";
 import { ZahlungspartnerForm } from "./zahlungspartner-form";
 import { ZahlungspartnerCreateDialog } from "./zahlungspartner-create-dialog";
@@ -58,10 +55,7 @@ function normalizeOwnerDraft(form: OwnerFormState) {
   };
 }
 
-function isOwnerDirty(
-  editingOwner: ZahlungspartnerRecord | null,
-  form: OwnerFormState,
-) {
+function isOwnerDirty(editingOwner: ZahlungspartnerRecord | null, form: OwnerFormState) {
   const draft = normalizeOwnerDraft(form);
 
   if (!editingOwner) {
@@ -79,8 +73,7 @@ function isOwnerDirty(
     draft.name !== editingOwner.name ||
     draft.website !== (editingOwner.website ?? null) ||
     draft.logo_url !== (editingOwner.logo_url ?? null) ||
-    draft.logo_white_background !==
-      (editingOwner.logo_white_background ?? false) ||
+    draft.logo_white_background !== (editingOwner.logo_white_background ?? false) ||
     draft.logo_padding !== (editingOwner.logo_padding ?? false) ||
     draft.is_company !== editingOwner.is_company
   );
@@ -112,8 +105,10 @@ export function ZahlungspartnerTab() {
       const payload = await fetchZahlungspartnerReferenceData(options);
       return payload.zahlungspartner ?? [];
     },
-    createItem: (payload) => createZahlungspartner(payload as Parameters<typeof createZahlungspartner>[0]),
-    updateItem: (id, payload) => updateZahlungspartner(id, payload as Parameters<typeof updateZahlungspartner>[1]),
+    createItem: (payload) =>
+      createZahlungspartner(payload as Parameters<typeof createZahlungspartner>[0]),
+    updateItem: (id, payload) =>
+      updateZahlungspartner(id, payload as Parameters<typeof updateZahlungspartner>[1]),
     deleteItem: (id) => deleteZahlungspartner(id),
     normalizeDraft: normalizeOwnerDraft,
     isDirty: isOwnerDirty,
@@ -127,9 +122,9 @@ export function ZahlungspartnerTab() {
     }),
   });
 
-  const visibleOwners = useMemo(() => hook.items, [hook.items]);
   const pendingScrollRef = useRef<number | null>(null);
   const processedOwnerIdRef = useRef<number | null>(null);
+  const refreshSourceId = hook.refreshSourceId;
 
   useEffect(() => {
     if (pendingScrollRef.current == null) return;
@@ -185,9 +180,7 @@ export function ZahlungspartnerTab() {
 
         toast.success("Logo erfolgreich hochgeladen");
       } catch (err) {
-        toast.error(
-          err instanceof Error ? err.message : "Logo-Upload fehlgeschlagen",
-        );
+        toast.error(err instanceof Error ? err.message : "Logo-Upload fehlgeschlagen");
       } finally {
         setUploadingLogoId(null);
       }
@@ -222,11 +215,7 @@ export function ZahlungspartnerTab() {
 
         toast.success("Logo erfolgreich gelöscht");
       } catch (err) {
-        toast.error(
-          err instanceof Error
-            ? err.message
-            : "Logo-Löschvorgang fehlgeschlagen",
-        );
+        toast.error(err instanceof Error ? err.message : "Logo-Löschvorgang fehlgeschlagen");
       } finally {
         setDeletingLogoId(null);
       }
@@ -289,35 +278,23 @@ export function ZahlungspartnerTab() {
     );
   }, [targetOwnerId, hook.items, navigate, searchParams]);
 
-  const updateOwnerKind = (isCompany: boolean) => {
-    hook.setForm((current) => ({
-      ...current,
-      is_company: isCompany,
-      website: isCompany ? current.website : "",
-      logo_url: isCompany ? current.logo_url : "",
-      logo_white_background: isCompany ? current.logo_white_background : false,
-      logo_padding: isCompany ? current.logo_padding : true,
-    }));
-  };
-
   const handleSaveOwner = async () => {
     hook.setSaving(true);
     hook.setError(null);
 
     try {
+      const scrollTop = hook.listScrollRef.current?.scrollTop;
       const payload = normalizeOwnerDraft(hook.form);
 
       if (hook.editingItem) {
         const updatedOwner = await updateZahlungspartner(
           hook.editingItem.id,
           payload,
+          refreshSourceId,
         );
 
-        pendingScrollRef.current = updatedOwner.id;
         hook.setItemsUpdater((current) =>
-          current.map((owner) =>
-            owner.id === updatedOwner.id ? updatedOwner : owner,
-          ),
+          current.map((owner) => (owner.id === updatedOwner.id ? updatedOwner : owner)),
         );
 
         hook.setEditingItem(updatedOwner);
@@ -325,22 +302,27 @@ export function ZahlungspartnerTab() {
           name: updatedOwner.name,
           website: updatedOwner.website ?? "",
           logo_url: updatedOwner.logo_url ?? "",
-          logo_white_background:
-            updatedOwner.logo_white_background ?? false,
+          logo_white_background: updatedOwner.logo_white_background ?? false,
           logo_padding: updatedOwner.logo_padding ?? false,
           is_company: updatedOwner.is_company,
         });
       } else {
-        const createdOwner = await createZahlungspartner(payload);
+        const createdOwner = await createZahlungspartner(payload, refreshSourceId);
         hook.setItemsUpdater((current) => [...current, createdOwner]);
         hook.setCreateDialogOpen(false);
         hook.setForm(EMPTY_FORM);
       }
+
+      if (scrollTop != null) {
+        requestAnimationFrame(() => {
+          if (hook.listScrollRef.current) {
+            hook.listScrollRef.current.scrollTop = scrollTop;
+          }
+        });
+      }
     } catch (err) {
       hook.setError(
-        err instanceof Error
-          ? err.message
-          : "Zahlungspartner konnten nicht gespeichert werden",
+        err instanceof Error ? err.message : "Zahlungspartner konnten nicht gespeichert werden",
       );
     } finally {
       hook.setSaving(false);
@@ -394,11 +376,9 @@ export function ZahlungspartnerTab() {
       ) : (
         <VirtualizedList
           ref={virtualListRef}
-          items={visibleOwners}
+          items={hook.items}
           loading={hook.loading}
-          filterItem={(owner, query) =>
-            filterOwner(owner, query) && matchesOwnerFilters(owner)
-          }
+          filterItem={(owner, query) => filterOwner(owner, query) && matchesOwnerFilters(owner)}
           searchPlaceholder="Zahlungspartner suchen..."
           externalScrollRef={hook.listScrollRef}
           scrollClassName="max-h-[65vh]"
@@ -407,11 +387,7 @@ export function ZahlungspartnerTab() {
           emptyStateIllustration={<User className="size-5" />}
           getItemKey={(owner) => owner.id}
           getItemHeight={(owner) =>
-            hook.editingItem?.id === owner.id
-              ? 476
-              : owner.ibans.length > 0
-                ? 108
-                : 92
+            hook.editingItem?.id === owner.id ? 476 : owner.ibans.length > 0 ? 108 : 92
           }
           filterItems={[
             <Button
@@ -503,7 +479,7 @@ export function ZahlungspartnerTab() {
             );
             const logoSrc = hasLocalImage
               ? rawLogoSrc + `?v=${logoVersions[owner.id] ?? 0}`
-              : rawLogoSrc ?? "";
+              : (rawLogoSrc ?? "");
 
             return (
               <div className="border-b border-muted/60 bg-background">
@@ -516,9 +492,7 @@ export function ZahlungspartnerTab() {
                     src={logoSrc}
                     alt={owner.name}
                     sizeClassName="size-12 shrink-0"
-                    backgroundClassName={
-                      owner.logo_white_background ? "bg-white" : "bg-zinc-900"
-                    }
+                    backgroundClassName={owner.logo_white_background ? "bg-white" : "bg-zinc-900"}
                     kind={avatarKind(owner.is_company)}
                     imgNoPadding={!owner.logo_padding}
                   />
@@ -539,16 +513,14 @@ export function ZahlungspartnerTab() {
                           Keine Webseite
                         </Badge>
                       )}
-                      {owner.is_company &&
-                        !owner.logo_url?.trim() &&
-                        !hasLocalImage && (
-                          <Badge
-                            variant="outline"
-                            className="bg-orange-500/20 text-orange-500 text-[11px]"
-                          >
-                            Kein Logo
-                          </Badge>
-                        )}
+                      {owner.is_company && !owner.logo_url?.trim() && !hasLocalImage && (
+                        <Badge
+                          variant="outline"
+                          className="bg-orange-500/20 text-orange-500 text-[11px]"
+                        >
+                          Kein Logo
+                        </Badge>
+                      )}
                     </div>
 
                     <div className="mt-0.5 flex items-center gap-2 overflow-ellipsis">
@@ -626,11 +598,7 @@ export function ZahlungspartnerTab() {
         title="Zahlungspartner löschen"
         description={`Zahlungspartner "${hook.itemToDelete?.name ?? ""}" wirklich löschen? Zugeordnete IBANs werden dabei entfernt. Diese Aktion kann nicht rückgängig gemacht werden.`}
         confirmLabel="Löschen"
-        loading={
-          hook.itemToDelete
-            ? hook.deletingItemId === hook.itemToDelete.id
-            : false
-        }
+        loading={hook.itemToDelete ? hook.deletingItemId === hook.itemToDelete.id : false}
         onOpenChange={(open) => {
           if (!open) hook.setItemToDelete(null);
         }}

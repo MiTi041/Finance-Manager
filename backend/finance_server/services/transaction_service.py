@@ -8,6 +8,7 @@ from finance_server.db import (
     delete_transaction,
     delete_transactions_batch,
     fetch_latest_transaction,
+    fetch_pending_transactions,
     fetch_transactions,
     update_transaction_category,
     update_transaction_note,
@@ -30,6 +31,9 @@ class TransactionService:
             from_date=from_date,
             to_date=to_date,
         )
+
+    def get_pending_transactions(self, iban: str | None = None) -> list[dict[str, Any]]:
+        return fetch_pending_transactions(account_iban=iban)
 
     def get_latest_transaction(
         self,

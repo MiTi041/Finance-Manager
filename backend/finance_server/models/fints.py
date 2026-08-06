@@ -30,6 +30,7 @@ class TransferRequest(BaseModel):
     tan: str | None = None
     sender_iban: str | None = None
     sender_name: str = Field(default="Finance-Manager", description="Name des Absenders auf dem Beleg")
+    instant_payment: bool = Field(default=True, description="SEPA-Instant (Echtzeit) statt Standard-Überweisung")
 
 
 class ProductIdRequest(BaseModel):

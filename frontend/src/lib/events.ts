@@ -1,8 +1,8 @@
 import { dispatchRefresh } from "@/lib/refresh-store";
 
-export function emitReferenceChange() {
+export function emitReferenceChange(sourceId?: string) {
   try {
-    dispatchRefresh();
+    dispatchRefresh(sourceId);
   } catch {
     // ignore if running in non-browser environment
   }

@@ -43,7 +43,7 @@ import { useSelection } from "./hooks/use-selection";
 import { useBatchActions } from "./hooks/use-batch-actions";
 import { buildCategoryOptions, type TransactionCategoryOption } from "@/lib/utils/categories";
 import { buildLinkedAccountLookup } from "@/lib/utils/accounts";
-import { formatDate } from "@/lib/utils/format";
+import { formatDate, formatAmount } from "@/lib/utils/format";
 import { normalizeIban } from "@/lib/iban";
 
 export default function TransactionsPage() {
@@ -53,6 +53,7 @@ export default function TransactionsPage() {
     loading,
     error,
     transactions = [],
+    pendingTransactions = [],
     reload,
     linkedAccounts = [],
     selectedBank = null,
@@ -561,6 +562,41 @@ export default function TransactionsPage() {
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 py-6">
       <DateFilter value={dateFilter} onChange={setDateFilter} />
+
+      {pendingTransactions.length > 0 ? (
+        <section className="rounded-lg border border-dashed bg-muted/30">
+          <div className="flex items-center justify-between border-b border-muted/60 px-4 py-2">
+            <h2 className="text-sm font-medium text-muted-foreground">Vorgemerkte Transaktionen</h2>
+            <span className="text-xs text-muted-foreground">{pendingTransactions.length}</span>
+          </div>
+          <ul>
+            {pendingTransactions.map((transaction) => (
+              <li
+                key={transaction.id}
+                className="flex items-center justify-between gap-4 border-b border-muted/60 px-4 py-2.5 last:border-b-0"
+              >
+                <div className="flex min-w-0 items-baseline gap-2">
+                  <span className="truncate text-sm font-medium text-foreground">
+                    {transaction.zahlungspartner.name || "Unbekannt"}
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {formatDate(transaction.daten.buchungsdatum || transaction.daten.erstelltAm)}
+                  </span>
+                </div>
+                <span
+                  className={
+                    transaction.betrag.wert < 0
+                      ? "shrink-0 text-sm font-semibold tabular-nums text-destructive"
+                      : "shrink-0 text-sm font-semibold tabular-nums text-green-600"
+                  }
+                >
+                  {formatAmount(transaction.betrag.wert, transaction.betrag.waehrung)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <VirtualizedList
         ref={virtualListRef}

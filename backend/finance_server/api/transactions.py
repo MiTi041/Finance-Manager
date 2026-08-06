@@ -26,9 +26,12 @@ def get_transactions(
         from_date=from_date,
         to_date=to_date,
     )
+    pending = service.get_pending_transactions(iban=iban)
     return {
         "count": len(rows),
         "transactions": rows,
+        "pending_count": len(pending),
+        "pending": pending,
     }
 
 

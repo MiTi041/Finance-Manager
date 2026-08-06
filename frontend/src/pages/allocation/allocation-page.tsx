@@ -69,6 +69,7 @@ export default function AllocationPage() {
     recipientName: string;
     recipientIban: string;
     purpose: string;
+    instant: boolean;
   }>({
     open: false,
     runBucketId: 0,
@@ -77,6 +78,7 @@ export default function AllocationPage() {
     recipientName: "",
     recipientIban: "",
     purpose: "",
+    instant: true,
   });
   const [donationAnalysisOpen, setDonationAnalysisOpen] = useState(false);
   const [incomeDialogOpen, setIncomeDialogOpen] = useState(false);
@@ -177,6 +179,7 @@ export default function AllocationPage() {
         recipientName,
         recipientIban,
         purpose,
+        instant: true,
       });
     },
     [status, recipientAccounts, donationAccounts],
@@ -191,6 +194,7 @@ export default function AllocationPage() {
             savingsPlanIdRef.current,
             tan,
             savingsPlanAmountRef.current || undefined,
+            transferState.instant,
           );
           savingsPlanIdRef.current = 0;
           savingsPlanAmountRef.current = 0;
@@ -199,6 +203,7 @@ export default function AllocationPage() {
             runBucketIdRef.current,
             tan,
             runBucketAmountRef.current > 0 ? runBucketAmountRef.current : undefined,
+            transferState.instant,
           );
         }
         toast.success("Überweisung erfolgreich!", { id: tid });
@@ -207,7 +212,7 @@ export default function AllocationPage() {
         throw e;
       }
     },
-    [transfer, transferSavings, transferState.amount],
+    [transfer, transferSavings, transferState.instant],
   );
 
   const handleSavingsPlanTransfer = useCallback(
@@ -234,6 +239,7 @@ export default function AllocationPage() {
         recipientName: plan.target_recipient_name,
         recipientIban: plan.target_recipient_iban,
         purpose,
+        instant: true,
       });
     },
     [recipientAccounts, bankAccounts],
@@ -403,6 +409,8 @@ export default function AllocationPage() {
         recipientName={transferState.recipientName}
         recipientIban={transferState.recipientIban}
         purpose={transferState.purpose}
+        instant={transferState.instant}
+        onInstantChange={(instant) => setTransferState((s) => ({ ...s, instant }))}
         onConfirm={confirmTransfer}
       />
 

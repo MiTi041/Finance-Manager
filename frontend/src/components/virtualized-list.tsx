@@ -323,7 +323,7 @@ function VirtualizedListInner<T>(
           align,
         });
       },
-      scrollToItem(key, align = "start") {
+      scrollToItem(key, align = "center") {
         if (!getItemKey) return;
         const index = visibleItems.findIndex((item, i) => getItemKey(item, i) === key);
         if (index >= 0) {

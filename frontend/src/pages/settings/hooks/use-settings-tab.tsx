@@ -14,9 +14,7 @@ export interface SettingsTabConfig<TRecord extends { id: number }, TForm> {
   saveErrorTitle: string;
   deleteErrorTitle: string;
   EMPTY_FORM: TForm;
-  fetchItems: (options?: {
-    forceRefresh?: boolean;
-  }) => Promise<TRecord[]>;
+  fetchItems: (options?: { forceRefresh?: boolean }) => Promise<TRecord[]>;
   createItem: (payload: unknown) => Promise<TRecord>;
   updateItem: (id: number, payload: unknown) => Promise<TRecord>;
   deleteItem: (id: number) => Promise<void>;
@@ -28,9 +26,7 @@ export interface SettingsTabConfig<TRecord extends { id: number }, TForm> {
 export interface SettingsTabState<TRecord, TForm> {
   items: TRecord[];
   setItems: (items: TRecord[]) => void;
-  setItemsUpdater: (
-    updater: (current: TRecord[]) => TRecord[],
-  ) => void;
+  setItemsUpdater: (updater: (current: TRecord[]) => TRecord[]) => void;
   loading: boolean;
   saving: boolean;
   error: string | null;
@@ -46,10 +42,7 @@ export interface SettingsTabState<TRecord, TForm> {
   itemToDelete: TRecord | null;
   deletingItemId: number | null;
   listScrollRef: React.RefObject<HTMLDivElement | null>;
-  loadData: (options?: {
-    silent?: boolean;
-    forceRefresh?: boolean;
-  }) => Promise<void>;
+  loadData: (options?: { silent?: boolean; forceRefresh?: boolean }) => Promise<void>;
   resetEditor: () => void;
   closeEditEditor: () => void;
   requestOpenItem: (item: TRecord) => void;
@@ -66,13 +59,10 @@ export interface SettingsTabState<TRecord, TForm> {
   setDiscardChangesOpen: (open: boolean) => void;
   setPendingAction: (action: PendingEditorAction<TRecord> | null) => void;
   setItemToDelete: (item: TRecord | null) => void;
+  refreshSourceId: string;
 }
 
-export function DiscardChangesDialog({
-  hook,
-}: {
-  hook: SettingsTabState<any, any>;
-}) {
+export function DiscardChangesDialog({ hook }: { hook: SettingsTabState<any, any> }) {
   return (
     <ConfirmDialog
       open={hook.discardChangesOpen}
@@ -93,10 +83,7 @@ export function DiscardChangesDialog({
   );
 }
 
-export function useSettingsTab<
-  TRecord extends { id: number },
-  TForm,
->(
+export function useSettingsTab<TRecord extends { id: number }, TForm>(
   config: SettingsTabConfig<TRecord, TForm>,
 ): SettingsTabState<TRecord, TForm> {
   const configRef = useRef(config);
@@ -109,64 +96,49 @@ export function useSettingsTab<
   const [editingItem, setEditingItem] = useState<TRecord | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [discardChangesOpen, setDiscardChangesOpen] = useState(false);
-  const [pendingAction, setPendingAction] =
-    useState<PendingEditorAction<TRecord> | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingEditorAction<TRecord> | null>(null);
   const [form, setForm] = useState<TForm>(config.EMPTY_FORM);
   const [itemToDelete, setItemToDelete] = useState<TRecord | null>(null);
   const [deletingItemId, setDeletingItemId] = useState<number | null>(null);
   const listScrollRef = useRef<HTMLDivElement | null>(null);
-
-  const setItemsUpdater = useCallback(
-    (updater: (current: TRecord[]) => TRecord[]) => {
-      setItemsState(updater);
-    },
-    [],
+  const refreshSourceIdRef = useRef(
+    `settings-${config.cacheKey}-${Math.random().toString(36).slice(2)}`,
   );
 
-  const loadData = useCallback(
-    async (options?: { silent?: boolean; forceRefresh?: boolean }) => {
-      const {
-        cacheKey,
-        loadErrorTitle,
-        fetchItems,
-      } = configRef.current;
-      const shouldShowLoading =
-        options?.forceRefresh || !hasFreshCache(cacheKey);
-      if (!options?.silent && shouldShowLoading) {
-        setLoading(true);
+  const setItemsUpdater = useCallback((updater: (current: TRecord[]) => TRecord[]) => {
+    setItemsState(updater);
+  }, []);
+
+  const loadData = useCallback(async (options?: { silent?: boolean; forceRefresh?: boolean }) => {
+    const { cacheKey, loadErrorTitle, fetchItems } = configRef.current;
+    const shouldShowLoading = options?.forceRefresh || !hasFreshCache(cacheKey);
+    if (!options?.silent && shouldShowLoading) {
+      setLoading(true);
+    }
+    setError(null);
+    try {
+      const nextItems = await fetchItems(options);
+      setItemsState(nextItems);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : loadErrorTitle);
+      setItemsState([]);
+    } finally {
+      if (!options?.silent) {
+        setLoading(false);
       }
-      setError(null);
-      try {
-        const nextItems = await fetchItems(options);
-        setItemsState(nextItems);
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : loadErrorTitle,
-        );
-        setItemsState([]);
-      } finally {
-        if (!options?.silent) {
-          setLoading(false);
-        }
-      }
-    },
-    [],
-  );
+    }
+  }, []);
 
   useEffect(() => {
     void loadData();
-    const onReferenceChange = () => {
+    const onReferenceChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ sourceId?: string }>).detail;
+      if (detail?.sourceId === refreshSourceIdRef.current) return;
       void loadData({ forceRefresh: true });
     };
-    window.addEventListener(
-      "finance-reference-data-changed",
-      onReferenceChange,
-    );
+    window.addEventListener("finance-reference-data-changed", onReferenceChange);
     return () => {
-      window.removeEventListener(
-        "finance-reference-data-changed",
-        onReferenceChange,
-      );
+      window.removeEventListener("finance-reference-data-changed", onReferenceChange);
     };
   }, [loadData]);
 
@@ -250,9 +222,7 @@ export function useSettingsTab<
       if (editingItem) {
         const updated = await updateItem(editingItem.id, payload);
         setItemsState((current) =>
-          current.map((item) =>
-            item.id === updated.id ? updated : item,
-          ),
+          current.map((item) => (item.id === updated.id ? updated : item)),
         );
         setEditingItem(updated);
       } else {
@@ -263,11 +233,7 @@ export function useSettingsTab<
       }
       confirmDiscardChanges();
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : config.saveErrorTitle,
-      );
+      setError(err instanceof Error ? err.message : config.saveErrorTitle);
     } finally {
       setSaving(false);
     }
@@ -289,17 +255,15 @@ export function useSettingsTab<
   const handleSave = useCallback(async () => {
     setSaving(true);
     setError(null);
+    const scrollTop = listScrollRef.current?.scrollTop;
     const { normalizeDraft, createItem, updateItem } = configRef.current;
     const config = configRef.current;
     try {
-      const prevScroll = listScrollRef.current?.scrollTop;
       const payload = normalizeDraft(form);
       if (editingItem) {
         const updated = await updateItem(editingItem.id, payload);
         setItemsState((current) =>
-          current.map((item) =>
-            item.id === updated.id ? updated : item,
-          ),
+          current.map((item) => (item.id === updated.id ? updated : item)),
         );
         setEditingItem(updated);
       } else {
@@ -308,31 +272,16 @@ export function useSettingsTab<
         setCreateDialogOpen(false);
         setForm(config.EMPTY_FORM);
       }
-      if (prevScroll != null) {
-        const restoreScroll = () => {
-          try {
-            if (listScrollRef.current) {
-              listScrollRef.current.scrollTop = prevScroll;
-            }
-          } catch {
-            // ignore
-          }
-        };
+    } catch (err) {
+      setError(err instanceof Error ? err.message : config.saveErrorTitle);
+    } finally {
+      if (scrollTop != null) {
         requestAnimationFrame(() => {
-          restoreScroll();
-          requestAnimationFrame(() => {
-            restoreScroll();
-            setTimeout(restoreScroll, 120);
-          });
+          if (listScrollRef.current) {
+            listScrollRef.current.scrollTop = scrollTop;
+          }
         });
       }
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : config.saveErrorTitle,
-      );
-    } finally {
       setSaving(false);
     }
   }, [form, editingItem]);
@@ -347,19 +296,13 @@ export function useSettingsTab<
     setError(null);
     try {
       await configRef.current.deleteItem(itemToDelete.id);
-      setItemsState((current) =>
-        current.filter((item) => item.id !== itemToDelete.id),
-      );
+      setItemsState((current) => current.filter((item) => item.id !== itemToDelete.id));
       if (editingItem?.id === itemToDelete.id) {
         resetEditor();
       }
       setItemToDelete(null);
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : configRef.current.deleteErrorTitle,
-      );
+      setError(err instanceof Error ? err.message : configRef.current.deleteErrorTitle);
     } finally {
       setDeletingItemId(null);
     }
@@ -401,5 +344,6 @@ export function useSettingsTab<
     setDiscardChangesOpen,
     setPendingAction,
     setItemToDelete,
+    refreshSourceId: refreshSourceIdRef.current,
   };
 }

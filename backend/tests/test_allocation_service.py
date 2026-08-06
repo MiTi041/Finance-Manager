@@ -742,3 +742,14 @@ class TestSavingsBreakdown:
         self._insert(test_db, -100.0, "tag.spliturlaub2026")
         assert _savings_breakdown("griechenlandurlaub2026")["einzahlungen"] == 500.0
         assert _savings_breakdown("spliturlaub2026")["einzahlungen"] == 100.0
+
+
+
+def test_bafoeg_partial_update_keeps_unsent_fields():
+    from finance_server.models.allocation import BafoegConfig
+
+    body = {"anlagezinsen": 50}
+    cfg = BafoegConfig.model_validate(body)
+    dump = cfg.model_dump(exclude_unset=True, exclude_none=True)
+    assert dump == {"anlagezinsen": 50}
+    assert cfg.interest_rate == 2.0

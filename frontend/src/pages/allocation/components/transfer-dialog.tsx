@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Loader2, ShieldCheck, TriangleAlert, Info } from "lucide-react";
+import { Loader2, ShieldCheck, Info, Zap } from "lucide-react";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -10,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ToggleRow } from "@/components/toggle-row";
 import { formatAmount } from "@/lib/utils/format";
 import { TanRequiredError } from "@/lib/allocation";
 
@@ -21,6 +23,8 @@ type Props = {
   recipientName: string;
   recipientIban: string;
   purpose?: string;
+  instant: boolean;
+  onInstantChange: (instant: boolean) => void;
   onConfirm: (tan?: string) => Promise<void>;
 };
 
@@ -36,11 +40,12 @@ export function TransferDialog({
   recipientName,
   recipientIban,
   purpose,
+  instant,
+  onInstantChange,
   onConfirm,
 }: Props) {
   const [tan, setTan] = useState("");
   const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [tanChallenge, setTanChallenge] = useState<string | null>(null);
   const [tanDecoupled, setTanDecoupled] = useState(false);
 
@@ -49,7 +54,6 @@ export function TransferDialog({
   useEffect(() => {
     if (open) {
       setTan("");
-      setError(null);
       setSending(false);
       setTanChallenge(null);
       setTanDecoupled(false);
@@ -58,7 +62,6 @@ export function TransferDialog({
 
   const handleConfirm = async () => {
     setSending(true);
-    setError(null);
     setTanChallenge(null);
     setTanDecoupled(false);
     try {
@@ -69,7 +72,7 @@ export function TransferDialog({
         setTanChallenge(e.challenge);
         setTanDecoupled(e.decoupled);
       } else {
-        setError(
+        toast.error(
           e instanceof Error
             ? e.message
             : "Die Überweisung ist fehlgeschlagen. Bitte versuche es erneut.",
@@ -135,12 +138,14 @@ export function TransferDialog({
             )}
           </div>
 
-          {error && (
-            <div className="flex min-w-0 items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              <TriangleAlert className="mt-0.5 size-4 shrink-0" />
-              <span className="min-w-0 break-words">{error}</span>
-            </div>
-          )}
+          <ToggleRow
+            title="Echtzeit (SEPA Instant)"
+            description="Geld kommt sofort an, falls deine Bank SEPA-Instant unterstützt."
+            icon={<Zap className="size-4" />}
+            size="sm"
+            checked={instant}
+            onCheckedChange={onInstantChange}
+          />
 
           {tanChallenge && (
             <div className="min-w-0 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">

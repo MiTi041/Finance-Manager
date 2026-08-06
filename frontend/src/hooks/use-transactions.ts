@@ -6,6 +6,7 @@ import type { Transaction, TransactionDto } from "@/types/transaction";
 
 export function useTransactions(queryString: string, refreshVersion: number) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [pendingTransactions, setPendingTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,12 +29,15 @@ export function useTransactions(queryString: string, refreshVersion: number) {
         throw new Error(payload?.detail ?? "Transaktionen konnten nicht geladen werden");
       }
       const raw: TransactionDto[] = Array.isArray(payload?.transactions) ? payload.transactions : [];
+      const rawPending: TransactionDto[] = Array.isArray(payload?.pending) ? payload.pending : [];
       setTransactions(raw.map(mapTransaction));
+      setPendingTransactions(rawPending.map(mapTransaction));
       setLoading(false);
     } catch (err) {
       if (err instanceof AbortError || (err instanceof DOMException && err.name === "AbortError")) return;
       setError(getErrorMessage(err));
       setTransactions([]);
+      setPendingTransactions([]);
       setLoading(false);
     } finally {
       setRefreshing(false);
@@ -48,5 +52,5 @@ export function useTransactions(queryString: string, refreshVersion: number) {
     return () => abortRef.current?.abort();
   }, []);
 
-  return { transactions, loading, refreshing, error, reload: load };
+  return { transactions, pendingTransactions, loading, refreshing, error, reload: load };
 }

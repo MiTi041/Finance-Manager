@@ -10,14 +10,18 @@ export function getRefreshSnapshot() {
   return globalVersion;
 }
 
-export function dispatchRefresh() {
+export function dispatchRefresh(sourceId?: string) {
   globalVersion += 1;
   listeners.forEach((fn) => fn());
 
   try {
     window.dispatchEvent(new CustomEvent("finance-data-refresh"));
     window.dispatchEvent(new CustomEvent("finance-bank-credentials-changed"));
-    window.dispatchEvent(new CustomEvent("finance-reference-data-changed"));
+    window.dispatchEvent(
+      new CustomEvent("finance-reference-data-changed", {
+        detail: { sourceId },
+      }),
+    );
   } catch {
     // ignore if running in non-browser environment
   }

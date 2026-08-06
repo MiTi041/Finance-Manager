@@ -143,10 +143,12 @@ export async function executeTransfer(
   runBucketId: number,
   tan?: string,
   amount?: number,
+  instant?: boolean,
 ): Promise<{ status: string; transfer: unknown }> {
   const body: Record<string, unknown> = {};
   if (tan) body.tan = tan;
   if (amount != null) body.amount = amount;
+  if (instant != null) body.instant = instant;
   const response = await fetch(`${getApiBaseUrl()}/allocation/transfer/${runBucketId}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -316,10 +318,12 @@ export async function executeSavingsPlanTransfer(
   planId: number,
   tan?: string,
   amount?: number,
+  instant?: boolean,
 ): Promise<{ status: string; transfer: unknown }> {
   const body: Record<string, unknown> = {};
   if (tan) body.tan = tan;
   if (amount != null) body.amount = amount;
+  if (instant != null) body.instant = instant;
   const response = await fetch(`${getApiBaseUrl()}/allocation/savings-plans/${planId}/transfer`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

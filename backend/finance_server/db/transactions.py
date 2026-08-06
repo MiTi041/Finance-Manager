@@ -198,6 +198,120 @@ def insert_transactions(rows: Iterable[dict[str, Any]]) -> dict[str, int]:
     }
 
 
+_PENDING_INSERT_COLUMNS = """
+    account_iban, account_bic, account_accountnumber, account_subaccount, account_blz,
+    status, funds_code, transaction_id, customer_reference, bank_reference, extra_details,
+    date, entry_date, guessed_entry_date,
+    transaction_reference, transaction_code, posting_text, prima_nota, purpose,
+    applicant_bic, applicant_iban, applicant_name, return_debit_notes, recipient_name,
+    additional_purpose, gvc_applicant_iban, gvc_applicant_bic, end_to_end_reference,
+    additional_position_reference, applicant_creditor_id, purpose_code,
+    additional_position_date, deviate_applicant, deviate_recipient,
+    FRST_ONE_OFF_RECC, old_SEPA_CI, old_SEPA_additional_position_reference,
+    settlement_tag, debitor_identifier, original_amount, amount, currency,
+    transaction_hash, created_at
+"""
+
+_PENDING_INSERT_PLACEHOLDERS = (
+    ":account_iban, :account_bic, :account_accountnumber, :account_subaccount, :account_blz, "
+    ":status, :funds_code, :transaction_id, :customer_reference, :bank_reference, :extra_details, "
+    ":date, :entry_date, :guessed_entry_date, "
+    ":transaction_reference, :transaction_code, :posting_text, :prima_nota, :purpose, "
+    ":applicant_bic, :applicant_iban, :applicant_name, :return_debit_notes, :recipient_name, "
+    ":additional_purpose, :gvc_applicant_iban, :gvc_applicant_bic, :end_to_end_reference, "
+    ":additional_position_reference, :applicant_creditor_id, :purpose_code, "
+    ":additional_position_date, :deviate_applicant, :deviate_recipient, "
+    ":FRST_ONE_OFF_RECC, :old_SEPA_CI, :old_SEPA_additional_position_reference, "
+    ":settlement_tag, :debitor_identifier, :original_amount, :amount, :currency, "
+    ":transaction_hash, :created_at"
+)
+
+
+def replace_pending_transactions(rows: Iterable[dict[str, Any]]) -> int:
+    normalized_rows = [to_row_payload(row) for row in rows]
+    normalized_rows = [row for row in normalized_rows if abs(row["amount"]) > 0.0001]
+
+    with get_connection() as connection:
+        connection.execute("DELETE FROM vorgemerkte_umsaetze")
+        if not normalized_rows:
+            return 0
+        cursor = connection.executemany(
+            f"INSERT INTO vorgemerkte_umsaetze ({_PENDING_INSERT_COLUMNS}) VALUES ({_PENDING_INSERT_PLACEHOLDERS})",
+            normalized_rows,
+        )
+        return cursor.rowcount if cursor.rowcount >= 0 else 0
+
+
+def pending_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "transaction_hash": row["transaction_hash"],
+        "account_iban": row["account_iban"],
+        "account_bic": row["account_bic"],
+        "account_accountnumber": row["account_accountnumber"],
+        "account_subaccount": row["account_subaccount"],
+        "account_blz": row["account_blz"],
+        "status": row["status"],
+        "funds_code": row["funds_code"],
+        "transaction_id": row["transaction_id"],
+        "customer_reference": row["customer_reference"],
+        "bank_reference": row["bank_reference"],
+        "extra_details": row["extra_details"],
+        "date": row["date"],
+        "entry_date": row["entry_date"],
+        "guessed_entry_date": row["guessed_entry_date"],
+        "transaction_reference": row["transaction_reference"],
+        "transaction_code": row["transaction_code"],
+        "posting_text": row["posting_text"],
+        "prima_nota": row["prima_nota"],
+        "purpose": row["purpose"],
+        "applicant_bic": row["applicant_bic"],
+        "applicant_iban": row["applicant_iban"],
+        "applicant_name": row["applicant_name"],
+        "return_debit_notes": row["return_debit_notes"],
+        "recipient_name": row["recipient_name"],
+        "additional_purpose": row["additional_purpose"],
+        "gvc_applicant_iban": row["gvc_applicant_iban"],
+        "gvc_applicant_bic": row["gvc_applicant_bic"],
+        "end_to_end_reference": row["end_to_end_reference"],
+        "additional_position_reference": row["additional_position_reference"],
+        "applicant_creditor_id": row["applicant_creditor_id"],
+        "purpose_code": row["purpose_code"],
+        "additional_position_date": row["additional_position_date"],
+        "deviate_applicant": row["deviate_applicant"],
+        "deviate_recipient": row["deviate_recipient"],
+        "FRST_ONE_OFF_RECC": row["FRST_ONE_OFF_RECC"],
+        "old_SEPA_CI": row["old_SEPA_CI"],
+        "old_SEPA_additional_position_reference": row["old_SEPA_additional_position_reference"],
+        "settlement_tag": row["settlement_tag"],
+        "debitor_identifier": row["debitor_identifier"],
+        "original_amount": row["original_amount"],
+        "amount": row["amount"],
+        "currency": row["currency"],
+        "created_at": row["created_at"],
+        "kategorie": None,
+        "note": None,
+        "splits": None,
+        "bank_deleted": False,
+        "refund_links": [],
+        "refund_attributed": 0,
+        "refund_total": 0,
+        "is_refund": False,
+    }
+
+
+def fetch_pending_transactions(account_iban: str | None = None) -> list[dict[str, Any]]:
+    query = "SELECT * FROM vorgemerkte_umsaetze"
+    values: list[Any] = []
+    if account_iban:
+        query += " WHERE account_iban = ?"
+        values.append(account_iban)
+    query += " ORDER BY COALESCE(date, created_at) DESC"
+    with get_connection() as connection:
+        rows = connection.execute(query, values).fetchall()
+    return [pending_row_to_dict(row) for row in rows]
+
+
 def _refund_links_map(connection: sqlite3.Connection) -> dict[int, list[dict[str, Any]]]:
     rows = connection.execute(
         """SELECT id, refund_transaction_id, expense_transaction_id, amount

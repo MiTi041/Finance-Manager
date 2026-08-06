@@ -1,122 +1,88 @@
 # Finance Manager
 
-Personal finance management app with automatic bank synchronization via FinTS/EBICS.  
-Built with **Electron + React + Python** — runs on macOS and Windows.
+Persönliche Finanzverwaltung mit automatischer Banksynchronisation über **FinTS/EBICS**.  
+Die App läuft lokal auf deinem Rechner, speichert sensible Daten verschlüsselt und bringt deine Konten und Umsätze an einem Ort zusammen.
 
 ---
 
-## Features
+## Warum diese App?
 
-- **Bank account synchronization** via FinTS (HBCI) — supports ING, Sparkasse and all German FinTS-enabled banks
-- **Transaction overview** with filtering, sorting and category management
-- **Automatic categorization** — assign categories to transactions, group by parent category
-- **Bank credential management** — encrypted storage for multiple bank accounts
-- **Reference data** — resolves account holder names, IBANs, beneficiary accounts automatically
-- **Export / Import** — backup and restore your database via the UI
-- **Auto-updater** — built-in updates via GitHub Releases (electron-updater)
-- **Cross-platform** — macOS (DMG/ZIP) and Windows (NSIS installer)
+- **Banksynchronisation** mit deutschen FinTS-fähigen Banken, darunter ING und Sparkasse
+- **Lokale Datenspeicherung** ohne Cloud-Zwang
+- **Verschlüsselte Bankzugänge** für mehrere Konten
+- **Referenzdaten** zur automatischen Zuordnung von Kontoinhabern, IBANs und Empfängerkonten
+- **Export / Import** für Backup und Wiederherstellung
+- **Auto-Updater** über GitHub Releases
 
 ---
 
-## Screenshots
+## Erste Schritte
 
-> _Coming soon_
-
----
-
-## Architecture
-
-```
-├── frontend/           React + Vite + TypeScript (UI)
-├── backend/            Python FastAPI server (FinTS sync, REST API)
-├── electron/           Electron main process (auto-updater, backend lifecycle)
-├── build/              App icons
-└── .github/workflows/  CI/CD — auto-build & release via GitHub Actions
-```
-
-The backend runs as a PyInstaller-bundled binary, spawned by Electron on startup.  
-The frontend communicates with the backend via REST API (`http://127.0.0.1:8112`).
-
----
-
-## Development
-
-### Prerequisites
+### Voraussetzungen
 
 - [Node.js](https://nodejs.org) ≥ 20
-- [pnpm](https://pnpm.io) (install via `npm i -g pnpm`)
 - [Python](https://python.org) ≥ 3.11
+
+[pnpm](https://pnpm.io) installierst du mit `npm i -g pnpm`.
 
 ### Setup
 
 ```bash
-pnpm install              # Install JS dependencies (root + frontend)
-python3 -m venv backend/.venv             # Create Python virtual environment
-source backend/.venv/bin/activate         # Activate it
-pip install -r backend/requirements.txt   # Install Python dependencies
+pnpm install                                    # JS-Abhängigkeiten (root + frontend)
+python3 -m venv backend/.venv && source backend/.venv/bin/activate
+pip install -r backend/requirements.txt
 ```
 
-### Run for development
+### Entwicklung starten
 
 ```bash
-pnpm run dev              # Starts frontend (Vite) + backend (uvicorn) concurrently
+pnpm run dev        # Frontend (Vite) + Backend (uvicorn)
+pnpm run start      # Kompletter Stack + Electron-Fenster
 ```
 
-Or with the Electron shell:
+---
 
-```bash
-pnpm run start            # Full stack + Electron window
-```
+## FinTS-Produkt-ID
 
-### ⚠️ Wichtiger Hinweis: FinTS-Produkt-ID erforderlich
+Die App erfordert beim ersten Start eine **persönliche FinTS-Produkt-ID** (vorgeschrieben von der Deutschen Kreditwirtschaft). Erst danach werden alle Funktionen freigeschaltet.
 
-Diese Anwendung kann **ohne eine persönliche Produkt-ID nicht genutzt werden**.
+1. Registriere die Anwendung kostenfrei auf [fints.org/de/hersteller/produktregistrierung](https://www.fints.org/de/hersteller/produktregistrierung) und erhalte deine Produkt-ID (z. B. `7FD7RCC1CP14CE8B35C59DD07`)
+2. Trage die ID im Setup-Bildschirm der App ein
 
-Beim ersten Start erscheint ein Setup-Bildschirm, der die Eingabe einer **FinTS-Produkt-ID** zwingend erfordert. Erst danach werden die restlichen Funktionen freigeschaltet.
+> Die Produkt-ID wird **ausschließlich lokal** in der Datenbank gespeichert und ist nicht im Release enthalten. Jeder Nutzer registriert seine eigene ID.
 
-**So erhältst du deine Produkt-ID:**
+---
 
-1. Rufe [fints.org/de/hersteller/produktregistrierung](https://www.fints.org/de/hersteller/produktregistrierung) auf
-2. Registriere die Anwendung **kostenfrei** (vorgeschrieben von der Deutschen Kreditwirtschaft)
-3. Nach erfolgreicher Registrierung erhältst du eine Produkt-ID (z.B. `7FD7RCC1CP14CE8B35C59DD07`)
-4. Trage diese ID im Setup-Bildschirm der App ein
+## Betrieb
 
-> Die Produkt-ID wird ausschließlich **lokal in der Datenbank** gespeichert und ist nicht im Release enthalten. Jeder Nutzer muss seine eigene ID registrieren.
+Das Backend läuft als PyInstaller-Binary und wird von Electron beim Start gestartet.  
+Die Kommunikation erfolgt lokal über die REST-API.
+
+**Tech-Stack:** React · TypeScript · Vite · Electron · Python · FastAPI · SQLite
+
+---
 
 ## Build & Release
 
 ```bash
-pnpm run electron:build   # Builds frontend + PyInstaller backend + Electron package
+pnpm run electron:build   # Frontend + PyInstaller-Backend + Electron-Paket
 ```
 
-On every push to `main`, GitHub Actions automatically:
+Bei jedem Push auf `main` baut GitHub Actions automatisch:
 
-- Builds Electron packages for **macOS** (`.dmg`, `.zip`) and **Windows** (`.exe` installer)
-- Publishes them as a **GitHub Release**
-- Tags the release with the version from `package.json`
+- **macOS**: `.dmg`, `.zip`
+- **Windows**: `.exe` (NSIS-Installer)
 
-Existing installations receive the update automatically via `electron-updater`.
-
----
-
-## Tech Stack
-
-| Layer    | Technology                         |
-| -------- | ---------------------------------- |
-| Frontend | React, TypeScript, Vite, Tailwind  |
-| Backend  | Python, FastAPI, Uvicorn           |
-| Banking  | FinTS protocol via `fints` library |
-| Desktop  | Electron, electron-builder         |
-| Database | SQLite (via Python)                |
-| CI/CD    | GitHub Actions, electron-updater   |
+und veröffentlicht sie als **GitHub Release** (Version aus `package.json`).  
+Bestehende Installationen erhalten das Update automatisch über `electron-updater`.
 
 ---
 
-## Security
+## Sicherheit
 
-- Bank credentials are encrypted at rest using **Fernet (symmetric encryption)**
-- The FinTS session state and encryption keys are stored locally and **never leave your machine**
-- No cloud service — all data stays on your device
-- The application is self-contained with no telemetry or analytics
+- Bankzugangsdaten sind **verschlüsselt gespeichert** (Fernet, symmetrische Verschlüsselung)
+- FinTS-Session-State und Schlüssel bleiben **lokal auf deinem Gerät**
 
-If you discover a security vulnerability, please open a [GitHub Issue](https://github.com/MiTi041/Finance-Manager/issues).
+Alle Daten bleiben auf deinem Gerät. Die App ist in sich geschlossen.
+
+Sicherheitslücken bitte als [GitHub Issue](https://github.com/MiTi041/Finance-Manager/issues) melden.
