@@ -134,8 +134,8 @@ def get_saved_breakdown(tag: str) -> dict[str, float]:
     tag_pattern = tag if tag.startswith("tag.") else f"tag.{tag}"
     with get_connection() as connection:
         rows = connection.execute(
-            "SELECT amount, purpose FROM umsaetze WHERE purpose LIKE ?",
-            (f"%{tag_pattern}%",),
+            "SELECT amount, purpose FROM umsaetze WHERE purpose LIKE ? OR note LIKE ?",
+            (f"%{tag_pattern}%", f"%{tag_pattern}%"),
         ).fetchall()
     return _tag_breakdown(tag, rows)
 
@@ -146,8 +146,8 @@ def get_month_breakdown(tag: str, month: str) -> dict[str, float]:
     month_end = f"{month}-31"
     with get_connection() as connection:
         rows = connection.execute(
-            "SELECT amount, purpose FROM umsaetze WHERE purpose LIKE ? AND date >= ? AND date <= ?",
-            (f"%{tag_pattern}%", month_start, month_end),
+            "SELECT amount, purpose FROM umsaetze WHERE (purpose LIKE ? OR note LIKE ?) AND date >= ? AND date <= ?",
+            (f"%{tag_pattern}%", f"%{tag_pattern}%", month_start, month_end),
         ).fetchall()
     return _tag_breakdown(tag, rows)
 
@@ -160,17 +160,17 @@ def _savings_breakdown(tag: str, month: str | None = None) -> dict[str, float]:
     tag_pattern = _tag_with_space(tag)
     base_like = f"%{tag_pattern}%"
     entnahme_like = f"%{tag_pattern}.entnahme%"
-    where = "purpose LIKE ? AND purpose NOT LIKE ?"
-    params: list[Any] = [base_like, entnahme_like]
+    where = "(COALESCE(purpose, '') LIKE ? OR COALESCE(note, '') LIKE ?) AND COALESCE(purpose, '') NOT LIKE ? AND COALESCE(note, '') NOT LIKE ?"
+    params: list[Any] = [base_like, base_like, entnahme_like, entnahme_like]
     if month:
         where += " AND date >= ? AND date <= ?"
         params += [f"{month}-01", f"{month}-31"]
     with get_connection() as connection:
         base_rows = connection.execute(f"SELECT amount FROM umsaetze WHERE {where}", params).fetchall()
         ent_rows = connection.execute(
-            "SELECT amount FROM umsaetze WHERE purpose LIKE ?"
+            "SELECT amount FROM umsaetze WHERE (COALESCE(purpose, '') LIKE ? OR COALESCE(note, '') LIKE ?)"
             + (f" AND date >= ? AND date <= ?" if month else ""),
-            [entnahme_like] + ([f"{month}-01", f"{month}-31"] if month else []),
+            [entnahme_like, entnahme_like] + ([f"{month}-01", f"{month}-31"] if month else []),
         ).fetchall()
     einzahlungen = sum(abs(r["amount"]) for r in base_rows if r["amount"] < 0)
     verschuldung = sum(r["amount"] for r in base_rows if r["amount"] > 0)
@@ -207,7 +207,7 @@ def get_income_payout_days(month: str) -> list[int]:
                FROM umsaetze
                WHERE amount > 0
                  AND date >= ? AND date <= ?
-                 AND (purpose IS NULL OR purpose NOT LIKE '%tag.%')
+                 AND (COALESCE(purpose, '') NOT LIKE '%tag.%' AND COALESCE(note, '') NOT LIKE '%tag.%')
                ORDER BY applicant_name, purpose, date""",
             (lookback_start, month_end),
         ).fetchall()

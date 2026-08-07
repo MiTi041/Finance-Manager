@@ -743,6 +743,18 @@ class TestSavingsBreakdown:
         assert _savings_breakdown("griechenlandurlaub2026")["einzahlungen"] == 500.0
         assert _savings_breakdown("spliturlaub2026")["einzahlungen"] == 100.0
 
+    def test_tag_in_note_is_matched(self, test_db, monkeypatch):
+        monkeypatch.setattr("finance_server.db.savings.get_connection", lambda: test_db)
+        conn = test_db
+        conn.execute(
+            "INSERT INTO umsaetze (amount, purpose, note, date, entry_date, account_iban, transaction_hash) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (-120.0, "Sparplan", "tag.spliturlaub2026 Geschenk", "2026-07-15", "2026-07-15", "iban", "hash-note-1"),
+        )
+        conn.commit()
+        breakdown = _savings_breakdown("spliturlaub2026")
+        assert breakdown["einzahlungen"] == 120.0
+
 
 
 def test_bafoeg_partial_update_keeps_unsent_fields():

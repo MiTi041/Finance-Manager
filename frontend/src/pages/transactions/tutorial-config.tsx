@@ -316,8 +316,8 @@ export const transactionTutorialSlides: Slide[] = [
         <div className="flex items-center gap-3 rounded-lg border bg-muted/50 px-4 py-3">
           <Tags className="size-5 shrink-0 text-violet-500" />
           <span className="text-sm">
-            Schreibe <strong>#hashtags</strong> in die Notiz – sie werden automatisch als violette
-            Tags angezeigt
+            Schreibe <strong>#hashtags</strong> oder <strong>tag.namen</strong> in die Notiz – sie werden
+            automatisch als violette Tags angezeigt
           </span>
         </div>
         <div className="flex items-center gap-3 rounded-lg border bg-amber-500/5 border-amber-500/20 px-4 py-3">

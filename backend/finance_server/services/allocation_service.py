@@ -289,13 +289,15 @@ class AllocationService:
                         tag = t if t.startswith("tag.") else f"tag.{t}"
                         if tag not in exclude_tags:
                             exclude_tags.append(tag)
-                conditions = " AND ".join("purpose NOT LIKE ?" for _ in exclude_tags)
-                params = [start, end] + [f"%{t}%" for t in exclude_tags]
+                conditions = " AND ".join(f"(COALESCE(purpose, '') NOT LIKE ? AND COALESCE(note, '') NOT LIKE ?)" for _ in exclude_tags)
+                params = [start, end]
+                for t in exclude_tags:
+                    params += [f"%{t}%", f"%{t}%"]
                 with get_connection() as conn:
                     row = conn.execute(
                         f"""SELECT COALESCE(SUM(ABS(amount) - COALESCE(refund_total, 0)), 0) FROM umsaetze
                            WHERE amount < 0 AND date >= ? AND date <= ?
-                           AND (purpose IS NULL OR ({conditions}))""",
+                           AND {conditions}""",
                         params,
                     ).fetchone()
                 bucket["spent"] = round(row[0], 2) if row else 0.0
@@ -354,7 +356,7 @@ class AllocationService:
                    WHERE amount > 0
                      AND NOT EXISTS (SELECT 1 FROM refund_links rl WHERE rl.refund_transaction_id = umsaetze.id)
                      AND date >= ? AND date <= ?
-                     AND (purpose IS NULL OR purpose NOT LIKE '%tag.%')
+                     AND (COALESCE(purpose, '') NOT LIKE '%tag.%' AND COALESCE(note, '') NOT LIKE '%tag.%')
                    ORDER BY applicant_name, purpose, date""",
                 (lookback_start, month_end),
             ).fetchall()
@@ -521,7 +523,7 @@ class AllocationService:
                 f"""SELECT id, amount, applicant_iban, applicant_name, recipient_name, purpose, date
                     FROM umsaetze
                     WHERE amount < 0
-                      AND (purpose LIKE '%tag.spenden%'
+                      AND (purpose LIKE '%tag.spenden%' OR note LIKE '%tag.spenden%'
                            {'OR UPPER(applicant_iban) IN (' + placeholders + ')' if ibans else ''})
                     ORDER BY date DESC""",
                 ibans if ibans else [],
