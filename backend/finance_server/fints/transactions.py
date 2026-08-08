@@ -11,6 +11,7 @@ from finance_server.db import (
     fetch_latest_transaction as fetch_local_latest_transaction,
     fetch_transactions as fetch_local_transactions,
     insert_transactions as insert_local_transactions,
+    replace_pending_transactions as replace_local_pending_transactions,
     load_bank_credentials as load_stored_bank_credentials,
 )
 
