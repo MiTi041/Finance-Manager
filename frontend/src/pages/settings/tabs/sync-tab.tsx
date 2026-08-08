@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import {
-  getSyncStatus,
+import { getSyncStatus,
   setupSync,
   triggerSync,
   clearSync,
@@ -10,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SettingsTabHeader } from "@/components/settings-tab-header";
 import { Progress } from "@/components/ui/progress";
 import {
   Cloud,
@@ -404,7 +404,9 @@ export function SyncTab() {
   if (pollMsg) {
     const isComplete = progress === 100;
     return (
-      <Card className="overflow-hidden py-6">
+      <div>
+        <SettingsTabHeader title="Sync" description="Halte deine Daten geräteübergreifend auf dem neuesten Stand." />
+        <Card className="overflow-hidden py-6">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Cloud className="size-4 animate-pulse text-primary" />
@@ -432,7 +434,8 @@ export function SyncTab() {
             )}
           </div>
         </CardContent>
-      </Card>
+        </Card>
+      </div>
     );
   }
 
@@ -442,7 +445,9 @@ export function SyncTab() {
   if (status?.configured) {
     const hasPending = status.pending_push > 0;
     return (
-      <Card className="overflow-hidden pb-6">
+      <div>
+        <SettingsTabHeader title="Sync" description="Halte deine Daten geräteübergreifend auf dem neuesten Stand." />
+        <Card className="overflow-hidden pb-6">
         <div
           className={`flex items-center gap-3 border-b px-6 py-4 ${
             status.running ? "bg-green-50 dark:bg-green-950/20" : "bg-muted/30"
@@ -518,8 +523,9 @@ export function SyncTab() {
               </div>
             )}
           </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
@@ -527,15 +533,14 @@ export function SyncTab() {
   // Not configured — connect existing / set up new
   // ---------------------------------------------------------------------
   return (
-    <Card className="py-6">
+    <div>
+      <SettingsTabHeader title="Sync" description="Halte deine Daten geräteübergreifend auf dem neuesten Stand." />
+      <Card className="py-6">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <PlugZap className="size-4 text-primary" />
           Sync einrichten
         </CardTitle>
-        <p className="text-sm text-muted-foreground">
-          Halte deine Daten geräteübergreifend über Cloudflare R2 auf dem neuesten Stand.
-        </p>
       </CardHeader>
       <CardContent>
         {/* Segmented control */}
@@ -706,6 +711,7 @@ export function SyncTab() {
           </form>
         )}
       </CardContent>
-    </Card>
+      </Card>
+    </div>
   );
 }

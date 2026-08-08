@@ -9,6 +9,8 @@ import {
   RefreshCw,
   Tags,
   UserCheck,
+  Bell,
+  KeyRound,
 } from "lucide-react";
 import {
   Sidebar,
@@ -25,6 +27,8 @@ import { ZahlungspartnerTab } from "./tabs/zahlungspartner/zahlungspartner-tab";
 import { RecipientAccountsTab } from "./tabs/recipient-accounts/recipient-accounts-tab";
 import { CategoriesTab } from "./tabs/categories/categories-tab";
 import { SyncTab } from "./tabs/sync-tab";
+import { NotificationsTab } from "./tabs/notifications-tab";
+import { ApiKeysTab } from "./tabs/api-keys-tab";
 import { AllocationSettingsTab } from "./tabs/allocation/allocation-settings-tab";
 const SETTINGS_TAB_VALUES = [
   "banking",
@@ -33,6 +37,8 @@ const SETTINGS_TAB_VALUES = [
   "categories",
   "allocation",
   "sync",
+  "notifications",
+  "keys",
   "productId",
   "database",
 ] as const;
@@ -49,6 +55,8 @@ const tabs = [
   { value: "categories" as const, label: "Kategorien", icon: Tags },
   { value: "allocation" as const, label: "Allokation", icon: PiggyBank },
   { value: "sync" as const, label: "Sync", icon: RefreshCw },
+  { value: "notifications" as const, label: "Benachrichtigungen", icon: Bell },
+  { value: "keys" as const, label: "API-Schlüssel", icon: KeyRound },
   { value: "productId" as const, label: "Produkt-ID", icon: Fingerprint },
   { value: "database" as const, label: "Datenbank", icon: Database },
 ];
@@ -60,6 +68,8 @@ const tabComponents: Record<SettingsTabValue, () => React.ReactNode> = {
   categories: () => <CategoriesTab />,
   allocation: () => <AllocationSettingsTab />,
   sync: () => <SyncTab />,
+  notifications: () => <NotificationsTab />,
+  keys: () => <ApiKeysTab />,
   productId: () => <ProductIdTab />,
   database: () => <DbExportImportTab />,
 };

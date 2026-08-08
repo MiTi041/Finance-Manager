@@ -9,7 +9,6 @@ from urllib.request import Request, urlopen
 from typing import Any, cast
 import sqlite3
 
-from finance_server.core.config import settings
 from finance_server.core.database import get_connection
 
 from .utils import normalize_text
@@ -93,14 +92,17 @@ def _resolve_local_logo_path(logo_url: str | None) -> Path | None:
     return path
 
 
-_hunter_logo_cache: dict[str, str | None] = {}
+_hunter_logo_cache: dict[tuple[str, str], str | None] = {}
 
 def _resolve_hunter_company_logo(domain: str) -> str | None:
-    if domain in _hunter_logo_cache:
-        return _hunter_logo_cache[domain]
-    hunter_key = settings.hunter_logo_key.strip()
+    from finance_server.services.api_keys import get_external_key
+
+    hunter_key = get_external_key("hunter_logo_key")
+    cache_key = (domain, hunter_key)
+    if cache_key in _hunter_logo_cache:
+        return _hunter_logo_cache[cache_key]
     if not hunter_key or not domain:
-        _hunter_logo_cache[domain] = None
+        _hunter_logo_cache[cache_key] = None
         return None
 
     url = f"https://api.hunter.io/v2/companies/find?domain={domain}&api_key={hunter_key}"
@@ -114,7 +116,7 @@ def _resolve_hunter_company_logo(domain: str) -> str | None:
 
     logo = payload.get("data", {}).get("logo") if isinstance(payload, dict) else None
     result = logo.strip() if isinstance(logo, str) and logo.strip() else None
-    _hunter_logo_cache[domain] = result
+    _hunter_logo_cache[cache_key] = result
     return result
 
 

@@ -24,6 +24,7 @@ from .client import (
     with_state_retry, make_client, bootstrap_client, save_state, resolve_tan_until_done,
 )
 from finance_server.services.payroll_parsing import enrich_paypal_merchant
+from finance_server.services.overdraw_notify import check_pending_overdraw
 
 
 def store_transactions_in_local_db(transactions: list[dict[str, Any]]) -> int:
@@ -282,6 +283,8 @@ def fetch_and_store_transactions(
         compute_and_store_balance_corrections(effective_scope, payload.get("balances", []))
     except Exception:
         logging.exception("Saldo-Korrektur fehlgeschlagen")
+
+    check_pending_overdraw(effective_scope, payload.get("balances", []), payload.get("pending", []))
 
     try:
         rows = list_transactions_from_local_db(days=None, iban=iban)

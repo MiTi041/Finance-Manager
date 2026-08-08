@@ -17,6 +17,7 @@ import { createCategory, deleteCategory, fetchCategories, updateCategory } from 
 import { type FinanceCategory } from "@/lib/categories/types";
 import { VirtualizedList } from "@/components/virtualized-list";
 import { DiscardChangesDialog, useSettingsTab } from "@/pages/settings/hooks/use-settings-tab";
+import { SettingsTabHeader } from "@/components/settings-tab-header";
 import { CategoryForm } from "./category-form";
 import { CategoryCreateDialog } from "./category-create-dialog";
 
@@ -204,6 +205,10 @@ export function CategoriesTab() {
 
   return (
     <div>
+      <SettingsTabHeader
+        title="Kategorien"
+        description="Verwalte die Kategorien für deine Umsätze."
+      />
       {hook.error ? (
         <EmptyState
           title="Kategorien konnten nicht geladen werden"

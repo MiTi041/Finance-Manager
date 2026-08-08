@@ -1,5 +1,5 @@
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CircleX } from "lucide-react";
+import { CircleX, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 
 import DateFilter from "@/components/date-filter";
@@ -20,7 +20,11 @@ import {
   fetchZahlungspartnerReferenceData,
   type ZahlungspartnerRecord,
 } from "@/lib/zahlungspartner";
-import { deleteTransaction, updateTransactionNote, updateTransactionSplits } from "@/lib/transactions";
+import {
+  deleteTransaction,
+  updateTransactionNote,
+  updateTransactionSplits,
+} from "@/lib/transactions";
 import { updateIbanZahlungspartnerMapping } from "@/lib/reference-data";
 
 import { type Transaction } from "@/types/transaction";
@@ -37,6 +41,7 @@ type SubscriptionOverride = {
 };
 
 import { TransactionRow } from "./components/transaction-row";
+import { PendingRow } from "./components/pending-row";
 import { TransactionsFilterBar } from "./components/transactions-filter-bar";
 import { BatchActionsBar } from "./components/batch-actions-bar";
 import { useSelection } from "./hooks/use-selection";
@@ -57,9 +62,12 @@ export default function TransactionsPage() {
     reload,
     linkedAccounts = [],
     selectedBank = null,
+    accountBalances = [],
   } = useFinanceData(dateFilter, { deletedBankTransactionsIncluded: true });
 
-  const [ibanToZahlungspartner, setIbanToZahlungspartner] = useState<Map<string, number>>(new Map());
+  const [ibanToZahlungspartner, setIbanToZahlungspartner] = useState<Map<string, number>>(
+    new Map(),
+  );
   const [zahlungspartner, setZahlungspartner] = useState<ZahlungspartnerRecord[]>([]);
   const [categories, setCategories] = useState<FinanceCategory[]>([]);
   const [predictionsMap, setPredictionsMap] = useState<
@@ -78,9 +86,15 @@ export default function TransactionsPage() {
   const [pendingCategoryFocusId, setPendingCategoryFocusId] = useState<number | null>(null);
   const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
   const [deletingTransaction, setDeletingTransaction] = useState(false);
-  const [subscriptionTransactionIds, setSubscriptionTransactionIds] = useState<Set<number>>(new Set());
-  const [subscriptionOverrideMap, setSubscriptionOverrideMap] = useState<Map<number, SubscriptionOverride>>(new Map());
-  const [subscriptionLinkMap, setSubscriptionLinkMap] = useState<Map<number, { counterpartyName: string; amount: number }>>(new Map());
+  const [subscriptionTransactionIds, setSubscriptionTransactionIds] = useState<Set<number>>(
+    new Set(),
+  );
+  const [subscriptionOverrideMap, setSubscriptionOverrideMap] = useState<
+    Map<number, SubscriptionOverride>
+  >(new Map());
+  const [subscriptionLinkMap, setSubscriptionLinkMap] = useState<
+    Map<number, { counterpartyName: string; amount: number }>
+  >(new Map());
   const categoryTriggerRefs = useRef(new Map<number, HTMLButtonElement | null>());
   const virtualListRef = useRef<VirtualizedListRef>(null);
   const pendingRefundScrollRef = useRef<number | null>(null);
@@ -161,7 +175,8 @@ export default function TransactionsPage() {
             ids.add(tid);
             links.set(tid, { counterpartyName, amount: sub.amount });
           }
-          const hasOverride = sub._counterpartyName !== undefined && sub._counterpartyName !== sub.name;
+          const hasOverride =
+            sub._counterpartyName !== undefined && sub._counterpartyName !== sub.name;
           if (hasOverride && sub.transactionIds) {
             for (const tid of sub.transactionIds) {
               overrides.set(tid, {
@@ -180,7 +195,9 @@ export default function TransactionsPage() {
         setSubscriptionLinkMap(links);
       })
       .catch(() => {});
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, []);
 
   const linkedAccountByIban = useMemo(
@@ -346,7 +363,9 @@ export default function TransactionsPage() {
       await loadZahlungspartnerData({ forceRefresh: true });
       toast.success("Zahlungspartner erstellt und IBAN verknüpft");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Zahlungspartner konnte nicht erstellt werden");
+      toast.error(
+        err instanceof Error ? err.message : "Zahlungspartner konnte nicht erstellt werden",
+      );
       throw err;
     }
   };
@@ -506,6 +525,11 @@ export default function TransactionsPage() {
     transactions,
   ]);
 
+  const selectableTransactions = useMemo(
+    () => visibleTransactions.filter((transaction) => !transaction.technisch.isPending),
+    [visibleTransactions],
+  );
+
   const {
     selectedTransactionIds,
     selectedCount,
@@ -513,7 +537,41 @@ export default function TransactionsPage() {
     isAllVisibleSelected,
     handleSelectAllVisible,
     clearSelection,
-  } = useSelection(visibleTransactions);
+  } = useSelection(selectableTransactions);
+
+  const listItems = useMemo(
+    () => [...pendingTransactions, ...filteredTransactions],
+    [pendingTransactions, filteredTransactions],
+  );
+
+  const pendingOverrunAccounts = useMemo(() => {
+    if (dateFilter.timeSpan || dateFilter.timeRange) return [];
+
+    const pendingSumByIban = new Map<string, number>();
+    for (const transaction of pendingTransactions) {
+      const iban = normalizeIban(transaction.konto.iban);
+      if (!iban) continue;
+      pendingSumByIban.set(iban, (pendingSumByIban.get(iban) ?? 0) + transaction.betrag.wert);
+    }
+    if (pendingSumByIban.size === 0) return [];
+
+    const overrun: Array<{ iban: string; name: string; balance: number; shortfall: number }> = [];
+    for (const account of accountBalances) {
+      const iban = normalizeIban(account.accountIban);
+      const pending = pendingSumByIban.get(iban);
+      if (pending == null || pending >= 0) continue;
+      const shortfall = account.balance + pending;
+      if (shortfall < 0) {
+        overrun.push({
+          iban,
+          name: account.accountName || account.bankName || iban,
+          balance: account.balance,
+          shortfall,
+        });
+      }
+    }
+    return overrun;
+  }, [accountBalances, dateFilter.timeSpan, dateFilter.timeRange, pendingTransactions]);
 
   const {
     batchDeleteOpen,
@@ -563,44 +621,26 @@ export default function TransactionsPage() {
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 py-6">
       <DateFilter value={dateFilter} onChange={setDateFilter} />
 
-      {pendingTransactions.length > 0 ? (
-        <section className="rounded-lg border border-dashed bg-muted/30">
-          <div className="flex items-center justify-between border-b border-muted/60 px-4 py-2">
-            <h2 className="text-sm font-medium text-muted-foreground">Vorgemerkte Transaktionen</h2>
-            <span className="text-xs text-muted-foreground">{pendingTransactions.length}</span>
+      {pendingOverrunAccounts.length > 0 ? (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <div className="flex items-center gap-2 font-medium">
+            <TriangleAlert className="size-4 shrink-0" />
+            <span>Vorgemerkte Umsätze überschreiten das Kontoguthaben</span>
           </div>
-          <ul>
-            {pendingTransactions.map((transaction) => (
-              <li
-                key={transaction.id}
-                className="flex items-center justify-between gap-4 border-b border-muted/60 px-4 py-2.5 last:border-b-0"
-              >
-                <div className="flex min-w-0 items-baseline gap-2">
-                  <span className="truncate text-sm font-medium text-foreground">
-                    {transaction.zahlungspartner.name || "Unbekannt"}
-                  </span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {formatDate(transaction.daten.buchungsdatum || transaction.daten.erstelltAm)}
-                  </span>
-                </div>
-                <span
-                  className={
-                    transaction.betrag.wert < 0
-                      ? "shrink-0 text-sm font-semibold tabular-nums text-destructive"
-                      : "shrink-0 text-sm font-semibold tabular-nums text-green-600"
-                  }
-                >
-                  {formatAmount(transaction.betrag.wert, transaction.betrag.waehrung)}
-                </span>
+          <ul className="mt-1.5 space-y-1 pl-6 text-xs text-destructive/90">
+            {pendingOverrunAccounts.map((account) => (
+              <li key={account.iban}>
+                {account.name}: {formatAmount(Math.abs(account.shortfall), "EUR")} über dem Guthaben
+                von {formatAmount(account.balance, "EUR")}
               </li>
             ))}
           </ul>
-        </section>
+        </div>
       ) : null}
 
       <VirtualizedList
         ref={virtualListRef}
-        items={filteredTransactions}
+        items={listItems}
         loading={loading}
         csvExport={true}
         searchPlaceholder="Transaktionen suchen..."
@@ -659,6 +699,7 @@ export default function TransactionsPage() {
         filterItem={handleFilterTransaction}
         getItemKey={(transaction) => transaction.id}
         getItemHeight={(transaction) => {
+          if (transaction.technisch.isPending) return 88;
           if (expandedTransactionId !== transaction.id) return 88;
           const splitHeight = transaction.technisch.splits
             ? transaction.technisch.splits.length * 52 + 80
@@ -671,6 +712,14 @@ export default function TransactionsPage() {
           return baseHeight + splitHeight;
         }}
         renderItem={(transaction) => {
+          if (transaction.technisch.isPending) {
+            return (
+              <PendingRow
+                transaction={transaction}
+                accountBank={linkedAccountByIban.get(normalizeIban(transaction.konto.iban)) ?? null}
+              />
+            );
+          }
           const accountBank = linkedAccountByIban.get(normalizeIban(transaction.konto.iban));
           const partnerBank = linkedAccountByIban.get(
             normalizeIban(transaction.zahlungspartner.iban),
@@ -709,9 +758,9 @@ export default function TransactionsPage() {
               onSaveCategory={(transactionId, categoryId) => {
                 void saveTransactionCategory(transactionId, categoryId);
               }}
-               onSaveNote={saveTransactionNote}
-               onSaveSplits={saveTransactionSplits}
-               onNoteDraftChange={(draft) => {
+              onSaveNote={saveTransactionNote}
+              onSaveSplits={saveTransactionSplits}
+              onNoteDraftChange={(draft) => {
                 if (expandedTransactionId === transaction.id) {
                   expandedNoteDraft.current = draft;
                 }
@@ -723,7 +772,9 @@ export default function TransactionsPage() {
                 categoryTriggerRefs.current.set(transaction.id, node);
               }}
               allTransactions={transactions}
-              onRefundLinkChange={() => { void reload(); }}
+              onRefundLinkChange={() => {
+                void reload();
+              }}
             />
           );
         }}

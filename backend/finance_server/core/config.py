@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     sync_r2_secret_access_key: str = ""
     sync_r2_bucket: str = "finance-sync"
 
+    resend_api_key: str = ""
+    resend_from: str = ""
+
     vercel: str = ""
 
 

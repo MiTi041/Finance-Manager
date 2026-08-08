@@ -19,6 +19,7 @@ import {
 import { VirtualizedList } from "@/components/virtualized-list";
 import { BrandIcon } from "@/components/bank-logo";
 import { DiscardChangesDialog, useSettingsTab } from "@/pages/settings/hooks/use-settings-tab";
+import { SettingsTabHeader } from "@/components/settings-tab-header";
 import { RecipientAccountForm } from "./recipient-account-form";
 import { RecipientAccountCreateDialog } from "./recipient-account-create-dialog";
 
@@ -148,6 +149,10 @@ export function RecipientAccountsTab() {
 
   return (
     <div>
+      <SettingsTabHeader
+        title="Empfängerkonten"
+        description="Verwalte die Konten, an die Überweisungen möglich sind."
+      />
       {hook.error ? (
         <EmptyState
           title="Empfängerkonten konnten nicht geladen werden"

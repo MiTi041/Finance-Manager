@@ -20,6 +20,7 @@ import {
 import { resolveZahlungspartnerLogoSrc } from "@/lib/bank/zahlungspartner-logo";
 import { VirtualizedList, type VirtualizedListRef } from "@/components/virtualized-list";
 import { DiscardChangesDialog, useSettingsTab } from "@/pages/settings/hooks/use-settings-tab";
+import { SettingsTabHeader } from "@/components/settings-tab-header";
 import { ZahlungspartnerForm } from "./zahlungspartner-form";
 import { ZahlungspartnerCreateDialog } from "./zahlungspartner-create-dialog";
 
@@ -367,6 +368,10 @@ export function ZahlungspartnerTab() {
 
   return (
     <div>
+      <SettingsTabHeader
+        title="Zahlungspartner"
+        description="Verwalte die Zahlungspartner, mit denen deine Umsätze verknüpft sind."
+      />
       {hook.error ? (
         <EmptyState
           title="Zahlungspartner konnten nicht geladen werden"

@@ -226,6 +226,8 @@ export interface Transaction {
     bankDeleted: boolean;
 
     isRefund: boolean;
+
+    isPending?: boolean;
   };
 }
 

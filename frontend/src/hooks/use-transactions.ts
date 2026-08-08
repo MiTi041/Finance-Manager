@@ -31,7 +31,13 @@ export function useTransactions(queryString: string, refreshVersion: number) {
       const raw: TransactionDto[] = Array.isArray(payload?.transactions) ? payload.transactions : [];
       const rawPending: TransactionDto[] = Array.isArray(payload?.pending) ? payload.pending : [];
       setTransactions(raw.map(mapTransaction));
-      setPendingTransactions(rawPending.map(mapTransaction));
+      setPendingTransactions(
+        rawPending.map((dto) => {
+          const transaction = mapTransaction(dto);
+          transaction.technisch.isPending = true;
+          return transaction;
+        }),
+      );
       setLoading(false);
     } catch (err) {
       if (err instanceof AbortError || (err instanceof DOMException && err.name === "AbortError")) return;

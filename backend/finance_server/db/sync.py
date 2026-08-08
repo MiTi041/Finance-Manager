@@ -134,6 +134,9 @@ def _resolve_lookup(
 
 SYNCED_APP_SETTING_KEYS = {
     "bafoeg_enabled",
+    "resend_api_key",
+    "resend_from",
+    "hunter_logo_key",
 }
 
 

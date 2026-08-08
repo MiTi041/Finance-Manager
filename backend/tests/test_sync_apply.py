@@ -401,3 +401,24 @@ class TestAppSettings:
             test_db.execute("SELECT COUNT(*) FROM app_settings WHERE key = 'sync_enc_key'").fetchone()[0]
             == 0
         )
+
+    def test_external_keys_synced(self, test_db):
+        for key, value in {
+            "resend_api_key": "re_123",
+            "resend_from": "no-reply@example.com",
+            "hunter_logo_key": "abc",
+        }.items():
+            ok = _apply(
+                test_db,
+                _op(
+                    "app_settings",
+                    None,
+                    "INSERT",
+                    {"key": key, "value": value, "updated_at": "2026-01-01T00:00:00+00:00"},
+                ),
+            )
+            assert ok
+            row = test_db.execute(
+                "SELECT value FROM app_settings WHERE key = ?", (key,)
+            ).fetchone()
+            assert row["value"] == value
