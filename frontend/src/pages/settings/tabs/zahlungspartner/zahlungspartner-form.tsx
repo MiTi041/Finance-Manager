@@ -18,6 +18,7 @@ type OwnerFormState = {
   logo_url: string;
   logo_white_background: boolean;
   logo_padding: boolean;
+  is_own_account: boolean;
   is_company: boolean;
 };
 
@@ -62,10 +63,13 @@ export function ZahlungspartnerForm({
   hasLocalImage,
   logoSrc,
 }: Props) {
-  const updateOwnerKind = (isCompany: boolean) => {
+  const updateOwnerKind = (value: string) => {
+    const isCompany = value === "company" || value === "own";
+    const isOwnAccount = value === "own";
     setForm((current) => ({
       ...current,
       is_company: isCompany,
+      is_own_account: isOwnAccount,
       website: isCompany ? current.website : "",
       logo_url: isCompany ? current.logo_url : "",
       logo_white_background: isCompany ? current.logo_white_background : false,
@@ -224,8 +228,14 @@ export function ZahlungspartnerForm({
                 Typ
               </label>
               <Select
-                value={form.is_company ? "company" : "person"}
-                onValueChange={(value) => updateOwnerKind(value === "company")}
+                value={
+                  form.is_own_account
+                    ? "own"
+                    : form.is_company
+                      ? "company"
+                      : "person"
+                }
+                onValueChange={(value) => updateOwnerKind(value)}
               >
                 <SelectTrigger
                   id={`owner-kind-${owner.id}`}
@@ -235,6 +245,7 @@ export function ZahlungspartnerForm({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="company">Unternehmen</SelectItem>
+                  <SelectItem value="own">Eigenes Konto</SelectItem>
                   <SelectItem value="person">Einzelperson</SelectItem>
                 </SelectContent>
               </Select>

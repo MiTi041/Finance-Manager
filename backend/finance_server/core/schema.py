@@ -232,7 +232,8 @@ def create_reference_tables(connection: sqlite3.Connection) -> None:
             local_logo_path TEXT,
             logo_white_background INTEGER NOT NULL DEFAULT 0,
             logo_padding INTEGER NOT NULL DEFAULT 0,
-            is_company INTEGER NOT NULL DEFAULT 1
+            is_company INTEGER NOT NULL DEFAULT 1,
+            is_own_account INTEGER NOT NULL DEFAULT 0
         )
         """
     )
@@ -263,6 +264,7 @@ def create_reference_tables(connection: sqlite3.Connection) -> None:
             bic TEXT,
             recipient_name TEXT NOT NULL,
             is_donation_account INTEGER NOT NULL DEFAULT 0,
+            local_logo_path TEXT,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
@@ -313,6 +315,7 @@ def migrate_reference_tables(connection: sqlite3.Connection) -> None:
             "logo_white_background": "INTEGER NOT NULL DEFAULT 0",
             "logo_padding": "INTEGER NOT NULL DEFAULT 0",
             "is_company": "INTEGER NOT NULL DEFAULT 1",
+            "is_own_account": "INTEGER NOT NULL DEFAULT 0",
         },
     )
 
@@ -322,6 +325,7 @@ def migrate_reference_tables(connection: sqlite3.Connection) -> None:
         {
             "bic": "TEXT",
             "is_donation_account": "INTEGER NOT NULL DEFAULT 0",
+            "local_logo_path": "TEXT",
         },
     )
 

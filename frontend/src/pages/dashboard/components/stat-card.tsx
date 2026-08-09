@@ -1,8 +1,13 @@
 import type { ComponentType, ReactNode } from "react";
-import { ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, Clock } from "lucide-react";
 import NumberFlow, { type Format } from "@number-flow/react";
 import { BankLogo } from "@/components/bank-logo";
 import { Button } from "@/components/ui/button";
+
+const euroFormatter = new Intl.NumberFormat("de-DE", {
+  style: "currency",
+  currency: "EUR",
+});
 
 type AccountBalance = {
   bankLogo?: string;
@@ -10,6 +15,7 @@ type AccountBalance = {
   accountName: string;
   bankName: string;
   balance: number;
+  balancePending?: number;
 };
 
 type StatCardProps = {
@@ -23,10 +29,22 @@ type StatCardProps = {
   icon: ComponentType<{ size?: number }>;
   footer?: string;
   accountBalances?: AccountBalance[];
+  pendingValue?: number;
   action?: ReactNode;
   transferableIbans?: Set<string>;
   onAccountTransfer?: (iban: string) => void;
 };
+
+function PendingLine({ value }: { value: number }) {
+  return (
+    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+      <Clock size={13} />
+      <span>Vorgemerkt:</span>
+      <span className="tabular-nums">{euroFormatter.format(value)}</span>
+      <span className="tabular-nums text-foreground">→ {euroFormatter.format(value)}</span>
+    </div>
+  );
+}
 
 export function StatCard({
   title,
@@ -39,6 +57,7 @@ export function StatCard({
   icon: Icon,
   footer,
   accountBalances,
+  pendingValue,
   action,
   transferableIbans,
   onAccountTransfer,
@@ -57,12 +76,6 @@ export function StatCard({
         </div>
       </div>
       <div className="flex-1">
-        <NumberFlow
-          value={value}
-          format={valueFormat}
-          locales={valueLocales}
-          className="pr-8 text-[26px] font-bold tabular-nums tracking-tight text-foreground"
-        />
         {sub && (
           <div
             className="mt-1.5 flex items-center gap-1 text-xs"
@@ -73,6 +86,26 @@ export function StatCard({
             {trend === "up" && <ArrowUpRight size={13} />}
             {trend === "down" && <ArrowDownRight size={13} />}
             {sub}
+          </div>
+        )}
+        <div className="flex items-baseline gap-2">
+          <NumberFlow
+            value={value}
+            format={valueFormat}
+            locales={valueLocales}
+            className="text-[26px] font-bold tabular-nums tracking-tight text-foreground"
+          />
+          {pendingValue != null && (
+            <span className="text-sm font-medium tabular-nums text-muted-foreground/60">
+              {euroFormatter.format(value + pendingValue)}
+            </span>
+          )}
+        </div>
+        {pendingValue != null && (
+          <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+            <Clock size={13} />
+            <span>Vorgemerkt:</span>
+            <span className="tabular-nums">{euroFormatter.format(pendingValue)}</span>
           </div>
         )}
       </div>
@@ -96,14 +129,24 @@ export function StatCard({
                   >
                     {acc.accountName}
                   </span>
-                  <span
-                    className={`font-mono text-xs tabular-nums ${acc.balance >= 0 ? "text-emerald-500" : "text-red-500"}`}
-                  >
-                    {new Intl.NumberFormat("de-DE", {
-                      style: "currency",
-                      currency: "EUR",
-                    }).format(acc.balance)}
-                  </span>
+                  <div className="flex items-baseline gap-2">
+                          <span
+                            className={`font-mono text-xs tabular-nums ${acc.balance >= 0 ? "text-emerald-500" : "text-red-500"}`}
+                          >
+                            {euroFormatter.format(acc.balance)}
+                          </span>
+                          {acc.balancePending ? (
+                            <span className="font-mono text-[10px] tabular-nums text-muted-foreground/60">
+                              {euroFormatter.format(acc.balance + acc.balancePending)}
+                            </span>
+                          ) : null}
+                        </div>
+                        {acc.balancePending ? (
+                          <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
+                            <Clock className="mr-1 inline size-3" />
+                            Vorgemerkt: {euroFormatter.format(acc.balancePending)}
+                          </span>
+                        ) : null}
                 </div>
               </div>
               {transferableIbans?.has(acc.accountIban) && (

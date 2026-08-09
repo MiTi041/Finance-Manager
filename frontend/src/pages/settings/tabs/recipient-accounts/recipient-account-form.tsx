@@ -1,7 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ToggleRow } from "@/components/toggle-row";
-import { Trash2 } from "lucide-react";
+import { BrandIcon } from "@/components/bank-logo";
+import { Plus, Trash2 } from "lucide-react";
 import { type RecipientAccountRecord } from "@/lib/recipient-accounts";
 
 type RecipientAccountFormState = {
@@ -21,6 +22,13 @@ type Props = {
   onSave: () => void;
   onDelete: () => void;
   deleting: boolean;
+  isPerson: boolean;
+  hasLogo: boolean;
+  logoSrc: string;
+  uploadingLogo: boolean;
+  deletingLogo: boolean;
+  onLogoUpload: (file: File) => void;
+  onLogoDelete: () => void;
 };
 
 export function RecipientAccountForm({
@@ -32,6 +40,13 @@ export function RecipientAccountForm({
   onSave,
   onDelete,
   deleting,
+  isPerson,
+  hasLogo,
+  logoSrc,
+  uploadingLogo,
+  deletingLogo,
+  onLogoUpload,
+  onLogoDelete,
 }: Props) {
   return (
     <div className="border-y border-muted/60 bg-muted/20">
@@ -124,6 +139,100 @@ export function RecipientAccountForm({
               />
             </div>
           </div>
+
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium">Logo</label>
+            {hasLogo ? (
+              <div className="flex items-center gap-3 rounded-lg border border-dashed px-4 py-3">
+                <BrandIcon
+                  src={logoSrc}
+                  alt={form.account_name}
+                  sizeClassName="size-12 shrink-0"
+                  backgroundClassName="bg-zinc-900"
+                  kind={isPerson ? "person" : "company"}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium text-foreground mb-2">
+                    Lokales Bild hinterlegt
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <label className="cursor-pointer group" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (file) onLogoUpload(file);
+                          event.target.value = "";
+                        }}
+                      />
+                      <span className="inline-flex h-10 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-xs font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground">
+                        {uploadingLogo ? (
+                          <>
+                            <span className="size-3 animate-spin rounded-full border border-current border-t-transparent" />
+                            Hochladen…
+                          </>
+                        ) : (
+                          "Bild ersetzen"
+                        )}
+                      </span>
+                    </label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onLogoDelete();
+                      }}
+                      disabled={deletingLogo}
+                    >
+                      {deletingLogo ? (
+                        <>
+                          <span className="mr-1 size-3 animate-spin rounded-full border border-current border-t-transparent" />
+                          Lösche…
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 className="mr-1 size-3" />
+                          Bild entfernen
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <label className="cursor-pointer group" onClick={(e) => e.stopPropagation()}>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) onLogoUpload(file);
+                    event.target.value = "";
+                  }}
+                />
+                <div className="flex items-center gap-3 rounded-lg border border-dashed px-4 py-3 transition-colors group-hover:border-muted-foreground/60 group-hover:bg-muted/40">
+                  <div className="flex size-9 shrink-0 items-center justify-center rounded-md border border-dashed border-muted-foreground/40 bg-background text-muted-foreground transition-colors group-hover:text-foreground">
+                    {uploadingLogo ? (
+                      <span className="size-4 animate-spin rounded-full border border-current border-t-transparent" />
+                    ) : (
+                      <Plus className="size-4" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-foreground">
+                      {uploadingLogo ? "Wird hochgeladen…" : "Logo hochladen"}
+                    </p>
+                  </div>
+                </div>
+              </label>
+            )}
+          </div>
+
           <ToggleRow
             title="Spendenkonto"
             description="Wird für Spenden-Überweisungen genutzt."

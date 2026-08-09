@@ -105,6 +105,12 @@ export function TransactionRow({
 
   const isSaving = note.savingNote || splits.savingSplits;
 
+  const isKontotransfer = Boolean(
+    partnerBank ||
+      (ownerId != null &&
+        zahlungspartnerOptions.some((o) => o.id === ownerId && o.is_own_account)),
+  );
+
   useEffect(() => {
     if (!isExpanded || currentCategoryId != null || predictedCategoryId == null) return;
     if (transaction.technisch.splits) return;
@@ -172,6 +178,7 @@ export function TransactionRow({
         isUnassigned={isUnassigned}
         isSubscriptionTransaction={isSubscriptionTransaction}
         subscriptionLink={subscriptionLink}
+        isKontotransfer={isKontotransfer}
         unknownIban={unknownIban}
         onToggleRow={onToggleRow}
         onOpenRefundSection={onOpenRefundSection}

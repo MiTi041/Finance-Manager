@@ -5,6 +5,7 @@ import { getErrorMessage } from "@/lib/utils/error";
 export interface AccountBalanceData {
   account_iban: string;
   balance: number;
+  balance_pending?: number;
 }
 
 export function useAccountBalances(queryString: string, refreshVersion: number) {

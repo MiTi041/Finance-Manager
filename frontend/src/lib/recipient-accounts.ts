@@ -8,6 +8,7 @@ export type RecipientAccountRecord = {
   bic?: string | null;
   recipient_name: string;
   is_donation_account: boolean;
+  local_logo_path?: string | null;
 };
 
 export async function fetchRecipientAccountsReferenceData(options?: {
@@ -68,6 +69,41 @@ export async function updateRecipientAccount(
         "Content-Type": "application/json",
       },
       body: JSON.stringify(payload),
+    },
+  );
+
+  const result = await parseJsonResponse(response);
+  await emitReferenceChange();
+  return result;
+}
+
+export async function uploadRecipientAccountLogo(
+  recipientAccountId: number,
+  file: File,
+): Promise<RecipientAccountRecord> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(
+    `${getApiBaseUrl()}/db/reference-data/recipient-accounts/${recipientAccountId}/logo`,
+    {
+      method: "POST",
+      body: formData,
+    },
+  );
+
+  const result = await parseJsonResponse(response);
+  await emitReferenceChange();
+  return result;
+}
+
+export async function deleteRecipientAccountLogo(
+  recipientAccountId: number,
+): Promise<RecipientAccountRecord> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/db/reference-data/recipient-accounts/${recipientAccountId}/logo`,
+    {
+      method: "DELETE",
     },
   );
 

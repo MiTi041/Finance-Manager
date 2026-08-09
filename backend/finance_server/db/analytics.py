@@ -97,8 +97,21 @@ def fetch_account_balances(
             params,
         ).fetchall()
 
+        pending_rows = conn.execute(
+            """
+            SELECT account_iban, COALESCE(SUM(amount), 0) AS balance_pending
+            FROM vorgemerkte_umsaetze
+            GROUP BY account_iban
+            """
+        ).fetchall()
+    pending_by_iban = {row["account_iban"]: row["balance_pending"] for row in pending_rows}
+
     return [
-        {"account_iban": row["account_iban"], "balance": round(float(row["balance"]), 2)}
+        {
+            "account_iban": row["account_iban"],
+            "balance": round(float(row["balance"]), 2),
+            "balance_pending": round(float(pending_by_iban.get(row["account_iban"], 0)), 2),
+        }
         for row in rows
     ]
 

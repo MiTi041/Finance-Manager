@@ -31,12 +31,14 @@ const EMPTY_FORM = {
   logo_white_background: false,
   logo_padding: false,
   is_company: true,
+  is_own_account: false,
 };
 
 type OwnerFormState = typeof EMPTY_FORM;
 
-function ownerKindLabel(isCompany: boolean) {
-  return isCompany ? "Unternehmen" : "Einzelperson";
+function ownerKindLabel(owner: ZahlungspartnerRecord) {
+  if (owner.is_own_account) return "Eigenes Konto";
+  return owner.is_company ? "Unternehmen" : "Einzelperson";
 }
 
 function avatarKind(isCompany: boolean) {
@@ -52,6 +54,7 @@ function normalizeOwnerDraft(form: OwnerFormState) {
     logo_url: isCompany ? form.logo_url.trim() || null : null,
     logo_white_background: isCompany ? form.logo_white_background : false,
     logo_padding: isCompany ? form.logo_padding : false,
+    is_own_account: isCompany ? form.is_own_account : false,
     is_company: isCompany,
   };
 }
@@ -66,6 +69,7 @@ function isOwnerDirty(editingOwner: ZahlungspartnerRecord | null, form: OwnerFor
       draft.logo_url !== null ||
       draft.logo_white_background !== false ||
       draft.logo_padding !== false ||
+      draft.is_own_account !== false ||
       draft.is_company !== true
     );
   }
@@ -76,6 +80,7 @@ function isOwnerDirty(editingOwner: ZahlungspartnerRecord | null, form: OwnerFor
     draft.logo_url !== (editingOwner.logo_url ?? null) ||
     draft.logo_white_background !== (editingOwner.logo_white_background ?? false) ||
     draft.logo_padding !== (editingOwner.logo_padding ?? false) ||
+    draft.is_own_account !== (editingOwner.is_own_account ?? false) ||
     draft.is_company !== editingOwner.is_company
   );
 }
@@ -119,6 +124,7 @@ export function ZahlungspartnerTab() {
       logo_url: owner.logo_url ?? "",
       logo_white_background: owner.logo_white_background ?? false,
       logo_padding: owner.logo_padding ?? false,
+      is_own_account: owner.is_own_account ?? false,
       is_company: owner.is_company,
     }),
   });
@@ -262,6 +268,7 @@ export function ZahlungspartnerTab() {
       logo_url: owner.logo_url ?? "",
       logo_white_background: owner.logo_white_background ?? false,
       logo_padding: owner.logo_padding ?? false,
+      is_own_account: owner.is_own_account ?? false,
       is_company: owner.is_company,
     });
 
@@ -305,6 +312,7 @@ export function ZahlungspartnerTab() {
           logo_url: updatedOwner.logo_url ?? "",
           logo_white_background: updatedOwner.logo_white_background ?? false,
           logo_padding: updatedOwner.logo_padding ?? false,
+          is_own_account: updatedOwner.is_own_account ?? false,
           is_company: updatedOwner.is_company,
         });
       } else {
@@ -340,6 +348,7 @@ export function ZahlungspartnerTab() {
       owner.logo_url ?? "",
       owner.ibans.join(" "),
       owner.is_company ? "unternehmen" : "einzelperson",
+      owner.is_own_account ? "eigenes konto kontotransfer" : "",
     ]
       .join(" ")
       .toLowerCase();
@@ -508,8 +517,16 @@ export function ZahlungspartnerTab() {
                         {owner.name}
                       </span>
                       <Badge variant="secondary" className="text-[11px]">
-                        {ownerKindLabel(owner.is_company)}
+                        {ownerKindLabel(owner)}
                       </Badge>
+                      {owner.is_own_account && (
+                        <Badge
+                          variant="outline"
+                          className="border-sky-500/30 bg-sky-500/15 text-sky-700 text-[11px]"
+                        >
+                          Kontotransfer
+                        </Badge>
+                      )}
                       {owner.is_company && !owner.website?.trim() && (
                         <Badge
                           variant="outline"

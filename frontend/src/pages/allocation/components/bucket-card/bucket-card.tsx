@@ -1,4 +1,12 @@
-import { PiggyBank, ShieldCheck, TrendingUp, Heart, Wallet, TriangleAlert } from "lucide-react";
+import {
+  PiggyBank,
+  ShieldCheck,
+  TrendingUp,
+  Heart,
+  Wallet,
+  TriangleAlert,
+  Repeat,
+} from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { HelpButton } from "@/components/ui/help-button";
 import { BucketSettingsPopover } from "./bucket-settings-popover";
@@ -25,7 +33,10 @@ const bucketIcons: Record<string, React.ReactNode> = {
   spending: <Wallet className="size-4" />,
 };
 
-const bucketAccents: Record<string, { icon: string; bar: string; badge: string; barMuted: string }> = {
+const bucketAccents: Record<
+  string,
+  { icon: string; bar: string; badge: string; barMuted: string }
+> = {
   bafoeg: {
     icon: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
     bar: "bg-amber-500",
@@ -202,28 +213,69 @@ export function BucketCard({
           onAnalyse={onAnalyse}
         />
 
-        {isInfoOnly && subscriptionState && subscriptionState.load > 0 && (
-          <div className="space-y-1 rounded-lg border border-slate-500/20 bg-muted/30 px-2.5 py-2 text-xs">
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Abonnements</span>
-              <span className="font-medium tabular-nums">
-                {formatAmount(subscriptionState.load)}/Monat
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Budget Restliche Ausgaben</span>
-              <span className="font-medium tabular-nums">
-                {formatAmount(bucket.target_amount)}
-              </span>
-            </div>
-            {subscriptionState.shortfall > 0 && (
-              <p className="flex items-center gap-1 pt-0.5 font-medium text-red-500">
-                <TriangleAlert className="size-3.5 shrink-0" />
-                Abonnements übersteigen das Budget um {formatAmount(subscriptionState.shortfall)}
-              </p>
-            )}
-          </div>
-        )}
+        {isInfoOnly &&
+          subscriptionState &&
+          subscriptionState.load > 0 &&
+          (() => {
+            const subPct =
+              bucket.target_amount > 0
+                ? Math.min(100, Math.round((subscriptionState.load / bucket.target_amount) * 100))
+                : 0;
+            const remaining = Math.max(0, bucket.target_amount - subscriptionState.load);
+            const isOver = subscriptionState.shortfall > 0;
+            const isTight = !isOver && subPct >= 80;
+
+            return (
+              <div className="space-y-2 rounded-lg border border-slate-500/20 bg-muted/30 p-3 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 font-medium text-muted-foreground">
+                    <Repeat className="size-3.5" />
+                    Abonnements
+                  </span>
+                  <span
+                    className={`rounded-full border px-1.5 py-0.5 font-medium ${
+                      isOver
+                        ? "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400"
+                        : isTight
+                          ? "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                          : accent.badge
+                    }`}
+                  >
+                    {subPct}%
+                  </span>
+                </div>
+
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      isOver ? "bg-red-500" : isTight ? "bg-amber-500" : accent.bar
+                    }`}
+                    style={{ width: `${Math.min(100, subPct)}%` }}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between text-muted-foreground">
+                  <span className="tabular-nums">
+                    {formatAmount(subscriptionState.load)} / {formatAmount(bucket.target_amount)}
+                  </span>
+                  {!isOver && <span className="tabular-nums">{formatAmount(remaining)} übrig</span>}
+                </div>
+
+                {isOver && (
+                  <p className="flex items-center gap-1 pt-0.5 font-medium text-red-500">
+                    <TriangleAlert className="size-3.5 shrink-0" />
+                    Abos übersteigen das Budget um {formatAmount(subscriptionState.shortfall)}
+                  </p>
+                )}
+                {!isOver && isTight && (
+                  <p className="flex items-center gap-1 pt-0.5 font-medium text-amber-600 dark:text-amber-400">
+                    <TriangleAlert className="size-3.5 shrink-0" />
+                    Abos beanspruchen fast das ganze Budget
+                  </p>
+                )}
+              </div>
+            );
+          })()}
 
         <BucketDetails
           hasDetails={hasDetails}

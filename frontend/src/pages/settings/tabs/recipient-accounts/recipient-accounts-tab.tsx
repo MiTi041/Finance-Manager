@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ChevronDown, Landmark, Plus } from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
@@ -10,12 +10,19 @@ import {
   type ZahlungspartnerMapping,
 } from "@/lib/zahlungspartner";
 import {
+  getServerBaseUrl,
+  resolveZahlungspartnerLogoSrc,
+} from "@/lib/bank/zahlungspartner-logo";
+import {
   createRecipientAccount,
   deleteRecipientAccount,
+  deleteRecipientAccountLogo,
   fetchRecipientAccountsReferenceData,
   type RecipientAccountRecord,
   updateRecipientAccount,
+  uploadRecipientAccountLogo,
 } from "@/lib/recipient-accounts";
+import { toast } from "sonner";
 import { VirtualizedList } from "@/components/virtualized-list";
 import { BrandIcon } from "@/components/bank-logo";
 import { DiscardChangesDialog, useSettingsTab } from "@/pages/settings/hooks/use-settings-tab";
@@ -147,6 +154,67 @@ export function RecipientAccountsTab() {
     return haystack.includes(normalizedQuery);
   };
 
+  const [logoBusyId, setLogoBusyId] = useState<number | null>(null);
+  const [deletingLogoId, setDeletingLogoId] = useState<number | null>(null);
+  const [logoVersions, setLogoVersions] = useState<Record<number, number>>({});
+
+  const resolveLogo = (recipientAccount: RecipientAccountRecord) => {
+    const ownPath = (recipientAccount.local_logo_path ?? "").trim();
+    if (ownPath) {
+      const version = logoVersions[recipientAccount.id] ?? 0;
+      return `${getServerBaseUrl()}${ownPath}${version ? `?v=${version}` : ""}`;
+    }
+    return undefined;
+  };
+
+  const refreshAfterLogo = useCallback(async () => {
+    await hook.loadData({ forceRefresh: true });
+  }, [hook]);
+
+  const handleLogoUpload = useCallback(
+    async (recipientAccount: RecipientAccountRecord, file: File) => {
+      setLogoBusyId(recipientAccount.id);
+      try {
+        if (!file.type.startsWith("image/")) {
+          toast.error("Bitte eine Bilddatei hochladen");
+          return;
+        }
+        await uploadRecipientAccountLogo(recipientAccount.id, file);
+        setLogoVersions((current) => ({
+          ...current,
+          [recipientAccount.id]: Date.now(),
+        }));
+        await refreshAfterLogo();
+        toast.success("Logo erfolgreich hochgeladen");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Logo-Upload fehlgeschlagen");
+      } finally {
+        setLogoBusyId(null);
+      }
+    },
+    [refreshAfterLogo],
+  );
+
+  const handleLogoDelete = useCallback(
+    async (recipientAccount: RecipientAccountRecord) => {
+      setDeletingLogoId(recipientAccount.id);
+      try {
+        await deleteRecipientAccountLogo(recipientAccount.id);
+        setLogoVersions((prev) => ({
+          ...prev,
+          [recipientAccount.id]: Date.now(),
+        }));
+        await refreshAfterLogo();
+        toast.success("Logo erfolgreich gelöscht");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Logo-Löschvorgang fehlgeschlagen");
+      } finally {
+        setDeletingLogoId(null);
+      }
+    },
+    [refreshAfterLogo],
+  );
+
   return (
     <div>
       <SettingsTabHeader
@@ -206,6 +274,7 @@ export function RecipientAccountsTab() {
               (m) =>
                 m.iban === normalizeAccountValue(recipientAccount.iban),
             );
+            const isPerson = !mapping?.zahlungspartner_is_company;
 
             return (
               <div className="border-b border-muted/60 bg-background">
@@ -216,9 +285,13 @@ export function RecipientAccountsTab() {
                 >
                   <BrandIcon
                     src={
-                      mapping?.zahlungspartner_logo_url ||
-                      mapping?.zahlungspartner_local_logo_path ||
-                      undefined
+                      recipientAccount.local_logo_path
+                        ? resolveLogo(recipientAccount)
+                        : resolveZahlungspartnerLogoSrc(
+                            mapping?.zahlungspartner_logo_url,
+                            undefined,
+                            mapping?.zahlungspartner_local_logo_path,
+                          )
                     }
                     alt={
                       mapping?.zahlungspartner_name ||
@@ -283,6 +356,17 @@ export function RecipientAccountsTab() {
                     onSave={() => void hook.handleSave()}
                     onDelete={() => hook.openDeleteDialog(recipientAccount)}
                     deleting={hook.deletingItemId === recipientAccount.id}
+                    isPerson={isPerson}
+                    hasLogo={Boolean(recipientAccount.local_logo_path)}
+                    logoSrc={resolveLogo(recipientAccount) ?? ""}
+                    uploadingLogo={logoBusyId === recipientAccount.id}
+                    deletingLogo={deletingLogoId === recipientAccount.id}
+                    onLogoUpload={(file) =>
+                      void handleLogoUpload(recipientAccount, file)
+                    }
+                    onLogoDelete={() =>
+                      void handleLogoDelete(recipientAccount)
+                    }
                   />
                 )}
               </div>

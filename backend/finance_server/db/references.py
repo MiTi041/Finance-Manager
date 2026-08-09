@@ -153,6 +153,7 @@ def _serialize_zahlungspartner_row(row: sqlite3.Row) -> dict[str, Any]:
         "logo_white_background": bool(row["logo_white_background"]),
         "logo_padding": bool(row["logo_padding"]),
         "is_company": bool(row["is_company"]),
+        "is_own_account": bool(row["is_own_account"]),
     }
     try:
         result["updated_at"] = row["updated_at"]
@@ -165,7 +166,7 @@ def list_zahlungspartner_records() -> list[dict[str, Any]]:
     with get_connection() as connection:
         rows = connection.execute(
             """
-            SELECT id, name, website, logo_url, local_logo_path, logo_white_background, logo_padding, is_company
+            SELECT id, name, website, logo_url, local_logo_path, logo_white_background, logo_padding, is_company, is_own_account
             FROM zahlungspartner
             ORDER BY name COLLATE NOCASE ASC, id ASC
             """
@@ -208,12 +209,17 @@ def create_zahlungspartner_record(payload: dict[str, Any]) -> dict[str, Any]:
         default=False,
     )
     is_company = _coerce_bool(payload.get("is_company"), default=True)
+    is_own_account = _coerce_bool(
+        payload.get("is_own_account"),
+        default=False,
+    )
 
     if not is_company:
         website = None
         logo_url = None
         logo_white_background = 0
         logo_padding = 0
+        is_own_account = 0
 
     with get_connection() as connection:
         cursor = connection.execute(
@@ -224,11 +230,12 @@ def create_zahlungspartner_record(payload: dict[str, Any]) -> dict[str, Any]:
                 logo_url,
                 logo_white_background,
                 logo_padding,
-                is_company
+                is_company,
+                is_own_account
             )
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (name, website, logo_url, logo_white_background, logo_padding, is_company),
+            (name, website, logo_url, logo_white_background, logo_padding, is_company, is_own_account),
         )
         zahlungspartner_id = cast(int, cursor.lastrowid)
 
@@ -245,6 +252,7 @@ def create_zahlungspartner_record(payload: dict[str, Any]) -> dict[str, Any]:
             "logo_white_background": bool(logo_white_background),
             "logo_padding": bool(logo_padding),
             "is_company": bool(is_company),
+            "is_own_account": bool(is_own_account),
             "ibans": [],
         }
 
@@ -313,6 +321,10 @@ def update_zahlungspartner_record(zahlungspartner_id: int, payload: dict[str, An
         fields.append("is_company = ?")
         params.append(next_is_company)
 
+    if "is_own_account" in payload:
+        fields.append("is_own_account = ?")
+        params.append(_coerce_bool(payload.get("is_own_account"), default=False))
+
     if not fields:
         return get_zahlungspartner_record(zahlungspartner_id)
 
@@ -365,7 +377,7 @@ def get_zahlungspartner_record(zahlungspartner_id: int) -> dict[str, Any] | None
     with get_connection() as connection:
         row = connection.execute(
             """
-            SELECT id, name, website, logo_url, local_logo_path, logo_white_background, logo_padding, is_company
+            SELECT id, name, website, logo_url, local_logo_path, logo_white_background, logo_padding, is_company, is_own_account
             FROM zahlungspartner
             WHERE id = ?
             """,
@@ -438,6 +450,7 @@ def _serialize_empfaengerkonto_row(row: sqlite3.Row) -> dict[str, Any]:
         "bic": row["bic"],
         "recipient_name": row["recipient_name"],
         "is_donation_account": bool(row["is_donation_account"]),
+        "local_logo_path": row["local_logo_path"],
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
@@ -447,7 +460,7 @@ def list_empfaengerkonten_records() -> list[dict[str, Any]]:
     with get_connection() as connection:
         rows = connection.execute(
             """
-            SELECT id, account_name, iban, bic, recipient_name, is_donation_account, created_at, updated_at
+            SELECT id, account_name, iban, bic, recipient_name, is_donation_account, local_logo_path, created_at, updated_at
             FROM empfaengerkonten
             ORDER BY recipient_name COLLATE NOCASE ASC, account_name COLLATE NOCASE ASC, iban ASC
             """
@@ -460,7 +473,7 @@ def get_empfaengerkonto_record(empfaengerkonto_id: int) -> dict[str, Any] | None
     with get_connection() as connection:
         row = connection.execute(
             """
-            SELECT id, account_name, iban, bic, recipient_name, is_donation_account, created_at, updated_at
+            SELECT id, account_name, iban, bic, recipient_name, is_donation_account, local_logo_path, created_at, updated_at
             FROM empfaengerkonten
             WHERE id = ?
             """,
@@ -482,6 +495,7 @@ def create_empfaengerkonto_record(payload: dict[str, Any]) -> dict[str, Any]:
         payload.get("is_donation_account"),
         default=False,
     )
+    local_logo_path = _normalize_optional_text(payload.get("local_logo_path"))
 
     if not account_name:
         raise ValueError("Kontoname fehlt.")
@@ -507,11 +521,19 @@ def create_empfaengerkonto_record(payload: dict[str, Any]) -> dict[str, Any]:
                 iban,
                 bic,
                 recipient_name,
-                is_donation_account
+                is_donation_account,
+                local_logo_path
             )
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (account_name, iban, bic, recipient_name, is_donation_account),
+            (
+                account_name,
+                iban,
+                bic,
+                recipient_name,
+                is_donation_account,
+                local_logo_path,
+            ),
         )
         empfaengerkonto_id = cast(int, cursor.lastrowid)
 
@@ -524,6 +546,7 @@ def create_empfaengerkonto_record(payload: dict[str, Any]) -> dict[str, Any]:
             "bic": bic,
             "recipient_name": recipient_name,
             "is_donation_account": bool(is_donation_account),
+            "local_logo_path": local_logo_path,
         }
 
     _log("empfaengerkonten", empfaengerkonto_id, "INSERT", record)
@@ -584,6 +607,10 @@ def update_empfaengerkonto_record(
         params.append(
             _coerce_bool(payload.get("is_donation_account"), default=False),
         )
+
+    if "local_logo_path" in payload:
+        fields.append("local_logo_path = ?")
+        params.append(_normalize_optional_text(payload.get("local_logo_path")))
 
     if not fields:
         return current
@@ -673,7 +700,7 @@ def get_zahlungspartner_by_iban(iban: str) -> dict[str, Any] | None:
         row = connection.execute(
             """
             SELECT k.id, k.name, k.website, k.logo_url, k.local_logo_path,
-                   k.logo_white_background, k.logo_padding, k.is_company
+                   k.logo_white_background, k.logo_padding, k.is_company, k.is_own_account
             FROM ibans i
             INNER JOIN zahlungspartner k ON k.id = i.f_zahlungspartner_id
             WHERE i.iban = ?

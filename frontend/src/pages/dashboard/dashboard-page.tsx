@@ -131,6 +131,11 @@ export default function DashboardPage() {
     [senderAccounts, presetSenderIban, activeAccountIban],
   );
 
+  const selectedPending = useMemo(() => {
+    if (activeAccountIban === "all") return undefined;
+    return accountBalances.find((a) => a.accountIban === activeAccountIban)?.balancePending;
+  }, [accountBalances, activeAccountIban]);
+
   const ownAccounts: OwnAccount[] = useMemo(
     () =>
       linkedAccounts.map((a) => ({
@@ -210,6 +215,7 @@ export default function DashboardPage() {
               icon={Wallet}
               footer={dateFooter ?? undefined}
               accountBalances={activeAccountIban === "all" ? accountBalances : undefined}
+              pendingValue={selectedPending}
               transferableIbans={activeAccountIban === "all" ? transferableIbanSet : undefined}
               onAccountTransfer={(iban) => {
                 setPresetSenderIban(iban);

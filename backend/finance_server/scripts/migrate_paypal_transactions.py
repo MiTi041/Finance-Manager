@@ -13,11 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from finance_server.db import get_connection
 from finance_server.db.utils import build_transaction_hash
-from finance_server.services.payroll_parsing import (
-    PAYPAL_PAYEE_REGEX,
-    extract_paypal_merchant,
-    build_paypal_pseud_iban,
-)
+from finance_server.services.payroll_parsing import enrich_paypal_merchant
 
 
 def migrate_paypal_transactions() -> dict[str, int]:
@@ -36,24 +32,10 @@ def migrate_paypal_transactions() -> dict[str, int]:
                 stats["already_done"] += 1
                 continue
 
-            if not PAYPAL_PAYEE_REGEX.match(tx.get("applicant_name", "")):
+            enrich_paypal_merchant(tx)
+            if not tx["applicant_iban"].startswith("PAYPAL:"):
                 stats["no_merchant"] += 1
                 continue
-
-            merchant = extract_paypal_merchant(tx.get("purpose", ""))
-            if not merchant:
-                stats["no_merchant"] += 1
-                continue
-
-            pseud_iban = build_paypal_pseud_iban(merchant)
-            new_name = f"PAYPAL {merchant}"
-            old_iban = tx["applicant_iban"]
-
-            tx["applicant_iban"] = pseud_iban
-            tx["applicant_bic"] = ""
-            tx["applicant_name"] = new_name
-            if not tx.get("gvc_applicant_iban"):
-                tx["gvc_applicant_iban"] = old_iban
 
             new_hash = build_transaction_hash(tx)
 
@@ -61,12 +43,22 @@ def migrate_paypal_transactions() -> dict[str, int]:
                 """
                 UPDATE umsaetze SET
                     applicant_iban = ?,
+                    applicant_bic = ?,
                     applicant_name = ?,
                     gvc_applicant_iban = ?,
+                    gvc_applicant_bic = ?,
                     transaction_hash = ?
                 WHERE id = ?
                 """,
-                (pseud_iban, new_name, tx["gvc_applicant_iban"], new_hash, tx["id"]),
+                (
+                    tx["applicant_iban"],
+                    tx["applicant_bic"],
+                    tx["applicant_name"],
+                    tx["gvc_applicant_iban"],
+                    tx["gvc_applicant_bic"],
+                    new_hash,
+                    tx["id"],
+                ),
             )
             stats["migrated"] += 1
 

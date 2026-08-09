@@ -10,6 +10,7 @@ export type ZahlungspartnerRecord = {
   logo_white_background?: boolean;
   logo_padding?: boolean;
   is_company: boolean;
+  is_own_account: boolean;
   ibans: string[];
 };
 
@@ -52,6 +53,7 @@ export async function createZahlungspartner(
     logo_white_background?: boolean;
     logo_padding?: boolean;
     is_company: boolean;
+    is_own_account?: boolean;
   },
   sourceId?: string,
 ): Promise<ZahlungspartnerRecord> {
@@ -95,6 +97,7 @@ export async function updateZahlungspartner(
     logo_white_background: boolean;
     logo_padding: boolean;
     is_company: boolean;
+    is_own_account?: boolean;
   }>,
   sourceId?: string,
 ): Promise<ZahlungspartnerRecord> {

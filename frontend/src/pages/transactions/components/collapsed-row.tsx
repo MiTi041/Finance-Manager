@@ -25,6 +25,7 @@ type CollapsedRowProps = {
   isUnassigned: boolean;
   isSubscriptionTransaction: boolean;
   subscriptionLink: { counterpartyName: string; amount: number } | null;
+  isKontotransfer: boolean;
   unknownIban: string | null;
   onToggleRow: (transactionId: number) => void;
   onOpenRefundSection: (transactionId: number) => void;
@@ -44,6 +45,7 @@ export function CollapsedRow({
   isUnassigned,
   isSubscriptionTransaction,
   subscriptionLink,
+  isKontotransfer,
   unknownIban,
   onToggleRow,
   onOpenRefundSection,
@@ -186,6 +188,11 @@ export function CollapsedRow({
                 {unknownIban ? (
                   <span className="hidden shrink-0 rounded-full bg-amber-500/15 px-1.5 py-px text-[10px] font-medium text-amber-600 sm:inline dark:text-amber-400">
                     Unbekannte IBAN
+                  </span>
+                ) : null}
+                {isKontotransfer ? (
+                  <span className="hidden shrink-0 rounded-full bg-sky-500/15 px-1.5 py-px text-[10px] font-medium text-sky-700 sm:inline dark:text-sky-400">
+                    Kontotransfer
                   </span>
                 ) : null}
               </div>

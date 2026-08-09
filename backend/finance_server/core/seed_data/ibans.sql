@@ -184,3 +184,4 @@ insert into `ibans` (`f_zahlungspartner_id`, `iban`) values (160, 'PAYPAL:ALL4BU
 insert into `ibans` (`f_zahlungspartner_id`, `iban`) values (161, 'PAYPAL:WHOWGAMESGMBH');
 insert into `ibans` (`f_zahlungspartner_id`, `iban`) values (162, 'PAYPAL:CDKLLC');
 insert into `ibans` (`f_zahlungspartner_id`, `iban`) values (163, 'PAYPAL:SCRIBD');
+insert into `ibans` (`f_zahlungspartner_id`, `iban`) values (171, 'PAYPAL:DEICHMANNSE');

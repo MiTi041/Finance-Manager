@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from finance_server.core.database import get_connection
+from finance_server.services.payroll_parsing import enrich_paypal_merchant
 
 
 def get_or_create_device_id(connection: sqlite3.Connection | None = None) -> str:
@@ -102,8 +103,9 @@ VALID_SYNC_COLUMNS: dict[str, set[str]] = {
         "kategorie", "note", "splits",
         "created_at", "updated_at",
     },
-    "zahlungspartner": {"id", "name", "website", "logo_url", "local_logo_path", "is_company", "logo_white_background", "logo_padding", "updated_at"},
-    "empfaengerkonten": {"id", "account_name", "iban", "bic", "recipient_name", "is_donation_account", "created_at", "updated_at"},
+    "zahlungspartner": {"id", "name", "website", "logo_url", "local_logo_path", "is_company",
+        "logo_white_background", "logo_padding", "is_own_account", "updated_at"},
+    "empfaengerkonten": {"id", "account_name", "iban", "bic", "recipient_name", "is_donation_account", "local_logo_path", "created_at", "updated_at"},
     "subscription_identities": {"id", "counterparty_name", "amount", "display_name", "f_zahlungspartner_id", "dismissed", "updated_at"},
     "ibans": {"iban", "f_zahlungspartner_id"},
     "allocation_buckets": {"id", "bucket_type", "percentage", "recipient_account_id", "sender_iban", "is_active", "sort_order", "target_amount", "target_months", "recipient_iban", "created_at", "updated_at"},
@@ -244,6 +246,9 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
         filtered_data = {k: v for k, v in data.items() if k in valid_cols}
         if not filtered_data:
             return False
+
+        if table == "umsaetze":
+            enrich_paypal_merchant(filtered_data)
 
         if pk == "id" and "id" not in filtered_data:
             return False

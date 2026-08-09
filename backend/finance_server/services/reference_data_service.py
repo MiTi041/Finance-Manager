@@ -7,6 +7,7 @@ from finance_server.db import (
     create_zahlungspartner_record,
     delete_empfaengerkonto_record,
     delete_zahlungspartner_record,
+    get_empfaengerkonto_record,
     get_zahlungspartner_record,
     list_empfaengerkonten_records,
     list_iban_zahlungspartner_references,
@@ -51,6 +52,11 @@ class ReferenceDataService:
 
     def get_recipient_accounts(self) -> list[dict[str, Any]]:
         return list_empfaengerkonten_records()
+
+    def get_recipient_account(
+        self, recipient_account_id: int
+    ) -> dict[str, Any] | None:
+        return get_empfaengerkonto_record(recipient_account_id)
 
     def create_recipient_account(
         self, payload: dict[str, Any]

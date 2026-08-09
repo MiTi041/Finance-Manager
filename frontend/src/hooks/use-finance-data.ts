@@ -264,6 +264,7 @@ export function useFinanceData(
         balance:
           (needsCorrection ? (account.balanceCorrection ?? 0) : 0) +
           (apiBalance?.balance ?? byIban.get(account.accountIban) ?? 0),
+        balancePending: apiBalance?.balance_pending ?? 0,
       };
     });
   }, [accountOptions, cleanedTransactions, filteredTransactions, needsCorrection, accountBalancesApi]);
