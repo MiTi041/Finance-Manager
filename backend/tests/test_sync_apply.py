@@ -422,3 +422,82 @@ class TestAppSettings:
                 "SELECT value FROM app_settings WHERE key = ?", (key,)
             ).fetchone()
             assert row["value"] == value
+
+
+class TestVorgemerkte:
+    def _pending(self, row_id: int, amount: float, hash_suffix: str = "") -> dict:
+        return {
+            "id": row_id,
+            "account_iban": "DE001",
+            "amount": amount,
+            "original_amount": amount,
+            "currency": "EUR",
+            "date": "2026-07-01",
+            "transaction_hash": build_transaction_hash(
+                {"account_iban": "DE001", "amount": amount} | ({"date": "2026-07-01"} if not hash_suffix else {})
+            ),
+            "created_at": "2026-07-01T10:00:00+00:00",
+        }
+
+    def test_delete_all_sentinel_clears(self, test_db):
+        _apply(test_db, _op("vorgemerkte_umsaetze", 1, "INSERT", self._pending(1, 10.0)))
+        ok = _apply(test_db, _op("vorgemerkte_umsaetze", None, "DELETE", None))
+        assert ok
+        assert test_db.execute("SELECT COUNT(*) FROM vorgemerkte_umsaetze").fetchone()[0] == 0
+
+    def test_insert_matches_by_hash_avoids_duplicate(self, test_db):
+        first = self._pending(1, 10.0)
+        assert _apply(test_db, _op("vorgemerkte_umsaetze", 1, "INSERT", first))
+        second = self._pending(99, 10.0)
+        ok = _apply(test_db, _op("vorgemerkte_umsaetze", 99, "INSERT", second))
+        assert ok
+        rows = test_db.execute("SELECT * FROM vorgemerkte_umsaetze").fetchall()
+        assert len(rows) == 1
+        assert rows[0]["id"] == 1
+
+
+class TestVorgemerkteLogging:
+    def test_replace_pending_logs_delete_and_inserts(self, test_db, monkeypatch):
+        from finance_server.db import transactions
+
+        monkeypatch.setattr(transactions, "get_connection", lambda: test_db)
+        rows = [
+            {"account_iban": "DE001", "data": {"amount": -9.99, "date": "2026-07-01", "applicant_name": "Muster"}},
+            {"account_iban": "DE001", "data": {"amount": -4.99, "date": "2026-07-02", "applicant_name": "Beispiel"}},
+        ]
+        assert transactions.replace_pending_transactions(rows) == 2
+        ops = test_db.execute(
+            "SELECT table_name, op_type FROM sync_ops ORDER BY id"
+        ).fetchall()
+        assert [(o["table_name"], o["op_type"]) for o in ops] == [
+            ("vorgemerkte_umsaetze", "DELETE"),
+            ("vorgemerkte_umsaetze", "INSERT"),
+            ("vorgemerkte_umsaetze", "INSERT"),
+        ]
+
+
+class TestRefundLinks:
+    def _link(self, row_id: int, refund_tx: int, expense_tx: int, amount: float) -> dict:
+        return {
+            "id": row_id,
+            "refund_transaction_id": refund_tx,
+            "expense_transaction_id": expense_tx,
+            "amount": amount,
+            "created_at": "2026-07-01T10:00:00+00:00",
+        }
+
+    def test_insert_and_delete_by_id(self, test_db):
+        assert _apply(test_db, _op("refund_links", 1, "INSERT", self._link(1, 10, 20, 50.0)))
+        row = test_db.execute("SELECT * FROM refund_links WHERE id = 1").fetchone()
+        assert row is not None and row["amount"] == 50.0
+        assert _apply(test_db, _op("refund_links", 1, "DELETE", {}))
+        assert test_db.execute("SELECT COUNT(*) FROM refund_links").fetchone()[0] == 0
+
+    def test_insert_dedupes_by_pair(self, test_db):
+        assert _apply(test_db, _op("refund_links", 1, "INSERT", self._link(1, 10, 20, 50.0)))
+        ok = _apply(test_db, _op("refund_links", 99, "INSERT", self._link(99, 10, 20, 40.0)))
+        assert ok
+        rows = test_db.execute("SELECT * FROM refund_links").fetchall()
+        assert len(rows) == 1
+        assert rows[0]["id"] == 1
+        assert rows[0]["amount"] == 40.0

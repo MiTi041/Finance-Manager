@@ -237,13 +237,21 @@ def replace_pending_transactions(rows: Iterable[dict[str, Any]]) -> int:
 
     with get_connection() as connection:
         connection.execute("DELETE FROM vorgemerkte_umsaetze")
+        _log("vorgemerkte_umsaetze", None, "DELETE", connection=connection)
         if not normalized_rows:
             return 0
         cursor = connection.executemany(
             f"INSERT INTO vorgemerkte_umsaetze ({_PENDING_INSERT_COLUMNS}) VALUES ({_PENDING_INSERT_PLACEHOLDERS})",
             normalized_rows,
         )
-        return cursor.rowcount if cursor.rowcount >= 0 else 0
+        count = cursor.rowcount if cursor.rowcount >= 0 else 0
+        if count > 0:
+            for new_row in connection.execute(
+                "SELECT * FROM vorgemerkte_umsaetze ORDER BY id"
+            ).fetchall():
+                _log("vorgemerkte_umsaetze", new_row["id"], "INSERT", dict(new_row), connection=connection)
+
+    return count
 
 
 def pending_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
@@ -493,18 +501,17 @@ def fetch_transaction_balance(account_iban: str) -> float:
 
 def delete_transaction(transaction_id: int) -> bool:
     with get_connection() as connection:
-        expense_ids = [
-            r["expense_transaction_id"]
-            for r in connection.execute(
-                "SELECT expense_transaction_id FROM refund_links WHERE refund_transaction_id = ?",
-                (transaction_id,),
-            ).fetchall()
-        ]
+        link_rows = connection.execute(
+            "SELECT id, expense_transaction_id FROM refund_links WHERE refund_transaction_id = ? OR expense_transaction_id = ?",
+            (transaction_id, transaction_id),
+        ).fetchall()
         connection.execute(
             "DELETE FROM refund_links WHERE refund_transaction_id = ? OR expense_transaction_id = ?",
             (transaction_id, transaction_id),
         )
-        for expense_id in set(expense_ids):
+        for link in link_rows:
+            _log("refund_links", link["id"], "DELETE", connection=connection)
+        for expense_id in set(r["expense_transaction_id"] for r in link_rows):
             if expense_id != transaction_id:
                 _recalc_refund_total(expense_id, connection)
         cursor = connection.execute("DELETE FROM umsaetze WHERE id = ?", (transaction_id,))
@@ -518,17 +525,16 @@ def delete_transactions_batch(transaction_ids: list[int]) -> int:
         return 0
     placeholders = ",".join("?" for _ in transaction_ids)
     with get_connection() as connection:
-        expense_ids = [
-            r["expense_transaction_id"]
-            for r in connection.execute(
-                f"SELECT expense_transaction_id FROM refund_links WHERE refund_transaction_id IN ({placeholders})",
-                transaction_ids,
-            ).fetchall()
-        ]
+        link_rows = connection.execute(
+            f"SELECT id, expense_transaction_id FROM refund_links WHERE refund_transaction_id IN ({placeholders}) OR expense_transaction_id IN ({placeholders})",
+            transaction_ids + transaction_ids,
+        ).fetchall()
         connection.execute(
             f"DELETE FROM refund_links WHERE refund_transaction_id IN ({placeholders}) OR expense_transaction_id IN ({placeholders})",
             transaction_ids + transaction_ids,
         )
+        for link in link_rows:
+            _log("refund_links", link["id"], "DELETE", connection=connection)
         cursor = connection.execute(
             f"DELETE FROM umsaetze WHERE id IN ({placeholders})",
             transaction_ids,
@@ -536,7 +542,7 @@ def delete_transactions_batch(transaction_ids: list[int]) -> int:
         result = cursor.rowcount
         for tid in transaction_ids:
             _log("umsaetze", tid, "DELETE", connection=connection)
-        for expense_id in set(expense_ids):
+        for expense_id in set(r["expense_transaction_id"] for r in link_rows):
             if expense_id not in transaction_ids:
                 _recalc_refund_total(expense_id, connection)
         return result

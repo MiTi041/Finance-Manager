@@ -78,6 +78,7 @@ VALID_SYNC_TABLES = {
     "subscription_identities", "ibans",
     "allocation_buckets", "allocation_bafoeg_config", "savings_plans", "budgets",
     "app_settings",
+    "vorgemerkte_umsaetze", "refund_links",
 }
 
 VALID_SYNC_COLUMNS: dict[str, set[str]] = {
@@ -113,6 +114,27 @@ VALID_SYNC_COLUMNS: dict[str, set[str]] = {
     "savings_plans": {"id", "name", "tag", "target_amount", "target_date", "target_recipient_name", "target_recipient_iban", "target_recipient_bic", "is_visible", "sender_iban", "created_at", "updated_at"},
     "budgets": {"id", "name", "category_ids", "amount", "period", "created_at", "updated_at"},
     "app_settings": {"key", "value", "updated_at"},
+    "vorgemerkte_umsaetze": {
+        "id",
+        "account_iban", "account_bic", "account_accountnumber", "account_subaccount", "account_blz",
+        "status", "funds_code", "transaction_id", "customer_reference", "bank_reference",
+        "extra_details",
+        "date", "entry_date", "guessed_entry_date",
+        "transaction_reference", "transaction_code", "posting_text", "prima_nota", "purpose",
+        "additional_purpose", "end_to_end_reference", "additional_position_reference",
+        "additional_position_date",
+        "applicant_bic", "applicant_iban", "applicant_name", "recipient_name",
+        "deviate_applicant", "deviate_recipient",
+        "gvc_applicant_iban", "gvc_applicant_bic",
+        "applicant_creditor_id", "debitor_identifier", "return_debit_notes",
+        "purpose_code", "FRST_ONE_OFF_RECC", "old_SEPA_CI",
+        "old_SEPA_additional_position_reference",
+        "settlement_tag",
+        "original_amount", "amount", "currency",
+        "transaction_hash",
+        "created_at",
+    },
+    "refund_links": {"id", "refund_transaction_id", "expense_transaction_id", "amount", "created_at"},
 }
 
 
@@ -169,10 +191,11 @@ TRANSACTION_IDENTITY_COLUMNS = (
 def _find_equivalent_transaction_id(
     connection: Any,
     data: dict[str, Any],
+    table: str = "umsaetze",
 ) -> int | None:
     if data.get("transaction_hash"):
         row = connection.execute(
-            "SELECT id FROM umsaetze WHERE transaction_hash = ?",
+            f"SELECT id FROM {table} WHERE transaction_hash = ?",
             (data["transaction_hash"],),
         ).fetchone()
         if row:
@@ -195,7 +218,7 @@ def _find_equivalent_transaction_id(
         return None
 
     row = connection.execute(
-        f"SELECT id FROM umsaetze WHERE {' AND '.join(where)} ORDER BY id LIMIT 1",
+        f"SELECT id FROM {table} WHERE {' AND '.join(where)} ORDER BY id LIMIT 1",
         values,
     ).fetchone()
     return int(row["id"]) if row else None
@@ -231,6 +254,9 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
         pk, pk_value, use_id = _resolve_lookup(table, row_id, data)
 
         if op_type == "DELETE":
+            if table == "vorgemerkte_umsaetze" and row_id is None:
+                connection.execute("DELETE FROM vorgemerkte_umsaetze")
+                return True
             if table == "allocation_buckets":
                 cursor = connection.execute(
                     "DELETE FROM allocation_buckets WHERE bucket_type = ?", (pk_value,)
@@ -267,12 +293,17 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
         values = [filtered_data[k] for k in columns]
 
         existing_transaction_id = None
-        if table == "umsaetze":
-            existing_transaction_id = _find_equivalent_transaction_id(connection, filtered_data)
+        if table in {"umsaetze", "vorgemerkte_umsaetze"}:
+            existing_transaction_id = _find_equivalent_transaction_id(connection, filtered_data, table)
             if existing_transaction_id is None and pk == "id" and pk_value is not None:
-                row = connection.execute("SELECT id FROM umsaetze WHERE id = ?", (pk_value,)).fetchone()
+                row = connection.execute(f"SELECT id FROM {table} WHERE id = ?", (pk_value,)).fetchone()
                 existing_transaction_id = int(row["id"]) if row else None
             existing = {"id": existing_transaction_id} if existing_transaction_id is not None else None
+        elif table == "refund_links":
+            existing = connection.execute(
+                "SELECT id FROM refund_links WHERE refund_transaction_id = ? AND expense_transaction_id = ?",
+                (filtered_data.get("refund_transaction_id"), filtered_data.get("expense_transaction_id")),
+            ).fetchone()
         elif table == "allocation_buckets":
             existing = connection.execute(
                 "SELECT * FROM allocation_buckets WHERE bucket_type = ?", (pk_value,)
@@ -283,12 +314,12 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
             ).fetchone()
         if table == "allocation_buckets" and existing:
             use_id = existing["id"]
-        if table == "umsaetze" and existing and "transaction_hash" in filtered_data and "transaction_hash" not in columns:
+        if table in {"umsaetze", "vorgemerkte_umsaetze"} and existing and "transaction_hash" in filtered_data and "transaction_hash" not in columns:
             columns.append("transaction_hash")
             placeholders = [f"{k} = ?" for k in columns]
             values = [filtered_data[k] for k in columns]
 
-        if table in {"empfaengerkonten", "umsaetze"} and existing and "id" in columns:
+        if table in {"empfaengerkonten", "vorgemerkte_umsaetze", "refund_links", "umsaetze"} and existing and "id" in columns:
             columns = [c for c in columns if c != "id"]
             placeholders = [f"{k} = ?" for k in columns]
             values = [filtered_data[k] for k in columns]
@@ -304,8 +335,15 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
                 return False
 
         if existing:
-            where_pk = "id" if table in {"allocation_buckets", "umsaetze"} else pk
-            where_val = use_id if table == "allocation_buckets" else existing_transaction_id if table == "umsaetze" else pk_value
+            where_pk = "id" if table in {"allocation_buckets", "umsaetze", "vorgemerkte_umsaetze", "refund_links"} else pk
+            if table == "allocation_buckets":
+                where_val = use_id
+            elif table in {"umsaetze", "vorgemerkte_umsaetze"}:
+                where_val = existing_transaction_id
+            elif table == "refund_links":
+                where_val = existing["id"]
+            else:
+                where_val = pk_value
             sql = f"UPDATE {table} SET {', '.join(placeholders)} WHERE {where_pk} = ?"
             values.append(where_val)
             cursor = connection.execute(sql, values)
@@ -313,6 +351,17 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
             if table == "allocation_buckets":
                 all_columns = ["id"] + columns + ["bucket_type"]
                 all_values = [use_id or row_id] + values + [filtered_data.get("bucket_type", "")]
+            elif table == "refund_links":
+                cursor = connection.execute(
+                    "INSERT OR IGNORE INTO refund_links (refund_transaction_id, expense_transaction_id, amount, created_at) VALUES (?, ?, ?, ?)",
+                    (
+                        filtered_data.get("refund_transaction_id"),
+                        filtered_data.get("expense_transaction_id"),
+                        filtered_data.get("amount"),
+                        filtered_data.get("created_at"),
+                    ),
+                )
+                return cursor.rowcount > 0
             else:
                 all_columns = [pk] + columns
                 all_values = [pk_value] + values
@@ -323,7 +372,7 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
             # still arrive with a local auto-increment id.
             if (
                 cursor.rowcount == 0
-                and table in {"empfaengerkonten", "umsaetze"}
+                and table in {"empfaengerkonten", "umsaetze", "vorgemerkte_umsaetze"}
                 and "id" in all_columns
             ):
                 retry_cols = [c for c in all_columns if c != "id"]
