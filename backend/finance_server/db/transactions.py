@@ -236,8 +236,21 @@ def replace_pending_transactions(rows: Iterable[dict[str, Any]]) -> int:
     normalized_rows = [row for row in normalized_rows if abs(row["amount"]) > 0.0001]
 
     with get_connection() as connection:
+        old_rows = connection.execute(
+            "SELECT id, transaction_hash FROM vorgemerkte_umsaetze WHERE transaction_hash IS NOT NULL"
+        ).fetchall()
+        old_by_hash = {row["transaction_hash"]: row["id"] for row in old_rows}
+        new_hashes = set(row["transaction_hash"] for row in normalized_rows)
+
+        # ponytail: per-row delta instead of a global clear — a transiently empty
+        # fetch must not wipe pending that still exists on the other device.
+        for gone_hash in sorted(set(old_by_hash) - new_hashes):
+            _log(
+                "vorgemerkte_umsaetze", old_by_hash[gone_hash], "DELETE",
+                {"transaction_hash": gone_hash}, connection=connection,
+            )
+
         connection.execute("DELETE FROM vorgemerkte_umsaetze")
-        _log("vorgemerkte_umsaetze", None, "DELETE", connection=connection)
         if not normalized_rows:
             return 0
         cursor = connection.executemany(
@@ -249,6 +262,8 @@ def replace_pending_transactions(rows: Iterable[dict[str, Any]]) -> int:
             for new_row in connection.execute(
                 "SELECT * FROM vorgemerkte_umsaetze ORDER BY id"
             ).fetchall():
+                if new_row["transaction_hash"] in old_by_hash:
+                    continue
                 _log("vorgemerkte_umsaetze", new_row["id"], "INSERT", dict(new_row), connection=connection)
 
     return count

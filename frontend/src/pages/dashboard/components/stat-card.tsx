@@ -35,17 +35,6 @@ type StatCardProps = {
   onAccountTransfer?: (iban: string) => void;
 };
 
-function PendingLine({ value }: { value: number }) {
-  return (
-    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-      <Clock size={13} />
-      <span>Vorgemerkt:</span>
-      <span className="tabular-nums">{euroFormatter.format(value)}</span>
-      <span className="tabular-nums text-foreground">→ {euroFormatter.format(value)}</span>
-    </div>
-  );
-}
-
 export function StatCard({
   title,
   value,
@@ -95,13 +84,13 @@ export function StatCard({
             locales={valueLocales}
             className="text-[26px] font-bold tabular-nums tracking-tight text-foreground"
           />
-          {pendingValue != null && (
+          {pendingValue != null && pendingValue !== 0 && (
             <span className="text-sm font-medium tabular-nums text-muted-foreground/60">
               {euroFormatter.format(value + pendingValue)}
             </span>
           )}
         </div>
-        {pendingValue != null && (
+        {pendingValue != null && pendingValue !== 0 && (
           <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
             <Clock size={13} />
             <span>Vorgemerkt:</span>

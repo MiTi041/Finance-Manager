@@ -445,6 +445,19 @@ class TestVorgemerkte:
         assert ok
         assert test_db.execute("SELECT COUNT(*) FROM vorgemerkte_umsaetze").fetchone()[0] == 0
 
+    def test_delete_by_hash_removes_only_matching_row(self, test_db):
+        a = self._pending(1, 10.0)
+        b = self._pending(2, 20.0)
+        _apply(test_db, _op("vorgemerkte_umsaetze", 1, "INSERT", a))
+        _apply(test_db, _op("vorgemerkte_umsaetze", 2, "INSERT", b))
+        ok = _apply(
+            test_db,
+            _op("vorgemerkte_umsaetze", 1, "DELETE", {"transaction_hash": a["transaction_hash"]}),
+        )
+        assert ok
+        rows = test_db.execute("SELECT * FROM vorgemerkte_umsaetze").fetchall()
+        assert [r["transaction_hash"] for r in rows] == [b["transaction_hash"]]
+
     def test_insert_matches_by_hash_avoids_duplicate(self, test_db):
         first = self._pending(1, 10.0)
         assert _apply(test_db, _op("vorgemerkte_umsaetze", 1, "INSERT", first))
@@ -457,23 +470,52 @@ class TestVorgemerkte:
 
 
 class TestVorgemerkteLogging:
-    def test_replace_pending_logs_delete_and_inserts(self, test_db, monkeypatch):
+    def _fetch(self, test_db, monkeypatch, rows):
         from finance_server.db import transactions
 
         monkeypatch.setattr(transactions, "get_connection", lambda: test_db)
+        return transactions.replace_pending_transactions(rows)
+
+    def test_replace_pending_logs_only_new_inserts(self, test_db, monkeypatch):
         rows = [
             {"account_iban": "DE001", "data": {"amount": -9.99, "date": "2026-07-01", "applicant_name": "Muster"}},
             {"account_iban": "DE001", "data": {"amount": -4.99, "date": "2026-07-02", "applicant_name": "Beispiel"}},
         ]
-        assert transactions.replace_pending_transactions(rows) == 2
-        ops = test_db.execute(
-            "SELECT table_name, op_type FROM sync_ops ORDER BY id"
-        ).fetchall()
+        assert self._fetch(test_db, monkeypatch, rows) == 2
+        ops = test_db.execute("SELECT table_name, op_type FROM sync_ops ORDER BY id").fetchall()
         assert [(o["table_name"], o["op_type"]) for o in ops] == [
-            ("vorgemerkte_umsaetze", "DELETE"),
             ("vorgemerkte_umsaetze", "INSERT"),
             ("vorgemerkte_umsaetze", "INSERT"),
         ]
+
+    def test_replacement_logs_delta_deletes_via_hash(self, test_db, monkeypatch):
+        rows = [
+            {"account_iban": "DE001", "data": {"amount": -9.99, "date": "2026-07-01", "applicant_name": "Muster"}},
+            {"account_iban": "DE001", "data": {"amount": -4.99, "date": "2026-07-02", "applicant_name": "Beispiel"}},
+        ]
+        assert self._fetch(test_db, monkeypatch, rows) == 2
+        remaining = [
+            {"account_iban": "DE001", "data": {"amount": -4.99, "date": "2026-07-02", "applicant_name": "Beispiel"}},
+        ]
+        assert self._fetch(test_db, monkeypatch, remaining) == 1
+        ops = test_db.execute(
+            "SELECT table_name, op_type, row_id, data FROM sync_ops ORDER BY id"
+        ).fetchall()
+        assert [(o["table_name"], o["op_type"]) for o in ops] == [
+            ("vorgemerkte_umsaetze", "INSERT"),
+            ("vorgemerkte_umsaetze", "INSERT"),
+            ("vorgemerkte_umsaetze", "DELETE"),
+        ]
+        assert ops[-1]["row_id"] == 1
+
+    def test_unchanged_fetch_logs_nothing(self, test_db, monkeypatch):
+        rows = [
+            {"account_iban": "DE001", "data": {"amount": -9.99, "date": "2026-07-01", "applicant_name": "Muster"}},
+        ]
+        assert self._fetch(test_db, monkeypatch, rows) == 1
+        assert self._fetch(test_db, monkeypatch, rows) == 1
+        ops = test_db.execute("SELECT table_name, op_type FROM sync_ops").fetchall()
+        assert len(ops) == 1
 
 
 class TestRefundLinks:

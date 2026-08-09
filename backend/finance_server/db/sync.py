@@ -147,6 +147,8 @@ def _resolve_lookup(
         return "id", 1, 1
     if table == "umsaetze" and data and data.get("transaction_hash"):
         return "transaction_hash", data["transaction_hash"], row_id
+    if table == "vorgemerkte_umsaetze" and data and data.get("transaction_hash"):
+        return "transaction_hash", data["transaction_hash"], row_id
     if table == "ibans":
         return "iban", row_id, row_id
     if table == "empfaengerkonten" and data and data.get("iban"):
@@ -254,10 +256,17 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
         pk, pk_value, use_id = _resolve_lookup(table, row_id, data)
 
         if op_type == "DELETE":
-            if table == "vorgemerkte_umsaetze" and row_id is None:
-                connection.execute("DELETE FROM vorgemerkte_umsaetze")
-                return True
-            if table == "allocation_buckets":
+            if table == "vorgemerkte_umsaetze":
+                if data and data.get("transaction_hash"):
+                    cursor = connection.execute(
+                        "DELETE FROM vorgemerkte_umsaetze WHERE transaction_hash = ?",
+                        (data["transaction_hash"],),
+                    )
+                else:
+                    # legacy full-clear sentinel; keep applying already-pushed ops
+                    connection.execute("DELETE FROM vorgemerkte_umsaetze")
+                    return True
+            elif table == "allocation_buckets":
                 cursor = connection.execute(
                     "DELETE FROM allocation_buckets WHERE bucket_type = ?", (pk_value,)
                 )
