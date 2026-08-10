@@ -226,6 +226,19 @@ def _find_equivalent_transaction_id(
     return int(row["id"]) if row else None
 
 
+def _recalc_expense_refund_total(connection: Any, expense_ids: int | set[int]) -> None:
+    ids = {expense_ids} if isinstance(expense_ids, int) else set(expense_ids)
+    for tx_id in ids:
+        connection.execute(
+            """UPDATE umsaetze SET refund_total = (
+                SELECT COALESCE(SUM(amount), 0)
+                FROM refund_links
+                WHERE expense_transaction_id = umsaetze.id
+            ) WHERE id = ?""",
+            (tx_id,),
+        )
+
+
 def _is_default_allocation_bucket(row: Any) -> bool:
     defaults = {
         "bafoeg": {"percentage": 0.0, "recipient_account_id": None, "sender_iban": None, "is_active": 0, "sort_order": 0},
@@ -256,6 +269,18 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
         pk, pk_value, use_id = _resolve_lookup(table, row_id, data)
 
         if op_type == "DELETE":
+            if table == "refund_links":
+                expense_ids = [
+                    r["expense_transaction_id"]
+                    for r in connection.execute(
+                        "SELECT expense_transaction_id FROM refund_links WHERE id = ?",
+                        (pk_value,),
+                    ).fetchall()
+                ]
+                cursor = connection.execute("DELETE FROM refund_links WHERE id = ?", (pk_value,))
+                if expense_ids:
+                    _recalc_expense_refund_total(connection, expense_ids)
+                return cursor.rowcount > 0
             if table == "vorgemerkte_umsaetze":
                 if data and data.get("transaction_hash"):
                     cursor = connection.execute(
@@ -343,6 +368,8 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
             if data.get("updated_at") and current_updated and current_updated >= data["updated_at"]:
                 return False
 
+        inserted_umsaetze_id = None
+
         if existing:
             where_pk = "id" if table in {"allocation_buckets", "umsaetze", "vorgemerkte_umsaetze", "refund_links"} else pk
             if table == "allocation_buckets":
@@ -370,6 +397,8 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
                         filtered_data.get("created_at"),
                     ),
                 )
+                if cursor.rowcount > 0 and filtered_data.get("expense_transaction_id"):
+                    _recalc_expense_refund_total(connection, filtered_data["expense_transaction_id"])
                 return cursor.rowcount > 0
             else:
                 all_columns = [pk] + columns
@@ -388,6 +417,15 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
                 retry_vals = [v for c, v in zip(all_columns, all_values) if c != "id"]
                 retry_sql = f"INSERT OR IGNORE INTO {table} ({', '.join(retry_cols)}) VALUES ({', '.join('?' for _ in retry_cols)})"
                 cursor = connection.execute(retry_sql, retry_vals)
+            if cursor.rowcount > 0 and table == "umsaetze":
+                inserted_umsaetze_id = cursor.lastrowid
+        if cursor.rowcount > 0:
+            # ponytail: refund_links reference origin txn ids; a remapped local id only
+            # leaves this expense unrecalced until its next sync op, not mis-credited.
+            if table == "refund_links" and filtered_data.get("expense_transaction_id"):
+                _recalc_expense_refund_total(connection, filtered_data["expense_transaction_id"])
+            elif inserted_umsaetze_id:
+                _recalc_expense_refund_total(connection, inserted_umsaetze_id)
         return cursor.rowcount > 0
 
 

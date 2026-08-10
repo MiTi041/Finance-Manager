@@ -1,4 +1,4 @@
-import { type KeyboardEvent } from "react";
+import { useEffect, type KeyboardEvent, useRef, useState } from "react";
 import { Check, Plus, Sparkles, Trash2, X } from "lucide-react";
 
 import { CategoryCombobox } from "@/components/category-combobox";
@@ -10,6 +10,51 @@ import { cn } from "@/lib/utils";
 import { type Transaction } from "@/types/transaction";
 
 import { useSplits } from "../hooks/use-splits";
+
+function SplitAmountInput({
+  value,
+  onCommit,
+}: {
+  value: number;
+  onCommit: (v: number) => void;
+}) {
+  const [text, setText] = useState(String(value));
+  const focused = useRef(false);
+
+  useEffect(() => {
+    if (!focused.current && String(value) !== text) setText(String(value));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  return (
+    <input
+      type="number"
+      step="0.01"
+      min="0"
+      value={text}
+      onFocus={() => {
+        focused.current = true;
+      }}
+      onBlur={() => {
+        focused.current = false;
+        const n = Number(text);
+        if (text === "" || !Number.isFinite(n)) {
+          setText("");
+          onCommit(0);
+        } else {
+          setText(String(n));
+        }
+      }}
+      onChange={(e) => {
+        setText(e.target.value);
+        const n = Number(e.target.value);
+        onCommit(Number.isFinite(n) ? n : 0);
+      }}
+      onKeyDown={(e) => e.stopPropagation()}
+      className="h-10 w-full rounded-md border border-input bg-background pl-6 pr-2 text-xs tabular-nums text-foreground shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+    />
+  );
+}
 
 type CategorySectionProps = {
   transaction: Transaction;
@@ -56,14 +101,9 @@ export function CategorySection({
                 <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground/40">
                   €
                 </span>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
+                <SplitAmountInput
                   value={Math.abs(split.betrag)}
-                  onChange={(e) => splits.handleSplitAmountChange(index, Number(e.target.value))}
-                  onKeyDown={(e) => e.stopPropagation()}
-                  className="h-10 w-full rounded-md border border-input bg-background pl-6 pr-2 text-xs tabular-nums text-foreground shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  onCommit={(v) => splits.handleSplitAmountChange(index, v)}
                 />
               </div>
               <CategoryCombobox
@@ -104,9 +144,9 @@ export function CategorySection({
                   "h-1.5 rounded-full transition-colors",
                   splits.splitAbsSum === 0
                     ? "bg-border/40"
-                    : splits.splitMatchesTotal
-                      ? "bg-green-500/30"
-                      : "bg-destructive/30",
+                    : splits.splitOverTotal
+                      ? "bg-destructive/30"
+                      : "bg-green-500/30",
                 )}
               >
                 <div
@@ -114,9 +154,9 @@ export function CategorySection({
                     "h-full rounded-full transition-all",
                     splits.splitAbsSum === 0
                       ? "w-0"
-                      : splits.splitMatchesTotal
-                        ? "bg-green-500"
-                        : "bg-destructive",
+                      : splits.splitOverTotal
+                        ? "bg-destructive"
+                        : "bg-green-500",
                   )}
                   style={{
                     width: `${Math.min((splits.splitAbsSum / splits.absTotal) * 100, 100)}%`,
@@ -127,18 +167,18 @@ export function CategorySection({
             <span
               className={cn(
                 "text-xs tabular-nums font-medium",
-                splits.splitMatchesTotal
-                  ? "text-green-600 dark:text-green-400"
-                  : "text-destructive",
+                splits.splitOverTotal
+                  ? "text-destructive"
+                  : "text-green-600 dark:text-green-400",
               )}
             >
               {formatAmount(splits.splitAbsSum, transaction.betrag.waehrung)}
               <span className="text-muted-foreground/40 mx-0.5">/</span>
               {formatAmount(splits.absTotal, transaction.betrag.waehrung)}
-              {splits.splitMatchesTotal ? (
-                <Check className="ml-1 inline size-3" />
-              ) : (
+              {splits.splitOverTotal ? (
                 <span className="ml-1">✗</span>
+              ) : (
+                <Check className="ml-1 inline size-3" />
               )}
             </span>
           </div>
@@ -154,7 +194,7 @@ export function CategorySection({
               <Plus className="size-3" />
               Split
             </Button>
-            {splits.splitsChanged && splits.splitMatchesTotal && (
+            {splits.splitsChanged && !splits.splitOverTotal && (
               <Button
                 type="button"
                 size="sm"

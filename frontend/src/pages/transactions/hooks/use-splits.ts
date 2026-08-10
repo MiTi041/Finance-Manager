@@ -28,6 +28,7 @@ export function useSplits(
   const absTotal = Math.abs(transaction.betrag.wert);
   const splitAbsSum = hasSplits ? splitDrafts.reduce((sum, s) => sum + Math.abs(s.betrag), 0) : 0;
   const splitMatchesTotal = Math.round(splitAbsSum * 100) === Math.round(absTotal * 100);
+  const splitOverTotal = Math.round(splitAbsSum * 100) > Math.round(absTotal * 100);
 
   const splitsChanged =
     JSON.stringify(splitDrafts) !== JSON.stringify(transaction.technisch.splits);
@@ -44,37 +45,23 @@ export function useSplits(
   const handleAddSplit = () => {
     setSplitDrafts((prev) => {
       if (!prev) return prev;
-      const extra = Math.round((absTotal / (prev.length + 1)) * 100) / 100;
-      const redistributed = Array.from({ length: prev.length + 1 }, () => ({
-        betrag: extra * sign,
+      const usedAbsSum = prev.reduce((sum, s) => sum + Math.abs(s.betrag), 0);
+      const rest = Math.round((absTotal - usedAbsSum) * 100) / 100;
+      const newSplit = {
+        betrag: Math.max(rest, 0) * sign,
         kategorieId: null as number | null,
-      }));
-      const diff = Math.round((absTotal - extra * redistributed.length) * 100) / 100;
-      if (diff !== 0) {
-        redistributed[redistributed.length - 1].betrag =
-          Math.round((redistributed[redistributed.length - 1].betrag + diff * sign) * 100) / 100;
-      }
-      return redistributed;
+      };
+      return [...prev.map((s) => ({ ...s })), newSplit];
     });
   };
 
   const handleRemoveSplit = (index: number) => {
     if (!splitDrafts) return;
-    if (splitDrafts.length <= 2) {
+    if (splitDrafts.length <= 1) {
       handleRemoveAllSplits();
       return;
     }
-    setSplitDrafts((prev) => {
-      if (!prev) return prev;
-      const next = prev.filter((_, i) => i !== index);
-      const remainingAbsSum = next.reduce((s, x) => s + Math.abs(x.betrag), 0);
-      const diff = Math.round((absTotal - remainingAbsSum) * 100) / 100;
-      if (diff !== 0) {
-        next[next.length - 1].betrag =
-          Math.round((Math.abs(next[next.length - 1].betrag) + diff) * sign * 100) / 100;
-      }
-      return next;
-    });
+    setSplitDrafts((prev) => (prev ? prev.filter((_, i) => i !== index) : prev));
   };
 
   const handleSplitAmountChange = (index: number, value: number) => {
@@ -100,7 +87,19 @@ export function useSplits(
     onSaveSplits(transaction.id, null);
   };
 
-  const saveSplits = () => onSaveSplits(transaction.id, splitDrafts);
+  const saveSplits = () => {
+    if (!splitDrafts || splitOverTotal) return;
+    const usedAbsSum = splitDrafts.reduce((sum, s) => sum + Math.abs(s.betrag), 0);
+    const rest = Math.round((absTotal - usedAbsSum) * 100) / 100;
+    if (rest > 0) {
+      onSaveSplits(transaction.id, [
+        ...splitDrafts.map((s) => ({ ...s })),
+        { betrag: Math.round(rest * sign * 100) / 100, kategorieId: null },
+      ]);
+      return;
+    }
+    onSaveSplits(transaction.id, splitDrafts);
+  };
 
   const resetSplits = () => setSplitDrafts(cloneSplits());
 
@@ -114,6 +113,7 @@ export function useSplits(
     absTotal,
     splitAbsSum,
     splitMatchesTotal,
+    splitOverTotal,
     splitsChanged,
     initFirstSplit,
     handleAddSplit,

@@ -528,12 +528,48 @@ class TestRefundLinks:
             "created_at": "2026-07-01T10:00:00+00:00",
         }
 
+    def _expense(self, row_id: int, amount: float) -> dict:
+        return {
+            "id": row_id,
+            "account_iban": "DE001",
+            "account_blz": "12345678",
+            "amount": amount,
+            "original_amount": amount,
+            "currency": "EUR",
+            "date": "2026-07-01",
+            "entry_date": "2026-07-02",
+            "transaction_hash": build_transaction_hash(
+                {"account_iban": "DE001", "amount": amount, "date": "2026-07-01"}
+            ),
+            "created_at": "2026-07-02T10:00:00+00:00",
+            "updated_at": "2026-07-02T10:00:00+00:00",
+        }
+
     def test_insert_and_delete_by_id(self, test_db):
         assert _apply(test_db, _op("refund_links", 1, "INSERT", self._link(1, 10, 20, 50.0)))
         row = test_db.execute("SELECT * FROM refund_links WHERE id = 1").fetchone()
         assert row is not None and row["amount"] == 50.0
         assert _apply(test_db, _op("refund_links", 1, "DELETE", {}))
         assert test_db.execute("SELECT COUNT(*) FROM refund_links").fetchone()[0] == 0
+
+    @staticmethod
+    def _refund_total(conn, tx_id: int) -> float:
+        return conn.execute("SELECT refund_total FROM umsaetze WHERE id = ?", (tx_id,)).fetchone()[
+            "refund_total"
+        ]
+
+    def test_insert_and_delete_recalculate_expense_refund_total(self, test_db):
+        assert _apply(test_db, _op("umsaetze", 20, "INSERT", self._expense(20, -50.0)))
+        assert _apply(test_db, _op("refund_links", 1, "INSERT", self._link(1, 10, 20, 50.0)))
+        assert self._refund_total(test_db, 20) == 50.0
+
+        assert _apply(test_db, _op("refund_links", 1, "DELETE", {}))
+        assert self._refund_total(test_db, 20) == 0.0
+
+    def test_expense_arriving_after_link_recalculates_refund_total(self, test_db):
+        assert _apply(test_db, _op("refund_links", 1, "INSERT", self._link(1, 10, 20, 50.0)))
+        assert _apply(test_db, _op("umsaetze", 20, "INSERT", self._expense(20, -50.0)))
+        assert self._refund_total(test_db, 20) == 50.0
 
     def test_insert_dedupes_by_pair(self, test_db):
         assert _apply(test_db, _op("refund_links", 1, "INSERT", self._link(1, 10, 20, 50.0)))
