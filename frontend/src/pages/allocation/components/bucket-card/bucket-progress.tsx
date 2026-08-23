@@ -16,6 +16,7 @@ type Props = {
   bafoegBeforeMonth: number;
   bafoegMonthEinz: number;
   bafoegOutstanding: number;
+  bafoegAvailable: number;
   progress: number;
   onAnalyse: () => void;
 };
@@ -34,6 +35,7 @@ export function BucketProgress(props: Props) {
     bafoegBeforeMonth,
     bafoegMonthEinz,
     bafoegOutstanding,
+    bafoegAvailable,
     progress,
     onAnalyse,
   } = props;
@@ -56,6 +58,16 @@ export function BucketProgress(props: Props) {
   const segBeforeMonthPct = Math.min(100, Math.max(0, (segBeforeMonthEinz / segSafeTarget) * 100));
   const segMonthPct = Math.min(100, Math.max(0, (segMonthEinz / segSafeTarget) * 100));
   const segEntnahmenPct = Math.min(100, Math.max(0, (segTotalEntnahmen / segSafeTarget) * 100));
+
+  const bafoegAvailablePct = Math.min(
+    100,
+    Math.max(0, (bafoegAvailable / bafoegSafeTarget) * 100),
+  );
+  const bafoegBeforeAmberPct = Math.min(bafoegBeforeMonthPct, bafoegAvailablePct);
+  const bafoegMonthAmberPct = Math.max(
+    0,
+    Math.min(bafoegMonthPct, bafoegAvailablePct - bafoegBeforeAmberPct),
+  );
 
   return (
     <>
@@ -106,13 +118,13 @@ export function BucketProgress(props: Props) {
         </>
       ) : hasBafoegGoal ? (
         <div className="flex h-2 w-full gap-1">
-          {bafoegBeforeMonthPct > 0 && (
+          {bafoegBeforeAmberPct > 0 && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <div
                   className="h-full rounded-full bg-amber-500/40 cursor-pointer"
                   style={
-                    { width: `${bafoegBeforeMonthPct}%`, minWidth: "8px" } as React.CSSProperties
+                    { width: `${bafoegBeforeAmberPct}%`, minWidth: "8px" } as React.CSSProperties
                   }
                 />
               </TooltipTrigger>
@@ -121,12 +133,12 @@ export function BucketProgress(props: Props) {
               </TooltipContent>
             </Tooltip>
           )}
-          {bafoegMonthPct > 0 && (
+          {bafoegMonthAmberPct > 0 && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <div
                   className="h-full rounded-full bg-amber-500 cursor-pointer"
-                  style={{ width: `${bafoegMonthPct}%`, minWidth: "8px" } as React.CSSProperties}
+                  style={{ width: `${bafoegMonthAmberPct}%`, minWidth: "8px" } as React.CSSProperties}
                 />
               </TooltipTrigger>
               <TooltipContent side="top">
@@ -257,10 +269,10 @@ export function BucketProgress(props: Props) {
           {hasBafoegGoal ? (
             <>
               <span>
-                {formatAmount(bucket.saved_total ?? 0)} von {formatAmount(bucket.goal_amount!)}
+                {formatAmount(bafoegAvailable)} von {formatAmount(bucket.goal_amount!)}
               </span>
               <span className="font-medium tabular-nums text-foreground">
-                {Math.round(((bucket.saved_total ?? 0) / bafoegSafeTarget) * 100)}%
+                {Math.round((bafoegAvailable / bafoegSafeTarget) * 100)}%
               </span>
             </>
           ) : hasEmergencyGoal ? (

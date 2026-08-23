@@ -141,6 +141,7 @@ export function BucketCard({
     0,
     (bucket.saved_entnahmen ?? 0) - (bucket.saved_tilgungen ?? 0),
   );
+  const bafoegAvailable = Math.max(0, (bucket.saved_total ?? 0) - bafoegOutstanding);
   const bafoegOutstandingPct = Math.min(
     100,
     Math.max(0, (bafoegOutstanding / bafoegSafeTarget) * 100),
@@ -209,6 +210,7 @@ export function BucketCard({
           bafoegBeforeMonth={bafoegBeforeMonth}
           bafoegMonthEinz={bafoegMonthEinz}
           bafoegOutstanding={bafoegOutstanding}
+          bafoegAvailable={bafoegAvailable}
           progress={progress}
           onAnalyse={onAnalyse}
         />
