@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { CategoryMultiSelect } from "./category-multi-select";
+import { HashtagInput } from "./hashtag-input";
 import { PeriodToggle } from "./period-toggle";
 
 export function EditBudgetDialog({
@@ -27,10 +28,12 @@ export function EditBudgetDialog({
     categoryIds: number[],
     amount: number,
     period: BudgetPeriod,
+    hashtags: string[],
   ) => Promise<void>;
 }) {
   const [period, setPeriod] = useState<BudgetPeriod>("monthly");
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [hashtags, setHashtags] = useState<string[]>([]);
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const [saving, setSaving] = useState(false);
@@ -38,6 +41,7 @@ export function EditBudgetDialog({
   useEffect(() => {
     if (open && budget) {
       setSelected(new Set(budget.category_ids));
+      setHashtags(budget.hashtags);
       setName(budget.name);
       setAmount(String(budget.amount));
       setPeriod(budget.period);
@@ -61,13 +65,17 @@ export function EditBudgetDialog({
   };
 
   const parsed = Number(amount.replace(",", "."));
-  const valid = selected.size > 0 && Number.isFinite(parsed) && parsed >= 0 && name.trim().length > 0;
+  const valid =
+    (selected.size > 0 || hashtags.length > 0) &&
+    Number.isFinite(parsed) &&
+    parsed >= 0 &&
+    name.trim().length > 0;
 
   const save = async () => {
     if (!budget || !valid) return;
     setSaving(true);
     try {
-      await onSave(budget.id, name.trim(), [...selected], parsed, period);
+      await onSave(budget.id, name.trim(), [...selected], parsed, period, hashtags);
       onOpenChange(false);
     } catch {
       // Fehler wurde bereits im Page-Handler getoastet; Dialog bleibt offen
@@ -100,6 +108,7 @@ export function EditBudgetDialog({
           onChange={(e) => setName(e.target.value)}
         />
         <CategoryMultiSelect categories={available} selected={selected} onToggle={toggle} />
+        <HashtagInput tags={hashtags} onChange={setHashtags} />
         <div className="relative">
           <Input
             type="number"

@@ -56,6 +56,59 @@ class TestTransferRunBucketGuard:
                 service.transfer_run_bucket(row["id"], custom_amount=-5)
         assert exc.value.status_code == 400
 
+    def _bafoeg_row(self) -> dict[str, Any]:
+        return {
+            "id": 3,
+            "target_amount": 100.0,
+            "transferred": 0.0,
+            "is_completed": 0,
+            "bucket_type": "bafoeg",
+            "recipient_account_id": 1,
+            "iban": "DE89370400440532013000",
+            "recipient_name": "Ruecklage",
+            "bic": None,
+        }
+
+    def test_bafoeg_tilgung_gets_entnahme_tag(self):
+        row = self._bafoeg_row()
+        service = AllocationService()
+        with patch("finance_server.services.allocation_service.get_connection") as mock_conn:
+            cursor = Mock()
+            cursor.fetchone.return_value = row
+            mock_conn.return_value.__enter__.return_value.execute.return_value = cursor
+            result = service.transfer_run_bucket(row["id"], custom_amount=50.0)
+        assert result["purpose"].endswith("tag.bafoegschulden.entnahme")
+
+    def test_bafoeg_monthly_rate_keeps_base_tag(self):
+        result = self._service(self._bafoeg_row())
+        assert result["purpose"].endswith("tag.bafoegschulden")
+        assert ".entnahme" not in result["purpose"]
+
+    def test_completed_bafoeg_allows_tilgung(self):
+        row = self._bafoeg_row()
+        row["is_completed"] = 1
+        service = AllocationService()
+        with patch("finance_server.services.allocation_service.get_connection") as mock_conn:
+            cursor = Mock()
+            cursor.fetchone.return_value = row
+            mock_conn.return_value.__enter__.return_value.execute.return_value = cursor
+            result = service.transfer_run_bucket(row["id"], custom_amount=50.0)
+        assert result["is_tilgung"] is True
+        assert result["purpose"].endswith("tag.bafoegschulden.entnahme")
+
+    def test_completed_bucket_still_blocks_monthly_transfer(self):
+        row = self._bafoeg_row()
+        row["is_completed"] = 1
+        from fastapi import HTTPException
+        service = AllocationService()
+        with patch("finance_server.services.allocation_service.get_connection") as mock_conn:
+            cursor = Mock()
+            cursor.fetchone.return_value = row
+            mock_conn.return_value.__enter__.return_value.execute.return_value = cursor
+            with pytest.raises(HTTPException) as exc:
+                service.transfer_run_bucket(row["id"])
+        assert exc.value.status_code == 400
+
 
 class TestDetectIncome:
     def test_returns_zero_when_no_transactions(self):

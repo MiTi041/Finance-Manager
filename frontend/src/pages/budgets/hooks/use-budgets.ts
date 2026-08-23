@@ -37,8 +37,8 @@ export function useBudgets() {
   }, [load]);
 
   const create = useCallback(
-    async (name: string, categoryIds: number[], amount: number, period: BudgetPeriod) => {
-      await createBudgetApi(name, categoryIds, amount, period);
+    async (name: string, categoryIds: number[], amount: number, period: BudgetPeriod, hashtags: string[]) => {
+      await createBudgetApi(name, categoryIds, amount, period, hashtags);
       await load();
     },
     [load],
@@ -51,8 +51,9 @@ export function useBudgets() {
       categoryIds: number[],
       amount: number,
       period: BudgetPeriod,
+      hashtags: string[],
     ) => {
-      await updateBudgetApi(id, name, categoryIds, amount, period);
+      await updateBudgetApi(id, name, categoryIds, amount, period, hashtags);
       await load();
     },
     [load],

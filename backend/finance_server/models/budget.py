@@ -5,7 +5,8 @@ from pydantic import BaseModel
 
 class BudgetCreateRequest(BaseModel):
     name: str
-    category_ids: list[int]
+    category_ids: list[int] = []
+    hashtags: list[str] = []
     amount: float
     period: str = "monthly"
 
@@ -13,5 +14,6 @@ class BudgetCreateRequest(BaseModel):
 class BudgetUpdateRequest(BaseModel):
     name: str | None = None
     category_ids: list[int] | None = None
+    hashtags: list[str] | None = None
     amount: float | None = None
     period: str | None = None

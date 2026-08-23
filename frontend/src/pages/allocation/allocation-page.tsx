@@ -155,8 +155,13 @@ export default function AllocationPage() {
         invest: "tag.investieren",
         donation: "tag.spenden",
       };
+      let tag = bucketTags[bucket.bucket_type] ?? "";
+      // muss zur Backend-Logik passen: Tilgung per Slider bekommt .entnahme-Tag
+      if (bucket.bucket_type === "bafoeg" && amount != null) {
+        tag += ".entnahme";
+      }
       const purpose =
-        `Allokation ${bucket.bucket_type} ${bucketTags[bucket.bucket_type] ?? ""}`.trim();
+        `Allokation ${bucket.bucket_type} ${tag}`.trim();
 
       const defaultAmount =
         bucket.bucket_type === "bafoeg"

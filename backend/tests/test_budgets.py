@@ -9,6 +9,7 @@ from finance_server.db.budgets import (
     create_budget,
     delete_budget,
     list_budgets,
+    list_hashtag_suggestions,
     update_budget,
 )
 
@@ -28,6 +29,7 @@ def _make_db() -> sqlite3.Connection:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL DEFAULT '',
             category_ids TEXT NOT NULL,
+            hashtags TEXT NOT NULL DEFAULT '[]',
             amount REAL NOT NULL,
             period TEXT NOT NULL DEFAULT 'monthly',
             created_at TEXT,
@@ -37,6 +39,7 @@ def _make_db() -> sqlite3.Connection:
             id INTEGER PRIMARY KEY,
             kategorie INTEGER,
             amount REAL,
+            note TEXT,
             entry_date TEXT,
             date TEXT,
             created_at TEXT,
@@ -72,11 +75,12 @@ def _tx(
     amount: float,
     cat: int | None,
     refund_total: float = 0,
+    note: str | None = None,
 ) -> None:
     conn.execute(
-        "INSERT INTO umsaetze (kategorie, amount, entry_date, date, created_at, refund_total) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (cat, amount, f"{month}-15", f"{month}-15", f"{month}-15T10:00:00", refund_total),
+        "INSERT INTO umsaetze (kategorie, amount, note, entry_date, date, created_at, refund_total) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (cat, amount, note, f"{month}-15", f"{month}-15", f"{month}-15T10:00:00", refund_total),
     )
 
 
@@ -357,3 +361,100 @@ class TestYearlyBudgets:
         result = _run(conn, lambda: update_budget(bid, period="yearly", amount=600.0))
         assert result["period"] == "yearly"
         assert result["amount"] == 600.0
+
+
+class TestHashtagBudgets:
+    def test_hashtag_only_budget_counts_matching_notes(self):
+        conn = _make_db()
+        _run(conn, lambda: create_budget("Urlaub", [], 200.0, hashtags=["urlaub"]))
+        _tx(conn, "2026-07", -50.0, 5, note="Hotel #Urlaub in Rom")
+        _tx(conn, "2026-07", -30.0, 5, note="ohne Tag")
+        _tx(conn, "2026-07", -20.0, 5, note="#urlaub2 falsch")
+
+        result = _run(conn, lambda: list_budgets("2026-07"))
+
+        assert len(result) == 1
+        assert result[0]["hashtags"] == ["urlaub"]
+        assert result[0]["spent"] == 50.0
+
+    def test_or_match_counts_category_or_tag_without_double_count(self):
+        conn = _make_db()
+        _run(conn, lambda: create_budget("Mix", [2], 100.0, hashtags=["kino"]))
+        _tx(conn, "2026-07", -20.0, 2, note="#kino beides")
+        _tx(conn, "2026-07", -10.0, 3, note="nur tag #kino")
+        _tx(conn, "2026-07", -5.0, 2, note="nur kategorie")
+
+        result = _run(conn, lambda: list_budgets("2026-07"))
+
+        assert result[0]["spent"] == 35.0
+
+    def test_hashtags_ignored_for_other_months(self):
+        conn = _make_db()
+        _run(conn, lambda: create_budget("Urlaub", [], 200.0, hashtags=["urlaub"]))
+        _tx(conn, "2026-06", -90.0, None, note="#urlaub")
+
+        result = _run(conn, lambda: list_budgets("2026-07"))
+
+        assert result[0]["spent"] == 0.0
+
+    def test_refunds_reduce_hashtag_spend(self):
+        conn = _make_db()
+        _run(conn, lambda: create_budget("Urlaub", [], 200.0, hashtags=["urlaub"]))
+        _tx(conn, "2026-07", -40.0, None, note="#urlaub", refund_total=15.0)
+
+        result = _run(conn, lambda: list_budgets("2026-07"))
+
+        assert result[0]["spent"] == 25.0
+
+    def test_create_normalizes_and_dedupes_hashtags(self):
+        conn = _make_db()
+
+        result = _run(
+            conn, lambda: create_budget("T", [1], 10.0, hashtags=["#Urlaub", "urlaub", "", "#URLAUB"])
+        )
+
+        assert result["hashtags"] == ["urlaub"]
+
+    def test_rejects_invalid_hashtag(self):
+        conn = _make_db()
+
+        with pytest.raises(ValueError, match="Ungültiger Hashtag"):
+            _run(conn, lambda: create_budget("T", [1], 10.0, hashtags=["mit leer"]))
+
+    def test_rejects_budget_without_categories_and_hashtags(self):
+        conn = _make_db()
+
+        with pytest.raises(ValueError, match="Mindestens eine Kategorie oder einen Hashtag"):
+            _run(conn, lambda: create_budget("T", [], 10.0))
+
+    def test_update_sets_and_clears_hashtags(self):
+        conn = _make_db()
+        _run(conn, lambda: create_budget("T", [1], 10.0))
+        bid = conn.execute("SELECT id FROM budgets").fetchone()["id"]
+
+        updated = _run(conn, lambda: update_budget(bid, hashtags=["a", "#b"]))
+        cleared = _run(conn, lambda: update_budget(bid, hashtags=[]))
+
+        assert updated["hashtags"] == ["a", "b"]
+        assert cleared["hashtags"] == []
+        assert cleared["category_ids"] == [1]
+
+    def test_update_cannot_remove_last_match_source(self):
+        conn = _make_db()
+        _run(conn, lambda: create_budget("T", [], 10.0, hashtags=["urlaub"]))
+        bid = conn.execute("SELECT id FROM budgets").fetchone()["id"]
+
+        with pytest.raises(ValueError, match="Mindestens eine Kategorie oder einen Hashtag"):
+            _run(conn, lambda: update_budget(bid, hashtags=[]))
+
+
+class TestHashtagSuggestions:
+    def test_extracts_distinct_sorted_hashtags_from_notes(self):
+        conn = _make_db()
+        _tx(conn, "2026-07", -10.0, 1, note="#Kino und #essen")
+        _tx(conn, "2026-07", -10.0, 2, note="nochmal #kino!")
+        _tx(conn, "2026-07", -10.0, 2, note=None)
+
+        result = _run(conn, lambda: list_hashtag_suggestions())
+
+        assert result == ["essen", "kino"]

@@ -32,9 +32,10 @@ export default function BudgetsPage() {
     categoryIds: number[],
     amount: number,
     period: BudgetPeriod,
+    hashtags: string[],
   ) => {
     try {
-      await create(name, categoryIds, amount, period);
+      await create(name, categoryIds, amount, period, hashtags);
       toast.success("Budget angelegt");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Fehler");
@@ -56,9 +57,10 @@ export default function BudgetsPage() {
     categoryIds: number[],
     amount: number,
     period: BudgetPeriod,
+    hashtags: string[],
   ) => {
     try {
-      await update(id, name, categoryIds, amount, period);
+      await update(id, name, categoryIds, amount, period, hashtags);
       toast.success("Budget aktualisiert");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Fehler");

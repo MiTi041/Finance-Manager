@@ -8,7 +8,7 @@ def test_initialize_database_creates_budgets_table():
     conn.row_factory = sqlite3.Row
     initialize_database(conn)
     cols = {row[1] for row in conn.execute("PRAGMA table_info(budgets)")}
-    assert {"id", "category_ids", "amount", "period", "created_at", "updated_at"} <= cols
+    assert {"id", "category_ids", "hashtags", "amount", "period", "created_at", "updated_at"} <= cols
     conn.close()
 
 

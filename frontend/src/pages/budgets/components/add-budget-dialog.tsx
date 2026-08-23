@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { CategoryMultiSelect } from "./category-multi-select";
+import { HashtagInput } from "./hashtag-input";
 import { PeriodToggle } from "./period-toggle";
 
 export function AddBudgetDialog({
@@ -18,10 +19,11 @@ export function AddBudgetDialog({
   onOpenChange: (open: boolean) => void;
   categories: FinanceCategory[];
   existingCategoryIds: Record<BudgetPeriod, Set<number>>;
-  onCreate: (name: string, categoryIds: number[], amount: number, period: BudgetPeriod) => void;
+  onCreate: (name: string, categoryIds: number[], amount: number, period: BudgetPeriod, hashtags: string[]) => void;
 }) {
   const [period, setPeriod] = useState<BudgetPeriod>("monthly");
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [hashtags, setHashtags] = useState<string[]>([]);
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const available = categories.filter((c) => !existingCategoryIds[period].has(c.id));
@@ -38,17 +40,23 @@ export function AddBudgetDialog({
     });
   };
 
-  const submit = () => {
-    if (selected.size === 0 || !(Number(amount) > 0) || !name.trim()) return;
-    onCreate(name.trim(), [...selected], Number(amount), period);
+  const reset = () => {
     setSelected(new Set());
+    setHashtags([]);
     setName("");
     setAmount("");
     setPeriod("monthly");
+  };
+
+  const submit = () => {
+    if (!(Number(amount) > 0) || !name.trim() || (selected.size === 0 && hashtags.length === 0)) return;
+    onCreate(name.trim(), [...selected], Number(amount), period, hashtags);
+    reset();
     onOpenChange(false);
   };
 
-  const canSubmit = selected.size > 0 && Number(amount) > 0 && name.trim().length > 0;
+  const canSubmit =
+    (selected.size > 0 || hashtags.length > 0) && Number(amount) > 0 && name.trim().length > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -69,6 +77,7 @@ export function AddBudgetDialog({
           onChange={(e) => setName(e.target.value)}
         />
         <CategoryMultiSelect categories={available} selected={selected} onToggle={toggle} />
+        <HashtagInput tags={hashtags} onChange={setHashtags} />
         <div className="relative">
           <Input
             type="number"

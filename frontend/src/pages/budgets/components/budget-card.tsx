@@ -18,8 +18,7 @@ export function BudgetCard({
   onDelete: (id: number) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const ratio =
-    budget.amount > 0 ? budget.spent / budget.amount : budget.spent > 0 ? 1 : 0;
+  const ratio = budget.amount > 0 ? budget.spent / budget.amount : budget.spent > 0 ? 1 : 0;
   const color = ratio > 1 ? "bg-red-500" : ratio >= 0.7 ? "bg-amber-500" : "bg-emerald-500";
   const status =
     ratio > 1
@@ -101,6 +100,14 @@ export function BudgetCard({
               +{budget.categories.length - 3}
             </span>
           )}
+          {budget.hashtags.map((tag) => (
+            <span
+              key={tag}
+              className="inline-flex max-w-40 items-center rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary"
+            >
+              <span className="truncate">#{tag}</span>
+            </span>
+          ))}
         </div>
 
         <p className="text-sm font-semibold tabular-nums">
@@ -111,7 +118,8 @@ export function BudgetCard({
         <div className="flex flex-col gap-1">
           <Progress value={ratio * 100} indicatorClassName={color} className="h-2.5 w-full" />
           <p className={"text-xs font-medium text-muted-foreground"}>
-            {Math.round(ratio * 100)} % vom {budget.period === "yearly" ? "Jahresbudget" : "Budget"} genutzt
+            {Math.round(ratio * 100)} % vom {budget.period === "yearly" ? "Jahresbudget" : "Budget"}{" "}
+            genutzt
           </p>
         </div>
       </CardContent>

@@ -432,7 +432,10 @@ class AllocationService:
             raise HTTPException(status_code=404, detail="Run-Bucket nicht gefunden")
 
         rb = dict(row)
-        if rb["is_completed"]:
+        # ponytail: BAföG-Tilgung (custom_amount) ist eine Extra-Zahlung und
+        # darf auch nach abgeschlossener Monatsrate möglich sein
+        is_tilgung = rb["bucket_type"] == "bafoeg" and custom_amount is not None
+        if rb["is_completed"] and not is_tilgung:
             raise HTTPException(status_code=400, detail="Dieser Bucket wurde bereits überwiesen")
 
         remaining = rb["target_amount"] - rb["transferred"]
@@ -483,6 +486,11 @@ class AllocationService:
                     raise HTTPException(status_code=400, detail="Empfängerkonto nicht gefunden")
                 recipient = dict(recipient_row)
 
+        tag = BUCKET_TAGS.get(rb["bucket_type"], "")
+        if rb["bucket_type"] == "bafoeg" and custom_amount is not None:
+            # ponytail: Tilgungs-Slider zahlt direkt auf die Schuld → muss als
+            # Tilgung (.entnahme) registriert werden, nicht als Rücklagen-Einzahlung
+            tag += ".entnahme"
         return {
             "run_bucket_id": run_bucket_id,
             "amount": amount,
@@ -490,7 +498,8 @@ class AllocationService:
             "recipient_name": recipient["recipient_name"],
             "recipient_bic": recipient.get("bic"),
             "sender_iban": rb.get("sender_iban"),
-            "purpose": f"Allokation {rb['bucket_type']} {BUCKET_TAGS.get(rb['bucket_type'], '')}".strip(),
+            "purpose": f"Allokation {rb['bucket_type']} {tag}".strip(),
+            "is_tilgung": is_tilgung,
         }
 
     def mark_transferred(self, run_bucket_id: int, amount: float) -> None:
