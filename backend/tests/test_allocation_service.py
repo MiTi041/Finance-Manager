@@ -817,4 +817,84 @@ def test_bafoeg_partial_update_keeps_unsent_fields():
     cfg = BafoegConfig.model_validate(body)
     dump = cfg.model_dump(exclude_unset=True, exclude_none=True)
     assert dump == {"anlagezinsen": 50}
-    assert cfg.interest_rate == 2.0
+    assert cfg.interest_rate is None
+    assert not hasattr(cfg, "monthly_rate")
+
+
+def test_compute_bafoeg_rate_uses_config_values():
+    service = AllocationService()
+    cfg = {
+        "total_debt": 10000.0,
+        "interest_rate": 2.5,
+        "payout_date": "2032-07-29",
+        "current_balance": 1000.0,
+        "anlagezinsen": 0.0,
+    }
+    with (
+        patch("finance_server.services.allocation_service.db.get_bafoeg_config", return_value=cfg),
+        patch("finance_server.services.allocation_service.get_income_payout_days", return_value=[1]),
+    ):
+        rate = service._compute_bafoeg_rate("2026-07", 1000.0, 0.0)
+    assert rate is not None
+    assert rate > 0
+
+
+def test_compute_bafoeg_rate_ignores_entnahmen_as_startkapital():
+    service = AllocationService()
+    cfg = {
+        "total_debt": 10000.0,
+        "interest_rate": 2.5,
+        "payout_date": "2032-07-29",
+        "current_balance": 1000.0,
+        "anlagezinsen": 0.0,
+    }
+    with (
+        patch("finance_server.services.allocation_service.db.get_bafoeg_config", return_value=cfg),
+        patch("finance_server.services.allocation_service.get_income_payout_days", return_value=[1]),
+    ):
+        same_startkapital = service._compute_bafoeg_rate("2026-07", 1000.0, 500.0)
+        without_outstanding = service._compute_bafoeg_rate("2026-07", 500.0, 0.0)
+    assert same_startkapital == without_outstanding
+    assert same_startkapital > 0
+
+
+def test_compute_bafoeg_rate_returns_none_when_incomplete():
+    service = AllocationService()
+    with patch(
+        "finance_server.services.allocation_service.db.get_bafoeg_config",
+        return_value={"total_debt": 10000.0, "interest_rate": 2.5, "payout_date": None},
+    ):
+        assert service._compute_bafoeg_rate("2026-07", 1000.0, 0.0) is None
+
+
+def test_compute_bafoeg_rate_uses_variable_zinsverlauf():
+    import json
+
+    service = AllocationService()
+    base = {
+        "total_debt": 10000.0,
+        "interest_rate": 2.5,
+        "payout_date": "2032-07-29",
+        "current_balance": 1000.0,
+        "anlagezinsen": 0.0,
+        "zinsverlauf": json.dumps([
+            {"datum": "2026-08-01", "zinssatz": 4.0},
+            {"datum": "2027-01-01", "zinssatz": 2.5},
+        ]),
+    }
+    with (
+        patch("finance_server.services.allocation_service.db.get_bafoeg_config", return_value=base),
+        patch("finance_server.services.allocation_service.get_income_payout_days", return_value=[1]),
+    ):
+        rate_var = service._compute_bafoeg_rate("2026-07", 1000.0, 0.0)
+
+    base["zinsverlauf"] = None
+    with (
+        patch("finance_server.services.allocation_service.db.get_bafoeg_config", return_value=base),
+        patch("finance_server.services.allocation_service.get_income_payout_days", return_value=[1]),
+    ):
+        rate_flat = service._compute_bafoeg_rate("2026-07", 1000.0, 0.0)
+
+    assert rate_var is not None
+    assert rate_flat is not None
+    assert rate_var < rate_flat

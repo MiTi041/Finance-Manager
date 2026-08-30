@@ -10,6 +10,7 @@ import {
   ArrowUpFromLine,
   HashIcon,
   Info,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,7 @@ import { SearchableSelect } from "@/components/searchable-select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DatePicker } from "@/components/date-picker";
 import { formatAmount } from "@/lib/utils/format";
+import { formatDateInputValue } from "@/pages/allocation/utils";
 import { fetchBafoegConfig, updateBafoegConfig } from "@/lib/allocation";
 import type { AllocationBucket, AllocationRunBucket } from "@/lib/allocation";
 
@@ -101,16 +103,19 @@ export function BucketSettingsPopover(props: Props) {
   useEffect(() => setLocalSender(config.sender_iban ?? ""), [config.sender_iban]);
 
   const [bafoegConfig, setBafoegConfig] = useState<{
-    current_balance: number;
-    anlagezinsen: number;
-    interest_rate: number;
+    current_balance?: number;
+    anlagezinsen?: number;
+    interest_rate?: number;
     payout_date: string | null;
-    total_debt: number;
+    total_debt?: number;
+    zinsverlauf?: { datum: string; zinssatz: number }[];
   } | null>(null);
   const [localBafoegBalance, setLocalBafoegBalance] = useState("");
+  const [localBafoegDebt, setLocalBafoegDebt] = useState("");
   const [zinsInput, setZinsInput] = useState("");
   const [localBafoegRate, setLocalBafoegRate] = useState("");
   const [localBafoegPayoutDate, setLocalBafoegPayoutDate] = useState("");
+  const [localZinsverlauf, setLocalZinsverlauf] = useState<{ datum: string; zinssatz: string }[]>([]);
   const bafoegConfigFetched = useRef(false);
 
   useEffect(() => {
@@ -118,28 +123,42 @@ export function BucketSettingsPopover(props: Props) {
     bafoegConfigFetched.current = true;
     fetchBafoegConfig().then((cfg) => {
       setBafoegConfig(cfg);
-      setLocalBafoegBalance(cfg.current_balance > 0 ? String(cfg.current_balance) : "");
-      setLocalBafoegRate(cfg.interest_rate > 0 ? String(cfg.interest_rate) : "");
+      setLocalBafoegBalance(cfg.current_balance && cfg.current_balance > 0 ? String(cfg.current_balance) : "");
+      setLocalBafoegDebt(cfg.total_debt && cfg.total_debt > 0 ? String(cfg.total_debt) : "");
+      setLocalBafoegRate(cfg.interest_rate && cfg.interest_rate > 0 ? String(cfg.interest_rate) : "");
       setLocalBafoegPayoutDate(cfg.payout_date ?? "");
+      setLocalZinsverlauf((cfg.zinsverlauf ?? []).map((s) => ({ datum: s.datum, zinssatz: String(s.zinssatz) })));
     });
   }, [bucket.bucket_type]);
 
   const commitBafoegConfig = (nextPayoutDate = localBafoegPayoutDate) => {
     if (!bafoegConfig) return;
+    const debt = parseFloat(localBafoegDebt.replace(",", ".")) || 0;
     const balance = parseFloat(localBafoegBalance.replace(",", ".")) || 0;
     const rate = parseFloat(localBafoegRate.replace(",", ".")) || 2.0;
     const payout = nextPayoutDate.trim() || null;
+    const zinsverlauf = localZinsverlauf
+      .map((s) => ({ datum: s.datum, zinssatz: parseFloat(s.zinssatz.replace(",", ".")) }))
+      .filter((s) => s.datum && !isNaN(s.zinssatz))
+      .sort((a, b) => a.datum.localeCompare(b.datum));
+    const prevVerlauf = (bafoegConfig.zinsverlauf ?? [])
+      .map((s) => ({ datum: s.datum, zinssatz: Number(s.zinssatz) }))
+      .sort((a, b) => a.datum.localeCompare(b.datum));
     if (
+      debt === bafoegConfig.total_debt &&
       balance === bafoegConfig.current_balance &&
       rate === bafoegConfig.interest_rate &&
-      payout === bafoegConfig.payout_date
+      payout === bafoegConfig.payout_date &&
+      JSON.stringify(zinsverlauf) === JSON.stringify(prevVerlauf)
     ) {
       return;
     }
     updateBafoegConfig({
+      total_debt: debt,
       current_balance: balance,
       interest_rate: rate,
       payout_date: payout,
+      zinsverlauf,
     }).then((cfg) => {
       setBafoegConfig(cfg);
       onRefresh?.();
@@ -149,13 +168,23 @@ export function BucketSettingsPopover(props: Props) {
   const addZins = () => {
     const amt = parseFloat(zinsInput.replace(",", "."));
     if (!bafoegConfig || isNaN(amt) || amt <= 0) return;
-    const next = Math.round((bafoegConfig.anlagezinsen + amt) * 100) / 100;
-    const nextBalance = Math.round((bafoegConfig.current_balance + amt) * 100) / 100;
+    const next = Math.round(((bafoegConfig.anlagezinsen ?? 0) + amt) * 100) / 100;
+    const nextBalance = Math.round(((bafoegConfig.current_balance ?? 0) + amt) * 100) / 100;
     setZinsInput("");
     updateBafoegConfig({ anlagezinsen: next, current_balance: nextBalance }).then((cfg) => {
       setBafoegConfig(cfg);
       onRefresh?.();
     });
+  };
+
+  const addZinsverlaufSegment = () => {
+    setLocalZinsverlauf((prev) => [...prev, { datum: "", zinssatz: "" }]);
+  };
+  const updateZinsverlaufSegment = (index: number, patch: Partial<{ datum: string; zinssatz: string }>) => {
+    setLocalZinsverlauf((prev) => prev.map((s, i) => (i === index ? { ...s, ...patch } : s)));
+  };
+  const removeZinsverlaufSegment = (index: number) => {
+    setLocalZinsverlauf((prev) => prev.filter((_, i) => i !== index));
   };
 
   const commitGoal = () => {
@@ -302,10 +331,32 @@ export function BucketSettingsPopover(props: Props) {
                   </div>
                   <div className="flex items-center justify-between gap-3">
                     <Label
+                      htmlFor={`bafoeg-debt-${bucket.id}`}
+                      className="text-sm font-normal text-foreground"
+                    >
+                      Gesamtschuld
+                    </Label>
+                    <div className="relative shrink-0">
+                      <Input
+                        id={`bafoeg-debt-${bucket.id}`}
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0"
+                        value={localBafoegDebt}
+                        onChange={(e) => setLocalBafoegDebt(e.target.value)}
+                        className="h-8 w-28 bg-background pr-7 text-right text-sm tabular-nums"
+                      />
+                      <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                        €
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <Label
                       htmlFor={`bafoeg-rate-${bucket.id}`}
                       className="text-sm font-normal text-foreground"
                     >
-                      Zinssatz
+                      Aktueller Zinssatz
                     </Label>
                     <div className="relative shrink-0">
                       <Input
@@ -332,21 +383,71 @@ export function BucketSettingsPopover(props: Props) {
                           : null
                       }
                       onChange={(d) => {
-                        const s = d ? d.toISOString().slice(0, 10) : "";
+                        const s = d ? formatDateInputValue(d) : "";
                         setLocalBafoegPayoutDate(s);
                       }}
                     />
                   </div>
-                  {bafoegConfig && (
+                </div>
+              </div>
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/80">
+                  Zinsverlauf
+                </p>
+                <div className="space-y-2 rounded-lg border bg-muted/20 px-3 py-2.5">
+                  {localZinsverlauf.length === 0 && (
                     <p className="text-xs text-muted-foreground">
-                      Ziel: {formatAmount(bafoegConfig.total_debt)} bis{" "}
-                      {bafoegConfig.payout_date
-                        ? new Date(
-                            bafoegConfig.payout_date + "T00:00:00",
-                          ).toLocaleDateString("de-DE")
-                        : "offen"}
+                      Keine Zinswechsel hinterlegt — es gilt durchgehend der aktuelle Zinssatz.
                     </p>
                   )}
+                  {localZinsverlauf.map((segment, index) => (
+                    <div key={index} className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-[11px] font-medium text-muted-foreground">
+                          Gültig ab
+                        </Label>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-6 shrink-0 text-muted-foreground hover:text-foreground"
+                          aria-label={`Segment entfernen ${index + 1}`}
+                          onClick={() => removeZinsverlaufSegment(index)}
+                        >
+                          <X className="size-3.5" />
+                        </Button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <DatePicker
+                          className="flex-1"
+                          value={segment.datum ? new Date(segment.datum + "T00:00:00") : null}
+                          onChange={(d) =>
+                            updateZinsverlaufSegment(index, {
+                              datum: d ? formatDateInputValue(d) : "",
+                            })
+                          }
+                        />
+                        <div className="relative shrink-0">
+                          <Input
+                            aria-label={`Zinssatz ab ${segment.datum || "…"}`}
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="2.5"
+                            value={segment.zinssatz}
+                            onChange={(e) =>
+                              updateZinsverlaufSegment(index, { zinssatz: e.target.value })
+                            }
+                            className="h-8 w-20 bg-background pr-6 text-right text-sm tabular-nums"
+                          />
+                          <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                            %
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <Button variant="outline" size="sm" className="w-full" onClick={addZinsverlaufSegment}>
+                    + Zinswechsel hinzufügen
+                  </Button>
                 </div>
               </div>
               <div className="space-y-2">

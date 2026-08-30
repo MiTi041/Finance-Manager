@@ -435,7 +435,6 @@ def create_allocation_bafoeg_config_table(connection: sqlite3.Connection) -> Non
         CREATE TABLE IF NOT EXISTS allocation_bafoeg_config (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             total_debt      REAL NOT NULL DEFAULT 7600,
-            monthly_rate    REAL NOT NULL DEFAULT 267,
             interest_rate   REAL NOT NULL DEFAULT 2.0,
             payout_date     TEXT,
             created_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -639,8 +638,12 @@ def initialize_database(connection: sqlite3.Connection) -> None:
         {
             "current_balance": "REAL NOT NULL DEFAULT 0",
             "anlagezinsen": "REAL NOT NULL DEFAULT 0",
+            "zinsverlauf": "TEXT",
         },
     )
+    bafoeg_cols = {row[1] for row in connection.execute("PRAGMA table_info(allocation_bafoeg_config)").fetchall()}
+    if "monthly_rate" in bafoeg_cols:
+        connection.execute("ALTER TABLE allocation_bafoeg_config DROP COLUMN monthly_rate")
     _ensure_table_columns(
         connection,
         "allocation_buckets",

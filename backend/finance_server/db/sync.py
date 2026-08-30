@@ -110,7 +110,7 @@ VALID_SYNC_COLUMNS: dict[str, set[str]] = {
     "subscription_identities": {"id", "counterparty_name", "amount", "display_name", "f_zahlungspartner_id", "dismissed", "updated_at"},
     "ibans": {"iban", "f_zahlungspartner_id"},
     "allocation_buckets": {"id", "bucket_type", "percentage", "recipient_account_id", "sender_iban", "is_active", "sort_order", "target_amount", "target_months", "recipient_iban", "created_at", "updated_at"},
-    "allocation_bafoeg_config": {"id", "total_debt", "monthly_rate", "interest_rate", "payout_date", "current_balance", "anlagezinsen", "created_at", "updated_at"},
+    "allocation_bafoeg_config": {"id", "total_debt", "interest_rate", "payout_date", "current_balance", "anlagezinsen", "created_at", "updated_at"},
     "savings_plans": {"id", "name", "tag", "target_amount", "target_date", "target_recipient_name", "target_recipient_iban", "target_recipient_bic", "is_visible", "sender_iban", "created_at", "updated_at"},
     "budgets": {"id", "name", "category_ids", "amount", "period", "created_at", "updated_at"},
     "app_settings": {"key", "value", "updated_at"},

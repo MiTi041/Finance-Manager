@@ -204,18 +204,12 @@ export type DonationAnalytics = {
 
 export type BafoegConfig = {
   id?: number;
-  total_debt: number;
-  monthly_rate: number;
-  interest_rate: number;
-  current_balance: number;
-  anlagezinsen: number;
+  total_debt?: number;
+  interest_rate?: number;
+  current_balance?: number;
+  anlagezinsen?: number;
   payout_date: string | null;
-};
-
-export type BafoegRateResponse = {
-  required_monthly_rate: number;
-  projected_end_balance: number;
-  interest_earned: number;
+  zinsverlauf?: { datum: string; zinssatz: number }[];
 };
 
 export async function fetchBafoegConfig(): Promise<BafoegConfig> {
@@ -226,21 +220,6 @@ export async function fetchBafoegConfig(): Promise<BafoegConfig> {
 export async function updateBafoegConfig(payload: Partial<BafoegConfig>): Promise<BafoegConfig> {
   const response = await fetch(`${getApiBaseUrl()}/allocation/bafoeg-config`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  return parseJsonResponse(response);
-}
-
-export async function berechneBafoegRate(payload: {
-  current_balance: number;
-  total_debt?: number;
-  interest_rate?: number;
-  payout_date: string;
-  offene_zinsen?: number;
-}): Promise<BafoegRateResponse> {
-  const response = await fetch(`${getApiBaseUrl()}/allocation/bafoeg/berechne-rate`, {
-    method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });

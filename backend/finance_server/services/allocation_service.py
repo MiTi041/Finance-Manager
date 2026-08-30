@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import json
 import math
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 
 from fastapi import HTTPException
@@ -51,9 +52,14 @@ class AllocationService:
         return db.update_bucket(bucket_id, payload, set_null)
 
     def get_bafoeg_config(self) -> dict[str, Any] | None:
-        return db.get_bafoeg_config()
+        cfg = db.get_bafoeg_config()
+        if cfg and cfg.get("zinsverlauf"):
+            cfg["zinsverlauf"] = json.loads(cfg["zinsverlauf"])
+        return cfg
 
     def update_bafoeg_config(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if "zinsverlauf" in payload:
+            payload["zinsverlauf"] = json.dumps(payload["zinsverlauf"] or [], ensure_ascii=False)
         return db.upsert_bafoeg_config(payload)
 
     def get_settings(self) -> dict[str, Any]:
@@ -118,14 +124,20 @@ class AllocationService:
         run_id = db.create_run(month, net_income, net_income)
         all_buckets = db.list_buckets()
 
-        # Pinned: BAföG bucket (fixed monthly rate, not percentage-based)
+        # Pinned: BAföG bucket (monthly rate auto-calculated, not percentage-based)
         bafoeg_amount = 0.0
         if get_setting("bafoeg_enabled") == "true":
             bafoeg_config = db.get_bafoeg_config()
-            if bafoeg_config:
-                bafoeg_amount = bafoeg_config["monthly_rate"]
-                bafoeg_bucket = next((b for b in all_buckets if b["bucket_type"] == "bafoeg"), None)
-                if bafoeg_bucket:
+            bafoeg_bucket = next((b for b in all_buckets if b["bucket_type"] == "bafoeg"), None)
+            if bafoeg_config and bafoeg_bucket:
+                breakdown = get_bafoeg_breakdown()
+                seed = bafoeg_config.get("current_balance", 0) or 0
+                anlagezinsen = bafoeg_config.get("anlagezinsen", 0) or 0
+                saved_total = seed + breakdown["einzahlungen"] + anlagezinsen
+                outstanding = max(0, (breakdown["entnahmen"] or 0) - (breakdown.get("tilgungen", 0) or 0))
+                req_rate = self._compute_bafoeg_rate(month, saved_total, outstanding)
+                if req_rate is not None:
+                    bafoeg_amount = round(req_rate, 2)
                     db.create_run_bucket(run_id, bafoeg_bucket["id"], bafoeg_amount)
 
         # Effective income = net_income minus pinned fixed amounts
@@ -176,6 +188,35 @@ class AllocationService:
                     db.update_run_bucket_transferred(rb["id"], state)
         return self._build_run_response(run)
 
+    def _compute_bafoeg_rate(self, month: str, saved_total: float, outstanding: float) -> float | None:
+        cfg = db.get_bafoeg_config()
+        if not cfg:
+            return None
+        total_debt = cfg.get("total_debt")
+        interest_rate = cfg.get("interest_rate")
+        payout = cfg.get("payout_date")
+        if not total_debt or interest_rate is None or not payout:
+            return None
+        payout_date = datetime.strptime(payout, "%Y-%m-%d").date()
+        # ponytail: +1 income event (last month's salary already funds the
+        # current rate) → amortize over one extra payout, starting a month earlier
+        y, m = int(month.split("-")[0]), int(month.split("-")[1]) - 1
+        if m <= 0:
+            m += 12
+            y -= 1
+        rate_start = date(y, m, 1)
+        zinsverlauf = [{"datum": rate_start, "zinssatz": interest_rate / 100}]
+        if cfg.get("zinsverlauf"):
+            for eintrag in json.loads(cfg["zinsverlauf"]):
+                zinsverlauf.append({
+                    "datum": datetime.strptime(eintrag["datum"], "%Y-%m-%d").date(),
+                    "zinssatz": eintrag["zinssatz"] / 100,
+                })
+        payout_days = get_income_payout_days(month)
+        return berechne_monatsrate(
+            saved_total - outstanding, total_debt, zinsverlauf, rate_start, payout_date, payout_days=payout_days
+        )
+
     def _build_run_response(self, run: dict[str, Any], auto_hidden: list[int] | None = None) -> dict[str, Any]:
         buckets = db.get_run_buckets(run["id"])
         config_buckets = db.list_buckets()
@@ -214,7 +255,6 @@ class AllocationService:
                             remaining = max(0, bucket["goal_amount"] - bucket["saved_total"])
                             bucket["months_left"] = math.ceil(remaining / monthly_rate)
                 if bucket["bucket_type"] == "bafoeg":
-                    from datetime import date
                     breakdown = get_bafoeg_breakdown()
                     with get_connection() as conn:
                         month_rows = conn.execute(
@@ -234,33 +274,16 @@ class AllocationService:
                     bucket["saved_tilgungen"] = round(breakdown.get("tilgungen", 0), 2)
                     bucket["month_einzahlungen"] = round(month_einz, 2)
                     if bafoeg_cfg:
-                        total_debt = bafoeg_cfg.get("total_debt", 7600)
-                        bucket["goal_amount"] = total_debt
-                        bucket["interest_rate"] = bafoeg_cfg.get("interest_rate", 2.0)
-                        payout = bafoeg_cfg.get("payout_date")
-                        bucket["payout_date"] = payout
-                        if payout:
-                            payout_date = datetime.strptime(payout, "%Y-%m-%d").date()
-                            start_date = datetime.strptime(f"{run['month']}-01", "%Y-%m-%d").date()
-                            # ponytail: +1 income event (last month's salary already funds the
-                            # current rate) → amortize over one extra payout, starting a month earlier
-                            y, m = int(run["month"].split("-")[0]), int(run["month"].split("-")[1]) - 1
-                            if m <= 0:
-                                m += 12
-                                y -= 1
-                            rate_start = date(y, m, 1)
-                            zinsverlauf = [
-                                {"datum": date(2025, 7, 6), "zinssatz": 0.02},
-                                {"datum": date(2026, 4, 29), "zinssatz": 0.02},
-                                {"datum": date(2027, 1, 1), "zinssatz": 0.025},
-                            ]
-                            zinsverlauf.append({"datum": rate_start, "zinssatz": bafoeg_cfg.get("interest_rate", 2.0) / 100})
+                        bucket["goal_amount"] = bafoeg_cfg.get("total_debt")
+                        bucket["interest_rate"] = bafoeg_cfg.get("interest_rate")
+                        bucket["payout_date"] = bafoeg_cfg.get("payout_date")
+                        outstanding = max(0, (breakdown["entnahmen"] or 0) - (breakdown.get("tilgungen", 0) or 0))
+                        req_rate = self._compute_bafoeg_rate(run["month"], bucket["saved_total"], outstanding)
+                        if req_rate is not None:
                             payout_days = get_income_payout_days(run["month"])
-                            future = count_income_events_until(payout, payout_days, f"{run['month']}-01", min_result=0)
+                            future = count_income_events_until(bafoeg_cfg["payout_date"], payout_days, f"{run['month']}-01", min_result=0)
                             bucket["future_income_events"] = future
                             bucket["income_events_left"] = max(1, future + 1)
-                            outstanding = max(0, (breakdown["entnahmen"] or 0) - (breakdown.get("tilgungen", 0) or 0))
-                            req_rate = berechne_monatsrate(bucket["saved_total"] + outstanding, total_debt, zinsverlauf, rate_start, payout_date, payout_days=payout_days)
                             bucket["required_monthly_rate"] = round(req_rate, 2)
                             bucket["months_left"] = bucket["income_events_left"]
                 if bucket["bucket_type"] == "invest":
