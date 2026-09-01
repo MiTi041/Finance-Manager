@@ -32,6 +32,8 @@ def test_initialize_database_migrates_legacy_budgets():
     assert row["category_ids"] == "[7]"
     assert row["amount"] == 50.0
     assert row["period"] == "monthly"
+    cols = {col[1] for col in conn.execute("PRAGMA table_info(budgets)")}
+    assert "hashtags" in cols
     conn.close()
 
 
@@ -59,6 +61,8 @@ def test_initialize_database_migrates_current_budgets_monthly_amount():
     assert row["category_ids"] == "[1, 2]"
     assert row["amount"] == 120.0
     assert row["period"] == "monthly"
+    cols = {col[1] for col in conn.execute("PRAGMA table_info(budgets)")}
+    assert "hashtags" in cols
     conn.close()
 
 

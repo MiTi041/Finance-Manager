@@ -81,6 +81,63 @@ class TestBudgets:
         assert row["category_ids"] == "[5]"
         assert row["amount"] == 50.0
 
+    def test_insert_with_hashtags_list_applies(self, test_db):
+        ok = _apply(
+            test_db,
+            _op(
+                "budgets",
+                1,
+                "INSERT",
+                {
+                    "id": 1,
+                    "name": "Urlaub",
+                    "category_ids": [],
+                    "hashtags": ["urlaub", "reisen"],
+                    "amount": 200.0,
+                    "created_at": "2026-01-01T00:00:00+00:00",
+                    "updated_at": "2026-01-01T00:00:00+00:00",
+                },
+            ),
+        )
+        assert ok
+        row = test_db.execute("SELECT * FROM budgets WHERE id = 1").fetchone()
+        assert row is not None
+        assert row["hashtags"] == '["urlaub", "reisen"]'
+
+    def test_update_with_hashtags_list_applies(self, test_db):
+        _apply(
+            test_db,
+            _op(
+                "budgets",
+                1,
+                "INSERT",
+                {
+                    "id": 1,
+                    "name": "Urlaub",
+                    "category_ids": [],
+                    "hashtags": ["urlaub"],
+                    "amount": 200.0,
+                    "updated_at": "2026-01-01T00:00:00+00:00",
+                },
+            ),
+        )
+        ok = _apply(
+            test_db,
+            _op(
+                "budgets",
+                1,
+                "UPDATE",
+                {
+                    "id": 1,
+                    "hashtags": ["urlaub", "flug"],
+                    "updated_at": "2026-02-01T00:00:00+00:00",
+                },
+            ),
+        )
+        assert ok
+        row = test_db.execute("SELECT * FROM budgets WHERE id = 1").fetchone()
+        assert row["hashtags"] == '["urlaub", "flug"]'
+
 
 class TestAllocationBuckets:
     def test_notgroschen_target_fields_apply(self, test_db):
@@ -165,6 +222,72 @@ class TestBafoegConfig:
         ).fetchone()
         assert row is not None
         assert row["current_balance"] == 1234.5
+
+    def test_zinsverlauf_applies(self, test_db):
+        ok = _apply(
+            test_db,
+            _op(
+                "allocation_bafoeg_config",
+                1,
+                "INSERT",
+                {
+                    "id": 1,
+                    "total_debt": 7600.0,
+                    "interest_rate": 2.0,
+                    "payout_date": None,
+                    "current_balance": 1000.0,
+                    "anlagezinsen": 0.0,
+                    "zinsverlauf": '[{"datum": "2026-08-01", "zinssatz": 3.0}, {"datum": "2027-01-01", "zinssatz": 2.5}]',
+                    "updated_at": "2026-01-01T00:00:00+00:00",
+                },
+            ),
+        )
+        assert ok
+        row = test_db.execute(
+            "SELECT * FROM allocation_bafoeg_config WHERE id = 1"
+        ).fetchone()
+        assert row is not None
+        assert row["zinsverlauf"] == (
+            '[{"datum": "2026-08-01", "zinssatz": 3.0}, {"datum": "2027-01-01", "zinssatz": 2.5}]'
+        )
+
+    def test_zinsverlauf_updates(self, test_db):
+        _apply(
+            test_db,
+            _op(
+                "allocation_bafoeg_config",
+                1,
+                "INSERT",
+                {
+                    "id": 1,
+                    "total_debt": 7600.0,
+                    "interest_rate": 2.0,
+                    "payout_date": None,
+                    "current_balance": 1000.0,
+                    "zinsverlauf": '[{"datum": "2026-08-01", "zinssatz": 3.0}]',
+                    "updated_at": "2026-01-01T00:00:00+00:00",
+                },
+            ),
+        )
+        ok = _apply(
+            test_db,
+            _op(
+                "allocation_bafoeg_config",
+                1,
+                "UPDATE",
+                {
+                    "id": 1,
+                    "interest_rate": 2.0,
+                    "zinsverlauf": '[{"datum": "2026-08-01", "zinssatz": 3.5}]',
+                    "updated_at": "2026-02-01T00:00:00+00:00",
+                },
+            ),
+        )
+        assert ok
+        row = test_db.execute(
+            "SELECT * FROM allocation_bafoeg_config WHERE id = 1"
+        ).fetchone()
+        assert row["zinsverlauf"] == '[{"datum": "2026-08-01", "zinssatz": 3.5}]'
 
 
 class TestTransactions:

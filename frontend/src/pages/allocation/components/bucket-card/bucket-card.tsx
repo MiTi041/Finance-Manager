@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { HelpButton } from "@/components/ui/help-button";
-import { BucketSettingsPopover } from "./bucket-settings-popover";
+import { BucketSettingsDialog } from "./bucket-settings-dialog";
 import { BucketProgress } from "./bucket-progress";
 import { BucketDetails } from "./bucket-details";
 import { BucketFooter } from "./bucket-footer";
@@ -175,7 +175,7 @@ export function BucketCard({
             </CardTitle>
           </div>
           {!isInfoOnly && (
-            <BucketSettingsPopover
+            <BucketSettingsDialog
               bucket={bucket}
               config={config}
               accent={accent}

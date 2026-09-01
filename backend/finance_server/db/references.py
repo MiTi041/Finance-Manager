@@ -360,6 +360,11 @@ def delete_zahlungspartner_record(zahlungspartner_id: int) -> bool:
         if owner is None:
             return False
 
+        iban_rows = connection.execute(
+            "SELECT iban FROM ibans WHERE f_zahlungspartner_id = ?",
+            (zahlungspartner_id,),
+        ).fetchall()
+
         connection.execute(
             "DELETE FROM ibans WHERE f_zahlungspartner_id = ?",
             (zahlungspartner_id,),
@@ -368,6 +373,15 @@ def delete_zahlungspartner_record(zahlungspartner_id: int) -> bool:
             "DELETE FROM zahlungspartner WHERE id = ?",
             (zahlungspartner_id,),
         )
+
+        for row in iban_rows:
+            _log(
+                "ibans",
+                row["iban"],
+                "DELETE",
+                {"iban": row["iban"], "f_zahlungspartner_id": zahlungspartner_id},
+                connection=connection,
+            )
 
     _log("zahlungspartner", zahlungspartner_id, "DELETE")
     return True
@@ -657,6 +671,11 @@ def update_zahlungspartner_iban_mapping(iban: str, zahlungspartner_id: int) -> b
         if owner is None:
             return False
 
+        existing = connection.execute(
+            "SELECT 1 FROM ibans WHERE iban = ?",
+            (normalized_iban,),
+        ).fetchone()
+
         connection.execute(
             """
             INSERT INTO ibans (iban, f_zahlungspartner_id)
@@ -665,6 +684,15 @@ def update_zahlungspartner_iban_mapping(iban: str, zahlungspartner_id: int) -> b
                 f_zahlungspartner_id = excluded.f_zahlungspartner_id
             """,
             (normalized_iban, zahlungspartner_id),
+        )
+
+        op_type = "UPDATE" if existing else "INSERT"
+        _log(
+            "ibans",
+            normalized_iban,
+            op_type,
+            {"iban": normalized_iban, "f_zahlungspartner_id": zahlungspartner_id},
+            connection=connection,
         )
         return True
 

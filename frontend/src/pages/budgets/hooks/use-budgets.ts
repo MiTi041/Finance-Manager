@@ -36,6 +36,12 @@ export function useBudgets() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    const onDataRefresh = () => void load();
+    window.addEventListener("finance-reference-data-changed", onDataRefresh);
+    return () => window.removeEventListener("finance-reference-data-changed", onDataRefresh);
+  }, [load]);
+
   const create = useCallback(
     async (name: string, categoryIds: number[], amount: number, period: BudgetPeriod, hashtags: string[]) => {
       await createBudgetApi(name, categoryIds, amount, period, hashtags);

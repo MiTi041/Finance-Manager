@@ -16,7 +16,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/searchable-select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { DatePicker } from "@/components/date-picker";
 import { formatAmount } from "@/lib/utils/format";
 import { formatDateInputValue } from "@/pages/allocation/utils";
@@ -61,8 +67,17 @@ type Props = {
   onRefresh?: () => void;
 };
 
-export function BucketSettingsPopover(props: Props) {
-  const { bucket, config, accent, recipientAccounts, bankAccounts, canTransferMap, onUpdateConfig, onRefresh } = props;
+export function BucketSettingsDialog(props: Props) {
+  const {
+    bucket,
+    config,
+    accent,
+    recipientAccounts,
+    bankAccounts,
+    canTransferMap,
+    onUpdateConfig,
+    onRefresh,
+  } = props;
 
   const [localPct, setLocalPct] = useState(String(config.percentage));
   useEffect(() => setLocalPct(String(config.percentage)), [config.percentage]);
@@ -115,7 +130,9 @@ export function BucketSettingsPopover(props: Props) {
   const [zinsInput, setZinsInput] = useState("");
   const [localBafoegRate, setLocalBafoegRate] = useState("");
   const [localBafoegPayoutDate, setLocalBafoegPayoutDate] = useState("");
-  const [localZinsverlauf, setLocalZinsverlauf] = useState<{ datum: string; zinssatz: string }[]>([]);
+  const [localZinsverlauf, setLocalZinsverlauf] = useState<{ datum: string; zinssatz: string }[]>(
+    [],
+  );
   const bafoegConfigFetched = useRef(false);
 
   useEffect(() => {
@@ -123,11 +140,17 @@ export function BucketSettingsPopover(props: Props) {
     bafoegConfigFetched.current = true;
     fetchBafoegConfig().then((cfg) => {
       setBafoegConfig(cfg);
-      setLocalBafoegBalance(cfg.current_balance && cfg.current_balance > 0 ? String(cfg.current_balance) : "");
+      setLocalBafoegBalance(
+        cfg.current_balance && cfg.current_balance > 0 ? String(cfg.current_balance) : "",
+      );
       setLocalBafoegDebt(cfg.total_debt && cfg.total_debt > 0 ? String(cfg.total_debt) : "");
-      setLocalBafoegRate(cfg.interest_rate && cfg.interest_rate > 0 ? String(cfg.interest_rate) : "");
+      setLocalBafoegRate(
+        cfg.interest_rate && cfg.interest_rate > 0 ? String(cfg.interest_rate) : "",
+      );
       setLocalBafoegPayoutDate(cfg.payout_date ?? "");
-      setLocalZinsverlauf((cfg.zinsverlauf ?? []).map((s) => ({ datum: s.datum, zinssatz: String(s.zinssatz) })));
+      setLocalZinsverlauf(
+        (cfg.zinsverlauf ?? []).map((s) => ({ datum: s.datum, zinssatz: String(s.zinssatz) })),
+      );
     });
   }, [bucket.bucket_type]);
 
@@ -169,9 +192,8 @@ export function BucketSettingsPopover(props: Props) {
     const amt = parseFloat(zinsInput.replace(",", "."));
     if (!bafoegConfig || isNaN(amt) || amt <= 0) return;
     const next = Math.round(((bafoegConfig.anlagezinsen ?? 0) + amt) * 100) / 100;
-    const nextBalance = Math.round(((bafoegConfig.current_balance ?? 0) + amt) * 100) / 100;
     setZinsInput("");
-    updateBafoegConfig({ anlagezinsen: next, current_balance: nextBalance }).then((cfg) => {
+    updateBafoegConfig({ anlagezinsen: next }).then((cfg) => {
       setBafoegConfig(cfg);
       onRefresh?.();
     });
@@ -180,7 +202,10 @@ export function BucketSettingsPopover(props: Props) {
   const addZinsverlaufSegment = () => {
     setLocalZinsverlauf((prev) => [...prev, { datum: "", zinssatz: "" }]);
   };
-  const updateZinsverlaufSegment = (index: number, patch: Partial<{ datum: string; zinssatz: string }>) => {
+  const updateZinsverlaufSegment = (
+    index: number,
+    patch: Partial<{ datum: string; zinssatz: string }>,
+  ) => {
     setLocalZinsverlauf((prev) => prev.map((s, i) => (i === index ? { ...s, ...patch } : s)));
   };
   const removeZinsverlaufSegment = (index: number) => {
@@ -190,8 +215,10 @@ export function BucketSettingsPopover(props: Props) {
   const commitGoal = () => {
     const amt = localGoalAmount.trim() ? parseFloat(localGoalAmount.replace(",", ".")) : 0;
     const mos = localGoalMonths.trim() ? parseFloat(localGoalMonths.replace(",", ".")) : 0;
-    const currentAmount = config.target_amount != null && config.target_amount > 0 ? config.target_amount : 0;
-    const currentMonths = config.target_months != null && config.target_months > 0 ? config.target_months : 0;
+    const currentAmount =
+      config.target_amount != null && config.target_amount > 0 ? config.target_amount : 0;
+    const currentMonths =
+      config.target_months != null && config.target_months > 0 ? config.target_months : 0;
     if (amt === currentAmount && mos === currentMonths) return;
     if (amt > 0) {
       void onUpdateConfig(bucket.bucket_id, { target_amount: amt, target_months: null });
@@ -242,7 +269,7 @@ export function BucketSettingsPopover(props: Props) {
   };
 
   return (
-    <Popover
+    <Dialog
       onOpenChange={(open) => {
         if (!open) {
           commitPercentage(localPct);
@@ -253,7 +280,7 @@ export function BucketSettingsPopover(props: Props) {
         }
       }}
     >
-      <PopoverTrigger asChild>
+      <DialogTrigger asChild>
         <Button
           variant="ghost"
           size="icon"
@@ -262,22 +289,20 @@ export function BucketSettingsPopover(props: Props) {
         >
           <Settings2 className="size-4" />
         </Button>
-      </PopoverTrigger>
+      </DialogTrigger>
 
-      <PopoverContent
-        align="end"
-        className="w-96 max-w-[calc(100vw-2rem)] overflow-hidden p-0"
+      <DialogContent
+        className="flex max-h-[85vh] max-w-lg flex-col gap-0 overflow-hidden p-0"
         onInteractOutside={(event) => {
           const target = event.target;
-          if (
-            target instanceof HTMLElement &&
-            target.closest("[data-searchable-select-content]")
-          ) {
+          if (target instanceof HTMLElement && target.closest("[data-searchable-select-content]")) {
             event.preventDefault();
           }
         }}
       >
-        <div className="flex items-center gap-2.5 border-b bg-muted/40 px-4 py-3">
+        <DialogTitle className="sr-only">{bucketLabels[bucket.bucket_type]}</DialogTitle>
+        <DialogDescription className="sr-only">Verteilung und Konten anpassen</DialogDescription>
+        <div className="flex shrink-0 items-center gap-2.5 border-b bg-muted/40 px-4 py-3">
           <span
             className={`flex size-7 shrink-0 items-center justify-center rounded-full ${accent.icon}`}
           >
@@ -291,15 +316,9 @@ export function BucketSettingsPopover(props: Props) {
               Verteilung und Konten anpassen
             </p>
           </div>
-          {bucketTags[bucket.bucket_type] && (
-            <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-background px-2 py-0.5 text-[11px] text-muted-foreground/80">
-              <HashIcon className="size-2.5" />
-              {bucketTags[bucket.bucket_type]}
-            </span>
-          )}
         </div>
 
-        <div className="space-y-4 px-4 py-4">
+        <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
           {bucket.bucket_type === "bafoeg" ? (
             <>
               <div className="space-y-2">
@@ -378,9 +397,7 @@ export function BucketSettingsPopover(props: Props) {
                     <DatePicker
                       className="w-36"
                       value={
-                        localBafoegPayoutDate
-                          ? new Date(localBafoegPayoutDate + "T00:00:00")
-                          : null
+                        localBafoegPayoutDate ? new Date(localBafoegPayoutDate + "T00:00:00") : null
                       }
                       onChange={(d) => {
                         const s = d ? formatDateInputValue(d) : "";
@@ -445,7 +462,12 @@ export function BucketSettingsPopover(props: Props) {
                       </div>
                     </div>
                   ))}
-                  <Button variant="outline" size="sm" className="w-full" onClick={addZinsverlaufSegment}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={addZinsverlaufSegment}
+                  >
                     + Zinswechsel hinzufügen
                   </Button>
                 </div>
@@ -530,7 +552,8 @@ export function BucketSettingsPopover(props: Props) {
                   </div>
                   {previewAmount !== null && (
                     <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Info className="size-3 shrink-0" />≈ {formatAmount(previewAmount)} bei aktuellem Netto-Einkommen
+                      <Info className="size-3 shrink-0" />≈ {formatAmount(previewAmount)} bei
+                      aktuellem Netto-Einkommen
                     </p>
                   )}
                 </div>
@@ -602,9 +625,7 @@ export function BucketSettingsPopover(props: Props) {
                           </span>
                         </div>
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        Leer lassen = kein Sparziel
-                      </p>
+                      <p className="text-xs text-muted-foreground">Leer lassen = kein Sparziel</p>
                     </div>
                   </div>
 
@@ -661,7 +682,9 @@ export function BucketSettingsPopover(props: Props) {
                       return (
                         <div className="flex flex-col gap-0.5 py-1">
                           <span className="font-medium text-sm leading-tight">{a.name}</span>
-                          <span className="text-xs text-muted-foreground leading-tight">Eigenes Konto</span>
+                          <span className="text-xs text-muted-foreground leading-tight">
+                            Eigenes Konto
+                          </span>
                           <span className="font-mono text-xs text-muted-foreground/70 leading-tight">
                             {formatIban(a.iban)}
                           </span>
@@ -672,9 +695,7 @@ export function BucketSettingsPopover(props: Props) {
                     if (!r) return <span>{option.label}</span>;
                     return (
                       <div className="flex flex-col gap-0.5 py-1">
-                        <span className="font-medium text-sm leading-tight">
-                          {r.account_name}
-                        </span>
+                        <span className="font-medium text-sm leading-tight">{r.account_name}</span>
                         <span className="text-xs text-muted-foreground leading-tight">
                           {r.recipient_name}
                         </span>
@@ -723,7 +744,10 @@ export function BucketSettingsPopover(props: Props) {
                 value={localSender}
                 onValueChange={setLocalSender}
                 options={bankAccounts
-                  .filter((a) => canTransferMap.get(a.bankKey) !== false && a.iban !== config.recipient_iban)
+                  .filter(
+                    (a) =>
+                      canTransferMap.get(a.bankKey) !== false && a.iban !== config.recipient_iban,
+                  )
                   .map((a) => ({
                     value: a.iban,
                     label: `${a.name} ${a.iban}`,
@@ -759,7 +783,7 @@ export function BucketSettingsPopover(props: Props) {
             </div>
           </div>
         </div>
-      </PopoverContent>
-    </Popover>
+      </DialogContent>
+    </Dialog>
   );
 }

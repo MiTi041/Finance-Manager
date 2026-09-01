@@ -29,6 +29,24 @@ def get_next_seq(connection: sqlite3.Connection | None = None) -> int:
     return next_seq
 
 
+def _resolve_recipient_account_iban(
+    recipient_account_id: int,
+    connection: sqlite3.Connection | None = None,
+) -> str | None:
+    if connection:
+        row = connection.execute(
+            "SELECT iban FROM empfaengerkonten WHERE id = ?",
+            (recipient_account_id,),
+        ).fetchone()
+    else:
+        with get_connection() as conn:
+            row = conn.execute(
+                "SELECT iban FROM empfaengerkonten WHERE id = ?",
+                (recipient_account_id,),
+            ).fetchone()
+    return row["iban"] if row else None
+
+
 def log_sync_op(
     table_name: str,
     row_id: int | None,
@@ -38,6 +56,15 @@ def log_sync_op(
 ) -> int:
     device_id = get_or_create_device_id(connection)
     seq = get_next_seq(connection)
+    if (
+        data is not None
+        and table_name == "allocation_buckets"
+        and data.get("recipient_account_id")
+    ):
+        iban = _resolve_recipient_account_iban(data["recipient_account_id"], connection)
+        if iban:
+            data = dict(data)
+            data["recipient_account_iban"] = iban
     data_json = json.dumps(data, ensure_ascii=False, default=str) if data else None
     checksum = None
     if data_json:
@@ -110,9 +137,9 @@ VALID_SYNC_COLUMNS: dict[str, set[str]] = {
     "subscription_identities": {"id", "counterparty_name", "amount", "display_name", "f_zahlungspartner_id", "dismissed", "updated_at"},
     "ibans": {"iban", "f_zahlungspartner_id"},
     "allocation_buckets": {"id", "bucket_type", "percentage", "recipient_account_id", "sender_iban", "is_active", "sort_order", "target_amount", "target_months", "recipient_iban", "created_at", "updated_at"},
-    "allocation_bafoeg_config": {"id", "total_debt", "interest_rate", "payout_date", "current_balance", "anlagezinsen", "created_at", "updated_at"},
+    "allocation_bafoeg_config": {"id", "total_debt", "interest_rate", "payout_date", "current_balance", "anlagezinsen", "zinsverlauf", "created_at", "updated_at"},
     "savings_plans": {"id", "name", "tag", "target_amount", "target_date", "target_recipient_name", "target_recipient_iban", "target_recipient_bic", "is_visible", "sender_iban", "created_at", "updated_at"},
-    "budgets": {"id", "name", "category_ids", "amount", "period", "created_at", "updated_at"},
+    "budgets": {"id", "name", "category_ids", "hashtags", "amount", "period", "created_at", "updated_at"},
     "app_settings": {"key", "value", "updated_at"},
     "vorgemerkte_umsaetze": {
         "id",
@@ -291,6 +318,19 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
                     # legacy full-clear sentinel; keep applying already-pushed ops
                     connection.execute("DELETE FROM vorgemerkte_umsaetze")
                     return True
+            elif table == "empfaengerkonten":
+                account_row = connection.execute(
+                    "SELECT id FROM empfaengerkonten WHERE iban = ?",
+                    (pk_value,),
+                ).fetchone()
+                if account_row:
+                    connection.execute(
+                        "UPDATE allocation_buckets SET recipient_account_id = NULL WHERE recipient_account_id = ?",
+                        (account_row["id"],),
+                    )
+                cursor = connection.execute(
+                    f"DELETE FROM {table} WHERE {pk} = ?", (pk_value,)
+                )
             elif table == "allocation_buckets":
                 cursor = connection.execute(
                     "DELETE FROM allocation_buckets WHERE bucket_type = ?", (pk_value,)
@@ -310,6 +350,13 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
         if table == "umsaetze":
             enrich_paypal_merchant(filtered_data)
 
+        if table == "allocation_buckets" and data.get("recipient_account_iban"):
+            resolved = connection.execute(
+                "SELECT id FROM empfaengerkonten WHERE iban = ?",
+                (data["recipient_account_iban"],),
+            ).fetchone()
+            filtered_data["recipient_account_id"] = resolved["id"] if resolved else None
+
         if pk == "id" and "id" not in filtered_data:
             return False
 
@@ -321,6 +368,9 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
 
         if table == "budgets" and "category_ids" in filtered_data and isinstance(filtered_data["category_ids"], list):
             filtered_data["category_ids"] = json.dumps(filtered_data["category_ids"], ensure_ascii=False)
+
+        if table == "budgets" and "hashtags" in filtered_data and isinstance(filtered_data["hashtags"], list):
+            filtered_data["hashtags"] = json.dumps(filtered_data["hashtags"], ensure_ascii=False)
 
         columns = [k for k in filtered_data.keys() if k != pk]
         placeholders = [f"{k} = ?" for k in columns]

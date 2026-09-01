@@ -19,6 +19,10 @@ def _payload(**overrides):
 @pytest.fixture
 def conn(test_db: sqlite3.Connection, monkeypatch):
     monkeypatch.setattr(references, "get_connection", lambda: test_db)
+    monkeypatch.setattr(
+        "finance_server.services.sync_logger.log_crud_event",
+        lambda *args, **kwargs: None,
+    )
     return test_db
 
 

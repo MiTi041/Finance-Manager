@@ -490,6 +490,7 @@ def create_budgets_table(connection: sqlite3.Connection) -> None:
                 id             INTEGER PRIMARY KEY AUTOINCREMENT,
                 name           TEXT NOT NULL DEFAULT '',
                 category_ids   TEXT NOT NULL,
+                hashtags       TEXT NOT NULL DEFAULT '[]',
                 amount         REAL NOT NULL CHECK(amount >= 0),
                 period         TEXT NOT NULL DEFAULT 'monthly' CHECK(period IN ('monthly', 'yearly')),
                 created_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
