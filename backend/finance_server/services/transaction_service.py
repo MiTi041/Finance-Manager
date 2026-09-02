@@ -12,6 +12,7 @@ from finance_server.db import (
     fetch_transactions,
     update_transaction_category,
     update_transaction_note,
+    update_transaction_purpose,
     update_transaction_splits,
     update_transactions_category_batch,
 )
@@ -50,6 +51,9 @@ class TransactionService:
 
     def update_note(self, transaction_id: int, note: str | None) -> bool:
         return update_transaction_note(transaction_id, note)
+
+    def update_purpose(self, transaction_id: int, purpose_edit: str | None) -> bool:
+        return update_transaction_purpose(transaction_id, purpose_edit)
 
     def update_splits(
         self, transaction_id: int, splits: list[dict[str, Any]] | None

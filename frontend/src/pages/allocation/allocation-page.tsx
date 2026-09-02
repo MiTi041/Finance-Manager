@@ -70,6 +70,7 @@ export default function AllocationPage() {
     recipientIban: string;
     purpose: string;
     instant: boolean;
+    tilgung: boolean;
   }>({
     open: false,
     runBucketId: 0,
@@ -79,6 +80,7 @@ export default function AllocationPage() {
     recipientIban: "",
     purpose: "",
     instant: true,
+    tilgung: false,
   });
   const [donationAnalysisOpen, setDonationAnalysisOpen] = useState(false);
   const [incomeDialogOpen, setIncomeDialogOpen] = useState(false);
@@ -157,7 +159,8 @@ export default function AllocationPage() {
       };
       let tag = bucketTags[bucket.bucket_type] ?? "";
       // muss zur Backend-Logik passen: Tilgung per Slider bekommt .entnahme-Tag
-      if (bucket.bucket_type === "bafoeg" && amount != null) {
+      const tilgung = bucket.bucket_type === "bafoeg" && amount != null;
+      if (tilgung) {
         tag += ".entnahme";
       }
       const purpose =
@@ -185,6 +188,7 @@ export default function AllocationPage() {
         recipientIban,
         purpose,
         instant: true,
+        tilgung,
       });
     },
     [status, recipientAccounts, donationAccounts],
@@ -209,6 +213,7 @@ export default function AllocationPage() {
             tan,
             runBucketAmountRef.current > 0 ? runBucketAmountRef.current : undefined,
             transferState.instant,
+            transferState.tilgung,
           );
         }
         toast.success("Überweisung erfolgreich!", { id: tid });
@@ -217,7 +222,7 @@ export default function AllocationPage() {
         throw e;
       }
     },
-    [transfer, transferSavings, transferState.instant],
+    [transfer, transferSavings, transferState.instant, transferState.tilgung],
   );
 
   const handleSavingsPlanTransfer = useCallback(
@@ -245,6 +250,7 @@ export default function AllocationPage() {
         recipientIban: plan.target_recipient_iban,
         purpose,
         instant: true,
+        tilgung: false,
       });
     },
     [recipientAccounts, bankAccounts],

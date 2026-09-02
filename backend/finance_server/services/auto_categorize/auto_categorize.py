@@ -104,7 +104,7 @@ def _combine_text(row: dict[str, Any]) -> str:
     unterschiedlichen Feldern verschiedene Bedeutungen hat.
     """
     fields = {
-        "purpose":    row.get("purpose") or "",
+        "purpose":    row.get("purpose_edit") or row.get("purpose") or "",
         "applicant":  row.get("applicant_name") or "",
         "deviate":    row.get("deviate_applicant") or "",
         "recipient":  row.get("recipient_name") or "",
@@ -154,11 +154,11 @@ def _fetch_categorized_hash() -> str:
     """
     with get_connection() as connection:
         rows = connection.execute(
-            "SELECT id, kategorie FROM umsaetze WHERE kategorie IS NOT NULL ORDER BY id"
+            "SELECT id, kategorie, COALESCE(purpose_edit, purpose) AS purpose FROM umsaetze WHERE kategorie IS NOT NULL ORDER BY id"
         ).fetchall()
     if not rows:
         return ""
-    data = "|".join(f"{r['id']}:{r['kategorie']}" for r in rows)
+    data = "|".join(f"{r['id']}:{r['kategorie']}:{r['purpose']}" for r in rows)
     return hashlib.sha256(data.encode()).hexdigest()
 
 
@@ -170,11 +170,11 @@ def _fetch_uncategorized_hash() -> str:
     """
     with get_connection() as connection:
         rows = connection.execute(
-            "SELECT id FROM umsaetze WHERE kategorie IS NULL ORDER BY id"
+            "SELECT id, COALESCE(purpose_edit, purpose) AS purpose FROM umsaetze WHERE kategorie IS NULL ORDER BY id"
         ).fetchall()
     if not rows:
         return ""
-    data = "|".join(str(r["id"]) for r in rows)
+    data = "|".join(f"{r['id']}:{r['purpose']}" for r in rows)
     return hashlib.sha256(data.encode()).hexdigest()
 
 
@@ -278,7 +278,7 @@ def _compute_predictions(
         predictions.append({
             "transaction_id":       tx["id"],
             "entry_date":           tx.get("entry_date"),
-            "purpose":              (tx.get("purpose") or "")[:120],
+            "purpose":              (tx.get("purpose_edit") or tx.get("purpose") or "")[:120],
             "amount":               tx.get("amount"),
             "applicant_name":       (tx.get("applicant_name") or "")[:80],
             "recipient_name":       (tx.get("recipient_name") or "")[:80],

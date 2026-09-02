@@ -493,7 +493,7 @@ def predict_rules(
     # Texte für die Keyword-Suche zusammenführen (ohne Feld-Prefixes, da
     # die Regex-Patterns auf natürlichsprachigen Text ausgelegt sind)
     raw_text = " ".join(filter(None, [
-        transaction.get("purpose") or "",
+        transaction.get("purpose_edit") or transaction.get("purpose") or "",
         transaction.get("applicant_name") or "",
         transaction.get("recipient_name") or "",
         transaction.get("posting_text") or "",
@@ -627,7 +627,7 @@ def _enrich_prediction(
     return {
         "transaction_id":       tx.get("id"),
         "entry_date":           tx.get("entry_date"),
-        "purpose":              (tx.get("purpose") or "")[:120],
+        "purpose":              (tx.get("purpose_edit") or tx.get("purpose") or "")[:120],
         "amount":               tx.get("amount"),
         "applicant_name":       (tx.get("applicant_name") or "")[:80],
         "recipient_name":       (tx.get("recipient_name") or "")[:80],

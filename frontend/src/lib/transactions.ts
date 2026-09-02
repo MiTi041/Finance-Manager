@@ -114,3 +114,21 @@ export async function updateTransactionNote(
 
   await parseJsonResponse(response);
 }
+
+export async function updateTransactionPurpose(
+  transactionId: number,
+  purposeEdit: string | null,
+): Promise<void> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/db/transactions/${transactionId}/purpose`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ purpose_edit: purposeEdit }),
+    },
+  );
+
+  await parseJsonResponse(response);
+}

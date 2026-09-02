@@ -361,6 +361,9 @@ def row_to_dict(
     row: sqlite3.Row, refund_links: list[dict[str, Any]] | None = None
 ) -> dict[str, Any]:
     links = refund_links or []
+    original_purpose = row["purpose"]
+    purpose_edit = row["purpose_edit"]
+    effective_purpose = purpose_edit if purpose_edit else original_purpose
     return {
         "id": row["id"],
         "transaction_hash": row["transaction_hash"],
@@ -382,7 +385,9 @@ def row_to_dict(
         "transaction_code": row["transaction_code"],
         "posting_text": row["posting_text"],
         "prima_nota": row["prima_nota"],
-        "purpose": row["purpose"],
+        "purpose": effective_purpose,
+        "original_purpose": original_purpose,
+        "purpose_edit": purpose_edit,
         "applicant_bic": row["applicant_bic"],
         "applicant_iban": row["applicant_iban"],
         "applicant_name": row["applicant_name"],
@@ -574,6 +579,32 @@ def update_transaction_note(transaction_id: int, note: str | None) -> bool:
         )
         result = cursor.rowcount > 0
         _log("umsaetze", transaction_id, "UPDATE", {"id": transaction_id, "note": note, "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat()}, connection=connection)
+        return result
+
+
+def update_transaction_purpose(transaction_id: int, purpose_edit: str | None) -> bool:
+    normalized = normalize_text(purpose_edit)
+    stored = normalized if normalized else None
+
+    with get_connection() as connection:
+        if stored is not None:
+            row = connection.execute(
+                "SELECT purpose FROM umsaetze WHERE id = ?",
+                (transaction_id,),
+            ).fetchone()
+            if row is not None and stored == normalize_text(row["purpose"]):
+                stored = None
+
+        cursor = connection.execute(
+            "UPDATE umsaetze SET purpose_edit = ? WHERE id = ?",
+            (stored, transaction_id),
+        )
+        result = cursor.rowcount > 0
+        _log(
+            "umsaetze", transaction_id, "UPDATE",
+            {"id": transaction_id, "purpose_edit": stored, "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat()},
+            connection=connection,
+        )
         return result
 
 

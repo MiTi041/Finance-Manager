@@ -29,6 +29,22 @@ BANKS: tuple[BankDefinition, ...] = (
         bank_logo="images/bank-logos/sparkasse-lemgo.png",
         can_transfer=True,
     ),
+    BankDefinition(
+        key="dkb",
+        name="DKB",
+        blz="12030000",
+        fints_url="https://fints.dkb.de/fints",
+        bank_logo="images/bank-logos/dkb.png",
+        can_transfer=True,
+    ),
+    BankDefinition(
+        key="norisbank",
+        name="Norisbank",
+        blz="10077777",
+        fints_url="https://fints.norisbank.de/",
+        bank_logo="images/bank-logos/norisbank.png",
+        can_transfer=True,
+    )
 )
 
 

@@ -55,6 +55,8 @@ export interface TransactionDto {
 
   purpose: string;
   additional_purpose: string;
+  purpose_edit?: string | null;
+  original_purpose?: string;
 
   end_to_end_reference: string;
   additional_position_reference: string;
@@ -161,6 +163,8 @@ export interface Transaction {
     buchungstext: string;
     primaNota: string;
     verwendungszweck: string;
+    verwendungszweckOriginal: string;
+    verwendungszweckEdit: string | null;
     zusatzVerwendungszweck: string;
     extraDetails: string;
     anmerkung: string;

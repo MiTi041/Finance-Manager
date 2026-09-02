@@ -19,7 +19,7 @@ from finance_server.db.savings import (
     get_saved_breakdown, get_month_breakdown,
     get_savings_breakdown, get_savings_month_breakdown,
     get_income_payout_days, count_income_events_until,
-    get_bafoeg_breakdown,
+    get_bafoeg_breakdown, get_bafoeg_month_einzahlungen,
 )
 from finance_server.db.settings import get_setting, set_setting, get_holiday_state
 from finance_server.services.sync_logger import log_crud_event
@@ -133,9 +133,11 @@ class AllocationService:
                 breakdown = get_bafoeg_breakdown()
                 seed = bafoeg_config.get("current_balance", 0) or 0
                 anlagezinsen = bafoeg_config.get("anlagezinsen", 0) or 0
-                saved_total = seed + breakdown["einzahlungen"] + anlagezinsen
-                outstanding = max(0, (breakdown["entnahmen"] or 0) - (breakdown.get("tilgungen", 0) or 0))
-                req_rate = self._compute_bafoeg_rate(month, saved_total, outstanding)
+                month_einz = get_bafoeg_month_einzahlungen(month)
+                saved_before_month = self._bafoeg_startkapital_vormonat(
+                    seed, breakdown["einzahlungen"], anlagezinsen, month_einz
+                )
+                req_rate = self._compute_bafoeg_rate(month, saved_before_month)
                 if req_rate is not None:
                     bafoeg_amount = round(req_rate, 2)
                     db.create_run_bucket(run_id, bafoeg_bucket["id"], bafoeg_amount)
@@ -188,7 +190,13 @@ class AllocationService:
                     db.update_run_bucket_transferred(rb["id"], state)
         return self._build_run_response(run)
 
-    def _compute_bafoeg_rate(self, month: str, saved_total: float, outstanding: float) -> float | None:
+    @staticmethod
+    def _bafoeg_startkapital_vormonat(
+        seed: float, einzahlungen: float, anlagezinsen: float, month_einz: float
+    ) -> float:
+        return seed + max(0.0, einzahlungen - month_einz) + anlagezinsen
+
+    def _compute_bafoeg_rate(self, month: str, saved_total: float) -> float | None:
         cfg = db.get_bafoeg_config()
         if not cfg:
             return None
@@ -214,7 +222,7 @@ class AllocationService:
                 })
         payout_days = get_income_payout_days(month)
         return berechne_monatsrate(
-            saved_total - outstanding, total_debt, zinsverlauf, rate_start, payout_date, payout_days=payout_days
+            saved_total, total_debt, zinsverlauf, rate_start, payout_date, payout_days=payout_days
         )
 
     def _build_run_response(self, run: dict[str, Any], auto_hidden: list[int] | None = None) -> dict[str, Any]:
@@ -233,7 +241,7 @@ class AllocationService:
                                 WHEN amount < 0 THEN ABS(amount) - COALESCE(refund_total, 0)
                                 ELSE ABS(amount)
                             END
-                        ), 0) FROM umsaetze WHERE purpose LIKE ? AND date >= ? AND date <= ?""",
+                        ), 0) FROM umsaetze WHERE COALESCE(purpose_edit, purpose) LIKE ? AND date >= ? AND date <= ?""",
                         (f"%{tag}%", start, end),
                     ).fetchone()
                 bucket["transferred"] = round(bucket["transferred"] + row[0], 2)
@@ -256,15 +264,7 @@ class AllocationService:
                             bucket["months_left"] = math.ceil(remaining / monthly_rate)
                 if bucket["bucket_type"] == "bafoeg":
                     breakdown = get_bafoeg_breakdown()
-                    with get_connection() as conn:
-                        month_rows = conn.execute(
-                            """SELECT amount FROM umsaetze
-                               WHERE ((' ' || COALESCE(purpose, '') || ' ') LIKE '% tag.bafoegschulden %'
-                                  OR (' ' || COALESCE(note, '') || ' ') LIKE '% tag.bafoegschulden %')
-                                 AND amount < 0 AND date >= ? AND date <= ?""",
-                            (f"{run['month']}-01", f"{run['month']}-31"),
-                        ).fetchall()
-                    month_einz = sum(abs(r["amount"]) for r in month_rows)
+                    month_einz = get_bafoeg_month_einzahlungen(run["month"])
                     bafoeg_cfg = db.get_bafoeg_config()
                     seed = bafoeg_cfg.get("current_balance", 0) if bafoeg_cfg else 0
                     anlagezinsen = bafoeg_cfg.get("anlagezinsen", 0) if bafoeg_cfg else 0
@@ -277,8 +277,10 @@ class AllocationService:
                         bucket["goal_amount"] = bafoeg_cfg.get("total_debt")
                         bucket["interest_rate"] = bafoeg_cfg.get("interest_rate")
                         bucket["payout_date"] = bafoeg_cfg.get("payout_date")
-                        outstanding = max(0, (breakdown["entnahmen"] or 0) - (breakdown.get("tilgungen", 0) or 0))
-                        req_rate = self._compute_bafoeg_rate(run["month"], bucket["saved_total"], outstanding)
+                        saved_before_month = self._bafoeg_startkapital_vormonat(
+                            seed, breakdown["einzahlungen"], anlagezinsen, month_einz
+                        )
+                        req_rate = self._compute_bafoeg_rate(run["month"], saved_before_month)
                         if req_rate is not None:
                             payout_days = get_income_payout_days(run["month"])
                             future = count_income_events_until(bafoeg_cfg["payout_date"], payout_days, f"{run['month']}-01", min_result=0)
@@ -312,7 +314,7 @@ class AllocationService:
                         tag = t if t.startswith("tag.") else f"tag.{t}"
                         if tag not in exclude_tags:
                             exclude_tags.append(tag)
-                conditions = " AND ".join(f"(COALESCE(purpose, '') NOT LIKE ? AND COALESCE(note, '') NOT LIKE ?)" for _ in exclude_tags)
+                conditions = " AND ".join(f"(COALESCE(purpose_edit, purpose, '') NOT LIKE ? AND COALESCE(note, '') NOT LIKE ?)" for _ in exclude_tags)
                 params = [start, end]
                 for t in exclude_tags:
                     params += [f"%{t}%", f"%{t}%"]
@@ -374,12 +376,12 @@ class AllocationService:
 
         with get_connection() as conn:
             rows = conn.execute(
-                """SELECT applicant_name, purpose, amount, date
+                """SELECT applicant_name, COALESCE(purpose_edit, purpose) AS purpose, amount, date
                    FROM umsaetze
                    WHERE amount > 0
                      AND NOT EXISTS (SELECT 1 FROM refund_links rl WHERE rl.refund_transaction_id = umsaetze.id)
                      AND date >= ? AND date <= ?
-                     AND (COALESCE(purpose, '') NOT LIKE '%tag.%' AND COALESCE(note, '') NOT LIKE '%tag.%')
+                     AND (COALESCE(purpose_edit, purpose, '') NOT LIKE '%tag.%' AND COALESCE(note, '') NOT LIKE '%tag.%')
                    ORDER BY applicant_name, purpose, date""",
                 (lookback_start, month_end),
             ).fetchall()
@@ -442,7 +444,7 @@ class AllocationService:
                 detail=f"Kontostand ({balance:.2f} €) reicht nicht aus für Überweisung ({amount:.2f} €)",
             )
 
-    def transfer_run_bucket(self, run_bucket_id: int, custom_amount: float | None = None) -> dict[str, Any]:
+    def transfer_run_bucket(self, run_bucket_id: int, custom_amount: float | None = None, tilgung: bool = False) -> dict[str, Any]:
         with get_connection() as connection:
             row = connection.execute(
                 """SELECT arb.*, ab.bucket_type, ab.recipient_account_id, ab.recipient_iban, ab.sender_iban
@@ -455,9 +457,10 @@ class AllocationService:
             raise HTTPException(status_code=404, detail="Run-Bucket nicht gefunden")
 
         rb = dict(row)
-        # ponytail: BAföG-Tilgung (custom_amount) ist eine Extra-Zahlung und
-        # darf auch nach abgeschlossener Monatsrate möglich sein
-        is_tilgung = rb["bucket_type"] == "bafoeg" and custom_amount is not None
+        # ponytail: BAföG-Tilgung ist eine Extra-Zahlung und darf auch nach
+        # abgeschlossener Monatsrate möglich sein. Monatsrate und Tilgung werden
+        # über das explizite tilgung-Flag unterschieden, nicht über den Betrag.
+        is_tilgung = rb["bucket_type"] == "bafoeg" and tilgung
         if rb["is_completed"] and not is_tilgung:
             raise HTTPException(status_code=400, detail="Dieser Bucket wurde bereits überwiesen")
 
@@ -510,9 +513,9 @@ class AllocationService:
                 recipient = dict(recipient_row)
 
         tag = BUCKET_TAGS.get(rb["bucket_type"], "")
-        if rb["bucket_type"] == "bafoeg" and custom_amount is not None:
-            # ponytail: Tilgungs-Slider zahlt direkt auf die Schuld → muss als
-            # Tilgung (.entnahme) registriert werden, nicht als Rücklagen-Einzahlung
+        if is_tilgung:
+            # ponytail: Tilgung zahlt direkt auf die Schuld → muss als Tilgung
+            # (.entnahme) registriert werden, nicht als Rücklagen-Einzahlung
             tag += ".entnahme"
         return {
             "run_bucket_id": run_bucket_id,
@@ -552,10 +555,10 @@ class AllocationService:
             ibans = [a["iban"] for a in accounts]
             placeholders = ",".join("?" for _ in ibans) if ibans else "''"
             rows = conn.execute(
-                f"""SELECT id, amount, applicant_iban, applicant_name, recipient_name, purpose, date
+                f"""SELECT id, amount, applicant_iban, applicant_name, recipient_name, COALESCE(purpose_edit, purpose) AS purpose, date
                     FROM umsaetze
                     WHERE amount < 0
-                      AND (purpose LIKE '%tag.spenden%' OR note LIKE '%tag.spenden%'
+                      AND (COALESCE(purpose_edit, purpose) LIKE '%tag.spenden%' OR note LIKE '%tag.spenden%'
                            {'OR UPPER(applicant_iban) IN (' + placeholders + ')' if ibans else ''})
                     ORDER BY date DESC""",
                 ibans if ibans else [],

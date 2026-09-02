@@ -23,6 +23,7 @@ import {
 import {
   deleteTransaction,
   updateTransactionNote,
+  updateTransactionPurpose,
   updateTransactionSplits,
 } from "@/lib/transactions";
 import { updateIbanZahlungspartnerMapping } from "@/lib/reference-data";
@@ -321,6 +322,19 @@ export default function TransactionsPage() {
       toast.success("Anmerkung gespeichert");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Anmerkung konnte nicht gespeichert werden");
+      throw err;
+    }
+  };
+
+  const saveTransactionPurpose = async (id: number, purposeEdit: string | null) => {
+    try {
+      await updateTransactionPurpose(id, purposeEdit);
+      await reload();
+      toast.success("Verwendungszweck gespeichert");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Verwendungszweck konnte nicht gespeichert werden",
+      );
       throw err;
     }
   };
@@ -759,6 +773,7 @@ export default function TransactionsPage() {
                 void saveTransactionCategory(transactionId, categoryId);
               }}
               onSaveNote={saveTransactionNote}
+              onSavePurpose={saveTransactionPurpose}
               onSaveSplits={saveTransactionSplits}
               onNoteDraftChange={(draft) => {
                 if (expandedTransactionId === transaction.id) {

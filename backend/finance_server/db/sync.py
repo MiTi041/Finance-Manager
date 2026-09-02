@@ -128,7 +128,7 @@ VALID_SYNC_COLUMNS: dict[str, set[str]] = {
         "settlement_tag",
         "original_amount", "amount", "currency",
         "dummy_entry", "transaction_hash",
-        "kategorie", "note", "splits",
+        "kategorie", "note", "splits", "purpose_edit",
         "created_at", "updated_at",
     },
     "zahlungspartner": {"id", "name", "website", "logo_url", "local_logo_path", "is_company",
@@ -398,15 +398,26 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
             ).fetchone()
         if table == "allocation_buckets" and existing:
             use_id = existing["id"]
+        if (
+            table == "umsaetze"
+            and op_type == "INSERT"
+            and existing
+        ):
+            # Ein Bank-Re-Import (gleicher transaction_hash) darf lokal gepflegte
+            # Nutzer-Felder nicht mit NULL überschreiben.
+            for manual_col in ("note", "splits", "kategorie", "purpose_edit"):
+                filtered_data.pop(manual_col, None)
+
+        columns = [k for k in filtered_data.keys() if k != pk]
         if table in {"umsaetze", "vorgemerkte_umsaetze"} and existing and "transaction_hash" in filtered_data and "transaction_hash" not in columns:
             columns.append("transaction_hash")
-            placeholders = [f"{k} = ?" for k in columns]
-            values = [filtered_data[k] for k in columns]
-
         if table in {"empfaengerkonten", "vorgemerkte_umsaetze", "refund_links", "umsaetze"} and existing and "id" in columns:
             columns = [c for c in columns if c != "id"]
-            placeholders = [f"{k} = ?" for k in columns]
-            values = [filtered_data[k] for k in columns]
+        placeholders = [f"{k} = ?" for k in columns]
+        values = [filtered_data[k] for k in columns]
+
+        if existing and not columns:
+            return True
 
         existing_is_default_bucket = table == "allocation_buckets" and existing and _is_default_allocation_bucket(existing)
 

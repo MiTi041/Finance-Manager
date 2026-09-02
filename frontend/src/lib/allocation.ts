@@ -144,11 +144,13 @@ export async function executeTransfer(
   tan?: string,
   amount?: number,
   instant?: boolean,
+  tilgung?: boolean,
 ): Promise<{ status: string; transfer: unknown }> {
   const body: Record<string, unknown> = {};
   if (tan) body.tan = tan;
   if (amount != null) body.amount = amount;
   if (instant != null) body.instant = instant;
+  if (tilgung != null) body.tilgung = tilgung;
   const response = await fetch(`${getApiBaseUrl()}/allocation/transfer/${runBucketId}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

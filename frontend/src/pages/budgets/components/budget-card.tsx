@@ -19,13 +19,16 @@ export function BudgetCard({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const ratio = budget.amount > 0 ? budget.spent / budget.amount : budget.spent > 0 ? 1 : 0;
-  const color = ratio > 1 ? "bg-red-500" : ratio >= 0.7 ? "bg-amber-500" : "bg-emerald-500";
+  const color =
+    ratio > 1 ? "bg-red-500" : ratio >= 1 ? "bg-emerald-500" : ratio >= 0.7 ? "bg-amber-500" : "bg-emerald-500";
   const status =
     ratio > 1
       ? { label: "Überzogen", cls: "bg-red-500/10 text-red-600 dark:text-red-400" }
-      : ratio >= 0.7
-        ? { label: "Fast erreicht", cls: "bg-amber-500/10 text-amber-600 dark:text-amber-400" }
-        : { label: "Im Plan", cls: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" };
+      : ratio >= 1
+        ? { label: "Erreicht", cls: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" }
+        : ratio >= 0.7
+          ? { label: "Fast erreicht", cls: "bg-amber-500/10 text-amber-600 dark:text-amber-400" }
+          : { label: "Im Plan", cls: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" };
 
   return (
     <Card>

@@ -33,6 +33,7 @@ def create_umsaetze_table(connection: sqlite3.Connection) -> None:
             prima_nota TEXT,
             purpose TEXT,
             additional_purpose TEXT,
+            purpose_edit TEXT,
             end_to_end_reference TEXT,
             additional_position_reference TEXT,
             additional_position_date TEXT,
@@ -592,6 +593,7 @@ def initialize_database(connection: sqlite3.Connection) -> None:
             "dummy_entry": "INTEGER NOT NULL DEFAULT 0",
             "note": "TEXT",
             "splits": "TEXT",
+            "purpose_edit": "TEXT",
         },
     )
     create_reference_tables(connection)

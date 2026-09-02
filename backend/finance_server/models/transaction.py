@@ -9,6 +9,10 @@ class TransactionNoteUpdateRequest(BaseModel):
     note: str | None = None
 
 
+class TransactionPurposeUpdateRequest(BaseModel):
+    purpose_edit: str | None = None
+
+
 class TransactionSplitUpdateRequest(BaseModel):
     splits: list[dict[str, Any]] | None = None
 

@@ -9,6 +9,7 @@ import {
 import {
   SidebarGroup,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
@@ -45,6 +46,12 @@ export function NavMain({
             : pathname.startsWith(item.url);
 
           if (!hasChildren) {
+            const badge = item.badge != null && item.badge > 0 && (
+              <SidebarMenuBadge className="rounded-full bg-red-500 px-1.5 text-[10px] font-semibold text-white">
+                {item.badge}
+              </SidebarMenuBadge>
+            );
+
             return (
               <SidebarMenuItem key={item.title}>
                 <SidebarMenuButton
@@ -55,22 +62,14 @@ export function NavMain({
                   {isActive ? (
                     <div className="flex items-center gap-2 cursor-default">
                       {item.icon && <item.icon />}
+                      {badge}
                       <span>{item.title}</span>
-                      {item.badge != null && item.badge > 0 && (
-                        <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-semibold text-white">
-                          {item.badge}
-                        </span>
-                      )}
                     </div>
                   ) : (
                     <Link to={item.url}>
                       {item.icon && <item.icon />}
+                      {badge}
                       <span>{item.title}</span>
-                      {item.badge != null && item.badge > 0 && (
-                        <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-semibold text-white">
-                          {item.badge}
-                        </span>
-                      )}
                     </Link>
                   )}
                 </SidebarMenuButton>

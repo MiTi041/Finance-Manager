@@ -66,6 +66,10 @@ export function mapTransaction(dto: TransactionDto): Transaction {
 
       verwendungszweck: dto.purpose ?? "",
 
+      verwendungszweckOriginal: dto.original_purpose ?? dto.purpose ?? "",
+
+      verwendungszweckEdit: dto.purpose_edit ?? null,
+
       zusatzVerwendungszweck: dto.additional_purpose ?? "",
 
       extraDetails: dto.extra_details,

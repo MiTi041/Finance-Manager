@@ -16,6 +16,7 @@ import { PurposeSection } from "./purpose-section";
 import { RefundSectionIncoming, RefundSectionOutgoing } from "./refund-section";
 import { ZahlungspartnerSection } from "./zahlungspartner-section";
 import { useNote } from "../hooks/use-note";
+import { usePurpose } from "../hooks/use-purpose";
 import { useSplits } from "../hooks/use-splits";
 import {
   type SubscriptionOverride,
@@ -45,6 +46,7 @@ type TransactionRowProps = {
   onSelectChange: (transactionId: number, selected: boolean) => void;
   onSaveCategory: (transactionId: number, categoryId: number | null) => void;
   onSaveNote: (transactionId: number, note: string | null) => Promise<void>;
+  onSavePurpose: (transactionId: number, purposeEdit: string | null) => Promise<void>;
   onSaveSplits: (transactionId: number, splits: TransactionSplit[] | null) => void;
   onNoteDraftChange?: (draft: string) => void;
   onLinkIbanToZahlungspartner: (iban: string, zahlungspartnerId: number) => Promise<void>;
@@ -79,6 +81,7 @@ export function TransactionRow({
   onSelectChange,
   onSaveCategory,
   onSaveNote,
+  onSavePurpose,
   onSaveSplits,
   onNoteDraftChange,
   onLinkIbanToZahlungspartner,
@@ -91,6 +94,7 @@ export function TransactionRow({
 }: TransactionRowProps) {
   const derivations = useTransactionDerivations(transaction, subscriptionOverride);
   const note = useNote(transaction, isExpanded, onSaveNote, onNoteDraftChange);
+  const purpose = usePurpose(transaction, isExpanded, onSavePurpose);
   const splits = useSplits(transaction, isExpanded, onSaveSplits);
 
   const refundTargetId =
@@ -103,7 +107,7 @@ export function TransactionRow({
   const [confirmCloseDialogOpen, setConfirmCloseDialogOpen] = useState(false);
   const pendingToggleAction = useRef<(() => void) | null>(null);
 
-  const isSaving = note.savingNote || splits.savingSplits;
+  const isSaving = note.savingNote || purpose.savingPurpose || splits.savingSplits;
 
   const isKontotransfer = Boolean(
     partnerBank ||
@@ -127,7 +131,7 @@ export function TransactionRow({
   }, [isExpanded, currentCategoryId, predictedCategoryId, transaction.id, onSaveCategory]);
 
   const handleRequestClose = (closeAction: () => void) => {
-    if (note.noteChanged || splits.splitsChanged) {
+    if (note.noteChanged || purpose.purposeChanged || splits.splitsChanged) {
       pendingToggleAction.current = closeAction;
       setConfirmCloseDialogOpen(true);
     } else {
@@ -137,6 +141,7 @@ export function TransactionRow({
 
   const handleDiscardAndClose = () => {
     note.resetNote();
+    purpose.resetPurpose();
     splits.resetSplits();
     pendingToggleAction.current?.();
     pendingToggleAction.current = null;
@@ -144,15 +149,19 @@ export function TransactionRow({
   };
 
   const handleSaveAndClose = async () => {
-    if (!note.noteChanged && !splits.splitsChanged) {
+    if (!note.noteChanged && !purpose.purposeChanged && !splits.splitsChanged) {
       handleDiscardAndClose();
       return;
     }
     note.setSavingNote(note.noteChanged);
+    purpose.setSavingPurpose(purpose.purposeChanged);
     splits.setSavingSplits(splits.splitsChanged);
     try {
       if (note.noteChanged) {
         await onSaveNote(transaction.id, note.trimmedNoteDraft || null);
+      }
+      if (purpose.purposeChanged) {
+        await onSavePurpose(transaction.id, purpose.trimmedPurposeDraft || null);
       }
       if (splits.splitsChanged) {
         onSaveSplits(transaction.id, splits.splitDrafts);
@@ -161,6 +170,7 @@ export function TransactionRow({
       // ignore – user can still discard or cancel
     } finally {
       note.setSavingNote(false);
+      purpose.setSavingPurpose(false);
       splits.setSavingSplits(false);
     }
     handleDiscardAndClose();
@@ -208,7 +218,7 @@ export function TransactionRow({
                 onLinkIbanToZahlungspartner={onLinkIbanToZahlungspartner}
                 onCreateZahlungspartnerForIban={onCreateZahlungspartnerForIban}
               />
-              <PurposeSection transaction={transaction} />
+              <PurposeSection transaction={transaction} purpose={purpose} />
               <CategorySection
                 transaction={transaction}
                 categoryOptions={categoryOptions}

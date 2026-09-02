@@ -101,23 +101,35 @@ def get_month_amount(tag: str, month: str) -> float:
     return get_month_breakdown(tag, month)["saldo"]
 
 
+def get_bafoeg_month_einzahlungen(month: str) -> float:
+    with get_connection() as connection:
+        rows = connection.execute(
+            """SELECT amount FROM umsaetze
+               WHERE ((' ' || COALESCE(purpose_edit, purpose, '') || ' ') LIKE '% tag.bafoegschulden %'
+                  OR (' ' || COALESCE(note, '') || ' ') LIKE '% tag.bafoegschulden %')
+                 AND amount < 0 AND date >= ? AND date <= ?""",
+            (f"{month}-01", f"{month}-31"),
+        ).fetchall()
+    return round(sum(abs(r["amount"]) for r in rows), 2)
+
+
 def get_bafoeg_breakdown() -> dict[str, float]:
     with get_connection() as connection:
         ein_rows = connection.execute(
             """SELECT amount, purpose, note FROM umsaetze
-               WHERE ((' ' || COALESCE(purpose, '') || ' ') LIKE '% tag.bafoegschulden %'
+               WHERE ((' ' || COALESCE(purpose_edit, purpose, '') || ' ') LIKE '% tag.bafoegschulden %'
                   OR (' ' || COALESCE(note, '') || ' ') LIKE '% tag.bafoegschulden %')
                  AND amount < 0""",
         ).fetchall()
         ent_rows = connection.execute(
             """SELECT amount, purpose, note FROM umsaetze
-               WHERE ((' ' || COALESCE(purpose, '') || ' ') LIKE '% tag.bafoegschulden.entnahme %'
+               WHERE ((' ' || COALESCE(purpose_edit, purpose, '') || ' ') LIKE '% tag.bafoegschulden.entnahme %'
                   OR (' ' || COALESCE(note, '') || ' ') LIKE '% tag.bafoegschulden.entnahme %')
                  AND amount > 0""",
         ).fetchall()
         tilg_rows = connection.execute(
             """SELECT amount, purpose, note FROM umsaetze
-               WHERE ((' ' || COALESCE(purpose, '') || ' ') LIKE '% tag.bafoegschulden.entnahme %'
+               WHERE ((' ' || COALESCE(purpose_edit, purpose, '') || ' ') LIKE '% tag.bafoegschulden.entnahme %'
                   OR (' ' || COALESCE(note, '') || ' ') LIKE '% tag.bafoegschulden.entnahme %')
                  AND amount < 0""",
         ).fetchall()
@@ -134,7 +146,7 @@ def get_saved_breakdown(tag: str) -> dict[str, float]:
     tag_pattern = tag if tag.startswith("tag.") else f"tag.{tag}"
     with get_connection() as connection:
         rows = connection.execute(
-            "SELECT amount, purpose FROM umsaetze WHERE purpose LIKE ? OR note LIKE ?",
+            "SELECT amount, purpose FROM umsaetze WHERE COALESCE(purpose_edit, purpose) LIKE ? OR note LIKE ?",
             (f"%{tag_pattern}%", f"%{tag_pattern}%"),
         ).fetchall()
     return _tag_breakdown(tag, rows)
@@ -146,7 +158,7 @@ def get_month_breakdown(tag: str, month: str) -> dict[str, float]:
     month_end = f"{month}-31"
     with get_connection() as connection:
         rows = connection.execute(
-            "SELECT amount, purpose FROM umsaetze WHERE (purpose LIKE ? OR note LIKE ?) AND date >= ? AND date <= ?",
+            "SELECT amount, purpose FROM umsaetze WHERE (COALESCE(purpose_edit, purpose) LIKE ? OR note LIKE ?) AND date >= ? AND date <= ?",
             (f"%{tag_pattern}%", f"%{tag_pattern}%", month_start, month_end),
         ).fetchall()
     return _tag_breakdown(tag, rows)
@@ -160,7 +172,7 @@ def _savings_breakdown(tag: str, month: str | None = None) -> dict[str, float]:
     tag_pattern = _tag_with_space(tag)
     base_like = f"%{tag_pattern}%"
     entnahme_like = f"%{tag_pattern}.entnahme%"
-    where = "(COALESCE(purpose, '') LIKE ? OR COALESCE(note, '') LIKE ?) AND COALESCE(purpose, '') NOT LIKE ? AND COALESCE(note, '') NOT LIKE ?"
+    where = "(COALESCE(purpose_edit, purpose, '') LIKE ? OR COALESCE(note, '') LIKE ?) AND COALESCE(purpose_edit, purpose, '') NOT LIKE ? AND COALESCE(note, '') NOT LIKE ?"
     params: list[Any] = [base_like, base_like, entnahme_like, entnahme_like]
     if month:
         where += " AND date >= ? AND date <= ?"
@@ -168,7 +180,7 @@ def _savings_breakdown(tag: str, month: str | None = None) -> dict[str, float]:
     with get_connection() as connection:
         base_rows = connection.execute(f"SELECT amount FROM umsaetze WHERE {where}", params).fetchall()
         ent_rows = connection.execute(
-            "SELECT amount FROM umsaetze WHERE (COALESCE(purpose, '') LIKE ? OR COALESCE(note, '') LIKE ?)"
+            "SELECT amount FROM umsaetze WHERE (COALESCE(purpose_edit, purpose, '') LIKE ? OR COALESCE(note, '') LIKE ?)"
             + (f" AND date >= ? AND date <= ?" if month else ""),
             [entnahme_like, entnahme_like] + ([f"{month}-01", f"{month}-31"] if month else []),
         ).fetchall()
@@ -203,11 +215,11 @@ def get_income_payout_days(month: str) -> list[int]:
 
     with get_connection() as connection:
         rows = connection.execute(
-            """SELECT applicant_name, purpose, date
+            """SELECT applicant_name, COALESCE(purpose_edit, purpose) AS purpose, date
                FROM umsaetze
                WHERE amount > 0
                  AND date >= ? AND date <= ?
-                 AND (COALESCE(purpose, '') NOT LIKE '%tag.%' AND COALESCE(note, '') NOT LIKE '%tag.%')
+                 AND (COALESCE(purpose_edit, purpose, '') NOT LIKE '%tag.%' AND COALESCE(note, '') NOT LIKE '%tag.%')
                ORDER BY applicant_name, purpose, date""",
             (lookback_start, month_end),
         ).fetchall()

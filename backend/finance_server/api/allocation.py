@@ -106,7 +106,8 @@ def execute_transfer(
 ) -> dict[str, Any]:
     tan = (body or {}).get("tan")
     custom_amount = (body or {}).get("amount")
-    transfer_data = service.transfer_run_bucket(run_bucket_id, custom_amount)
+    tilgung = bool((body or {}).get("tilgung", False))
+    transfer_data = service.transfer_run_bucket(run_bucket_id, custom_amount, tilgung=tilgung)
 
     req = TransferRequest(
         recipient_iban=transfer_data["recipient_iban"],
