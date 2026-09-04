@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, ShieldCheck, Info, Zap } from "lucide-react";
+import { Loader2, ShieldCheck, Info, Zap, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ToggleRow } from "@/components/toggle-row";
 import { formatAmount } from "@/lib/utils/format";
-import { TanRequiredError } from "@/lib/allocation";
+import { TanRequiredError, VopRequiredError } from "@/lib/allocation";
 
 type Props = {
   open: boolean;
@@ -25,7 +25,7 @@ type Props = {
   purpose?: string;
   instant: boolean;
   onInstantChange: (instant: boolean) => void;
-  onConfirm: (tan?: string) => Promise<void>;
+  onConfirm: (tan?: string, vopToken?: string) => Promise<void>;
 };
 
 function formatIban(iban: string) {
@@ -48,6 +48,7 @@ export function TransferDialog({
   const [sending, setSending] = useState(false);
   const [tanChallenge, setTanChallenge] = useState<string | null>(null);
   const [tanDecoupled, setTanDecoupled] = useState(false);
+  const [vopError, setVopError] = useState<VopRequiredError | null>(null);
 
   // Reset local state whenever the dialog is reopened for a new transfer,
   // so a previous error or half-typed TAN doesn't linger.
@@ -57,6 +58,7 @@ export function TransferDialog({
       setSending(false);
       setTanChallenge(null);
       setTanDecoupled(false);
+      setVopError(null);
     }
   }, [open]);
 
@@ -65,10 +67,12 @@ export function TransferDialog({
     setTanChallenge(null);
     setTanDecoupled(false);
     try {
-      await onConfirm(tan || undefined);
+      await onConfirm(tan || undefined, vopError?.info.vop_token);
       onOpenChange(false);
     } catch (e) {
-      if (e instanceof TanRequiredError) {
+      if (e instanceof VopRequiredError) {
+        setVopError(e);
+      } else if (e instanceof TanRequiredError) {
         setTanChallenge(e.challenge);
         setTanDecoupled(e.decoupled);
       } else {
@@ -147,6 +151,32 @@ export function TransferDialog({
             onCheckedChange={onInstantChange}
           />
 
+          {vopError && (
+            <div className="min-w-0 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+              <div className="flex min-w-0 items-start gap-2">
+                <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+                <div className="min-w-0 break-words">
+                  <p className="font-medium">Namensabgleich fehlgeschlagen</p>
+                  <p className="mt-0.5">
+                    Die Bank konnte den Empfänger „{recipientName}" nicht zweifelsfrei dem
+                    Kontoinhaber der IBAN {formatIban(recipientIban)} zuordnen.
+                  </p>
+                  {vopError.info.close_match_name && (
+                    <p className="mt-1">
+                      Laut Bank lautet der hinterlegte Name:{` `}
+                      <span className="font-medium">{vopError.info.close_match_name}</span>.
+                    </p>
+                  )}
+                  {vopError.info.notice && <p className="mt-1">{vopError.info.notice}</p>}
+                  <p className="mt-1">
+                    Wenn du die Überweisung trotzdem ausführst, könnte das Geld bei einer falschen
+                    Person ankommen. Bitte prüfe Empfänger und IBAN genau.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {tanChallenge && (
             <div className="min-w-0 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
               <div className="flex min-w-0 items-start gap-2">
@@ -192,7 +222,7 @@ export function TransferDialog({
             </Button>
             <Button type="submit" disabled={sending}>
               {sending && <Loader2 className="size-4 animate-spin" />}
-              {sending ? "Wird gesendet…" : "Abschicken"}
+              {sending ? "Wird gesendet…" : vopError ? "Trotzdem überweisen" : "Abschicken"}
             </Button>
           </div>
         </form>

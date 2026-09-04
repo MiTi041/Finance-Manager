@@ -153,8 +153,21 @@ class TestDto:
 from finance_server.db.analytics import fetch_summary
 
 
+def _link_account(conn, iban: str) -> None:
+    conn.execute(
+        "INSERT INTO bank_credentials (scope, payload, created_at, updated_at) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT(scope) DO NOTHING",
+        ("test-scope", b"", "2026-07-15T10:00:00", "2026-07-15T10:00:00"),
+    )
+    conn.execute(
+        "INSERT INTO bank_accounts (scope, iban) VALUES (?, ?)",
+        ("test-scope", iban),
+    )
+
+
 class TestAnalytics:
     def _summary(self, conn):
+        _link_account(conn, "DE1")
         with patch("finance_server.db.analytics.get_connection", return_value=conn):
             return fetch_summary(days=36500)
 
@@ -185,3 +198,19 @@ class TestAnalytics:
 
         assert summary["incomes"] == 10.0
         assert summary["expenses"] == 0.0
+
+    def test_unlinked_account_transactions_are_excluded(self, test_db):
+        _ins(test_db, 500.0, "linked")
+        for suffix, amount in (("ghost-1", -300.0), ("ghost-2", -100.0)):
+            test_db.execute(
+                "INSERT INTO umsaetze (account_iban, amount, date, entry_date, created_at, transaction_hash) "
+                "VALUES ('DE2', ?, '2026-07-15', '2026-07-15', '2026-07-15T10:00:00', ?)",
+                (amount, f"h-{suffix}"),
+            )
+
+        summary = self._summary(test_db)
+
+        assert summary["balance"] == 500.0
+        assert summary["incomes"] == 500.0
+        assert summary["expenses"] == 0.0
+        assert summary["transaction_count"] == 1

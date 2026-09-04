@@ -1266,6 +1266,40 @@ IMPLEMENTED_HKTAN_VERSIONS = {
 }
 
 
+def _extract_vop_xml_result(hivpp):
+    """Bestimmt das VOP-Prüfergebnis aus dem pain.002-XML der Bank.
+
+    Viele Institute (z. B. Norisbank) liefern das Ergebnis je Transaktion nicht
+    im FinTS-Feld ``EVPE``, sondern als Payment Status Report (pain.002) im
+    ``HIVPP.payment_status_report``. Diese Banken senden einen leeren
+    ``vop_single_result``, wodurch python-fints den VOP-Zweig nie auslöst.
+    Wir lesen hier den Code (``TxSts`` = RCVC/RVNM/RVMC/RVNA/PDNG) aus dem XML.
+    """
+    report = getattr(hivpp, 'payment_status_report', None)
+    if not report:
+        return None
+    try:
+        import xml.etree.ElementTree as ET
+
+        if isinstance(report, bytes):
+            xml_text = report.decode('utf-8', 'replace')
+        else:
+            xml_text = str(report)
+        root = ET.fromstring(xml_text)
+    except Exception:
+        return None
+
+    codes = []
+    for element in root.iter():
+        if element.tag.rsplit('}', 1)[-1] != 'TxSts':
+            continue
+        if element.text and element.text.strip().upper() in (
+            'RCVC', 'RVNM', 'RVMC', 'RVNA', 'PDNG'
+        ):
+            codes.append(element.text.strip().upper())
+    return codes[0] if codes else None
+
+
 class FinTS3PinTanClient(FinTS3Client):
 
     def __init__(self, bank_identifier, user_id, pin, server, customer_id=None, tan_medium=None, *args, **kwargs):
@@ -1476,8 +1510,24 @@ class FinTS3PinTanClient(FinTS3Client):
                     hivpp = response.find_segment_first(HIVPP1, throw=True)
 
                     vop_result = hivpp.vop_single_result
-                     # Not Applicable, No Match, Close Match, or exact match but still requires confirmation
-                    if vop_result.result in ('RVNA', 'RVNM', 'RVMC')  or (vop_result.result == 'RCVC' and '3945' in [res.code for res in response.responses(tan_seg)]): 
+                    # Einige Institute liefern das Prüfergebnis nur als pain.002-XML
+                    # (payment_status_report) und lassen EVPE/vop_single_result leer.
+                    if getattr(vop_result, 'result', None) is None:
+                        xml_code = _extract_vop_xml_result(hivpp)
+                        if xml_code:
+                            from .segments.auth import EVPE
+
+                            hivpp.vop_single_result = EVPE(result=xml_code)
+                            vop_result = hivpp.vop_single_result
+                    # Not Applicable, No Match, Close Match, or exact match
+                    # but still requires confirmation
+                    if vop_result and (
+                        vop_result.result in ('RVNA', 'RVNM', 'RVMC')
+                        or (
+                            vop_result.result == 'RCVC'
+                            and '3945' in [res.code for res in response.responses(tan_seg)]
+                        )
+                    ):
                         return NeedVOPResponse(
                             vop_result=hivpp,
                             command_seg=command_seg,

@@ -7,12 +7,19 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+from fints.exceptions import FinTSClientError
+
 from finance_server.core.config import settings
 
 _fints_logger = logging.getLogger("fints")
-_fints_logger.setLevel(logging.INFO)
+_fints_logger.setLevel(logging.DEBUG if settings.fints_debug else logging.INFO)
 if not _fints_logger.handlers:
-    _fints_logger.addHandler(logging.StreamHandler())
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s"))
+    _fints_logger.addHandler(handler)
+elif settings.fints_debug:
+    for handler in _fints_logger.handlers:
+        handler.setLevel(logging.DEBUG)
 
 if getattr(sys, "frozen", False):
     BASE_DIR = Path(sys._MEIPASS)
@@ -30,6 +37,32 @@ _transactions_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _transactions_cache_lock = threading.Lock()
 
 
+class BankLoginRejected(FinTSClientError):
+    """Die Bank hat die Anmeldung waehrend der Dialog-/Sync-Initialisierung abgelehnt."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        codes: list[str] | None = None,
+        bank_messages: list[str] | None = None,
+    ):
+        super().__init__(message)
+        self.codes = codes or []
+        self.bank_messages = bank_messages or []
+
+    def to_detail(self) -> dict[str, Any]:
+        detail: dict[str, Any] = {
+            "code": "FINTS_LOGIN_FAILED",
+            "message": str(self),
+        }
+        if self.codes:
+            detail["codes"] = self.codes
+        if self.bank_messages:
+            detail["bank_messages"] = self.bank_messages
+        return detail
+
+
 class TanRequired(Exception):
     def __init__(self, challenge: str | None, decoupled: bool):
         self.challenge = challenge
@@ -38,6 +71,30 @@ class TanRequired(Exception):
 
 class TanTimeout(Exception):
     pass
+
+
+class VopConfirmationRequired(Exception):
+    """Die Bank verlangt eine explizite Bestätigung wegen eines abweichenden
+    Namensabgleichs (VOP), bevor der Auftrag freigegeben wird."""
+
+    def __init__(
+        self,
+        *,
+        vop_token: str,
+        result: str | None,
+        recipient_iban: str,
+        recipient_name: str,
+        close_match_name: str | None = None,
+        other_identification: str | None = None,
+        notice: str | None = None,
+    ):
+        self.vop_token = vop_token
+        self.result = result
+        self.recipient_iban = recipient_iban
+        self.recipient_name = recipient_name
+        self.close_match_name = close_match_name
+        self.other_identification = other_identification
+        self.notice = notice
 
 
 def to_jsonable(value: Any) -> Any:

@@ -78,7 +78,7 @@ def _extract_line_items(text: str) -> list[dict[str, Any]]:
         name = re.sub(r"\s+", " ", name).strip()
         if len(name) <= 1:
             return ""
-        if re.match(r"^[\d\s,.\-–—/:;]+$", name):
+        if re.match(r"^[\d\s,.\--—/:;]+$", name):
             return ""
         return name
 
@@ -160,7 +160,7 @@ def _is_receipt_noise(line: str) -> bool:
     for kw in _SKIP_STORE_KEYWORDS:
         if kw in lower:
             return True
-    if re.match(r"^[\d\s,.\-–—/:;]+$", line.strip()):
+    if re.match(r"^[\d\s,.\--—/:;]+$", line.strip()):
         return True
     return False
 

@@ -29,7 +29,7 @@ def _run(instant_payment: bool):
         patch("finance_server.fints.transfer.resolve_bank_credentials", return_value=("creds", None)),
         patch("finance_server.fints.transfer.load_state", return_value=None),
         patch("finance_server.fints.transfer.make_client", return_value=client),
-        patch("finance_server.fints.transfer.minimal_interactive_cli_bootstrap"),
+        patch("finance_server.fints.transfer.bootstrap_client"),
         patch("finance_server.fints.transfer.save_state"),
         patch("finance_server.fints.transfer.validate_transfer_result"),
     ):

@@ -55,11 +55,11 @@ function fmt(value: number) {
 
 function computeDateFooter(dateFilter: DateFilterValue) {
   if (dateFilter.timeSpan) {
-    return `${format(dateFilter.timeSpan.from, "dd.MM.yy")} – ${format(dateFilter.timeSpan.until, "dd.MM.yy")}`;
+    return `${format(dateFilter.timeSpan.from, "dd.MM.yy")} - ${format(dateFilter.timeSpan.until, "dd.MM.yy")}`;
   }
   if (dateFilter.timeRange) {
     const span = getTimeSpanForRange(dateFilter.timeRange);
-    return `${format(span.from, "dd.MM.yy")} – ${format(span.until, "dd.MM.yy")}`;
+    return `${format(span.from, "dd.MM.yy")} - ${format(span.until, "dd.MM.yy")}`;
   }
   return null;
 }
@@ -82,9 +82,7 @@ function groupSmallSlices(
   const sorted = [...items].sort((a, b) => b.value - a.value);
 
   const big = sorted.filter((item) => item.value >= threshold);
-  let restSum = sorted
-    .filter((item) => item.value < threshold)
-    .reduce((s, i) => s + i.value, 0);
+  let restSum = sorted.filter((item) => item.value < threshold).reduce((s, i) => s + i.value, 0);
 
   if (big.length >= 10) {
     const extra = big.splice(9).reduce((s, i) => s + i.value, 0);
@@ -116,9 +114,7 @@ function ChartTooltip({ active, payload }: any) {
         {isOther ? <Ellipsis size={12} /> : entry.icon && <span>{entry.icon}</span>}
         {name}
       </p>
-      <p
-        className="m-0 mt-1.5 text-[17px] font-semibold tabular-nums tracking-tight text-foreground"
-      >
+      <p className="m-0 mt-1.5 text-[17px] font-semibold tabular-nums tracking-tight text-foreground">
         {fmt(value)}
       </p>
     </div>
@@ -164,9 +160,7 @@ function CardHeader({
         </span>
       </div>
       {dateFooter && (
-        <span className="text-[10.5px] tracking-wide text-muted-foreground/40">
-          {dateFooter}
-        </span>
+        <span className="text-[10.5px] tracking-wide text-muted-foreground/40">{dateFooter}</span>
       )}
     </div>
   );
@@ -229,9 +223,7 @@ function LegendRow({
           </div>
         )}
 
-        <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">
-          {name}
-        </span>
+        <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">{name}</span>
         <span className="shrink-0 text-[12px] font-semibold tabular-nums tracking-tight text-foreground">
           {fmt(value)}
         </span>
@@ -293,7 +285,12 @@ function ChartCard({
       ) : (
         <div className="flex flex-1 items-center gap-5">
           {/* donut */}
-          <div className="shrink-0" style={{ width: donutSize, height: donutSize }} role="img" aria-label={`Kuchendiagramm: ${title}`}>
+          <div
+            className="shrink-0"
+            style={{ width: donutSize, height: donutSize }}
+            role="img"
+            aria-label={`Kuchendiagramm: ${title}`}
+          >
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie

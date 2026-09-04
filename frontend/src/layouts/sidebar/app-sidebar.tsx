@@ -1,7 +1,6 @@
 import * as React from "react";
 import { FileText, Gauge, Repeat, ScanSearch, Target, Wallet } from "lucide-react";
 
-import { normalizeIban } from "@/lib/iban";
 import { buildAccountOptions, resolveAccountSelection } from "@/lib/utils/accounts";
 import { NavMain } from "@/components/nav-main";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader } from "@/components/ui/sidebar";
@@ -14,9 +13,12 @@ import {
   type FintsSyncStatusDetail,
 } from "@/lib/sync-events";
 import { UpdateBanner } from "@/components/update-banner";
+import { readFintsSyncCache } from "@/lib/sync-cache";
+import { formatRelativeAge } from "@/lib/utils/format";
 import { readActiveAccountIban, writeActiveAccountIban } from "@/lib/bank/active-storage";
 import { BankSelector } from "./bank-selector";
 import { SidebarFooterContent } from "./sidebar-footer-content";
+import type { SyncStatusRow } from "./sync-button";
 import { fetchBudgets } from "@/lib/budgets";
 
 function parseLatestTimestamp(value: unknown): Date | null {
@@ -65,12 +67,30 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   };
 
   const [cacheAgeText, setCacheAgeText] = React.useState<string>("Kein Cache");
+  const [scopeSyncTimes, setScopeSyncTimes] = React.useState<Record<string, number>>({});
   const [isSyncing, setIsSyncing] = React.useState(false);
   const [syncStatusText, setSyncStatusText] = React.useState<string>("");
   const [linkedBanks, setLinkedBanks] = React.useState<StoredBankCredentials[]>([]);
   const [activeAccountIban, setActiveAccountIban] = React.useState<string>(() => readActiveAccountIban());
 
   const accountOptions = React.useMemo(() => buildAccountOptions(linkedBanks), [linkedBanks]);
+
+  const syncStatusRows = React.useMemo<SyncStatusRow[]>(() => {
+    const byScope = new Map<string, { label: string; ts: number }>();
+    accountOptions.forEach((option) => {
+      const ts = scopeSyncTimes[option.scope];
+      if (!ts) return;
+      const existing = byScope.get(option.scope);
+      if (!existing) {
+        byScope.set(option.scope, { label: option.bankName, ts });
+      }
+    });
+
+    const rows = Array.from(byScope.values());
+    const distinctTimes = new Set(rows.map((row) => row.ts));
+    if (distinctTimes.size < 2) return [];
+    return rows.map(({ label, ts }) => ({ label, text: formatRelativeAge(ts) }));
+  }, [accountOptions, scopeSyncTimes]);
 
   const resolveSelection = React.useCallback(
     (selection: string) => resolveAccountSelection(selection, accountOptions, linkedBanks),
@@ -107,6 +127,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const updateCacheAge = React.useCallback(async () => {
     // prefer client-side cache timestamps (localStorage), fallback to DB
     let newest = 0;
+    const syncCache = readFintsSyncCache();
+    const syncScopes: Record<string, number> = syncCache?.scopes ?? {};
+    setScopeSyncTimes(syncScopes);
 
     try {
       const financeRaw = window.localStorage.getItem("financeDataCache");
@@ -115,21 +138,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         const cand = Number(parsed?.cachedAt ?? parsed?.cached_at ?? parsed?.cachedAtMs);
         if (Number.isFinite(cand)) newest = Math.max(newest, cand);
       }
-    } catch (e) {
+    } catch {
       /* ignore parse errors */
     }
 
-    try {
-      const syncRaw = window.localStorage.getItem("fintsSyncCache");
-      if (syncRaw) {
-        const parsed = JSON.parse(syncRaw);
-        const cand = Number(
-          parsed?.syncedAt ?? parsed?.synced_at ?? parsed?.syncedAtMs ?? parsed?.lastSynced,
-        );
-        if (Number.isFinite(cand)) newest = Math.max(newest, cand);
-      }
-    } catch (e) {
-      /* ignore parse errors */
+    if (syncCache?.syncedAt) {
+      newest = Math.max(newest, syncCache.syncedAt);
     }
 
     if (!newest) {
@@ -145,23 +159,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       return;
     }
 
-    const diffMs = Date.now() - newest;
-    const minutes = Math.floor(diffMs / 60000);
-
-    if (minutes < 1) {
-      setCacheAgeText("Gerade aktualisiert");
-      return;
-    }
-    if (minutes < 60) {
-      setCacheAgeText(`Vor ${minutes} Min.`);
-      return;
-    }
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) {
-      setCacheAgeText(`Vor ${hours} Std.`);
-      return;
-    }
-    setCacheAgeText(`Vor ${Math.floor(hours / 24)} Tagen`);
+    setCacheAgeText(formatRelativeAge(newest));
   }, []);
 
   React.useEffect(() => {
@@ -254,6 +252,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           isSyncing={isSyncing}
           syncStatusText={syncStatusText}
           cacheAgeText={cacheAgeText}
+          syncStatusRows={syncStatusRows}
           refreshFinanceData={refreshFinanceData}
         />
       </SidebarFooter>

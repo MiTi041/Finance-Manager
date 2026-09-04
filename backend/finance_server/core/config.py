@@ -25,6 +25,7 @@ class Settings(BaseSettings):
 
     fints_max_days: int = 36500
     fints_initial_sync_days: int = 730
+    fints_debug: bool = False
     fints_transactions_cache_ttl_seconds: int = 120
     fints_transactions_cache_max_entries: int = 32
 

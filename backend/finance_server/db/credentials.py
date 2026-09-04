@@ -55,6 +55,7 @@ def _normalize_accounts(accounts: Any) -> list[dict[str, Any]]:
             {
                 "iban": iban,
                 "account_name": normalize_text(account.get("account_name")) or None,
+                "holder_name": normalize_text(account.get("holder_name")) or None,
             }
         )
 
@@ -66,6 +67,14 @@ def _sync_bank_accounts(
     scope: str,
     accounts: list[dict[str, Any]],
 ) -> None:
+    existing = connection.execute(
+        "SELECT iban, holder_name FROM bank_accounts WHERE scope = ?",
+        (scope,),
+    ).fetchall()
+    previous_holder = {
+        normalize_text(row["iban"]).upper(): row["holder_name"] for row in existing
+    }
+
     connection.execute("DELETE FROM bank_accounts WHERE scope = ?", (scope,))
 
     if not accounts:
@@ -74,14 +83,16 @@ def _sync_bank_accounts(
     now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     connection.executemany(
         """
-        INSERT INTO bank_accounts (scope, iban, account_name, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO bank_accounts (scope, iban, account_name, holder_name, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
         [
             (
                 scope,
                 account["iban"],
                 account.get("account_name"),
+                account.get("holder_name")
+                or previous_holder.get(normalize_text(account["iban"]).upper()),
                 now,
                 now,
             )
@@ -93,7 +104,7 @@ def _sync_bank_accounts(
 def _load_bank_accounts(connection: sqlite3.Connection, scope: str) -> list[dict[str, Any]]:
     rows = connection.execute(
         """
-        SELECT iban, account_name, balance
+        SELECT iban, account_name, holder_name, balance
         FROM bank_accounts
         WHERE scope = ?
         ORDER BY created_at ASC, id ASC
@@ -105,6 +116,7 @@ def _load_bank_accounts(connection: sqlite3.Connection, scope: str) -> list[dict
         {
             "iban": row["iban"],
             "account_name": row["account_name"],
+            "holder_name": row["holder_name"],
             "balance": row["balance"],
         }
         for row in rows
@@ -226,6 +238,38 @@ def load_bank_credentials_by_iban(iban: str) -> dict[str, Any] | None:
     return None
 
 
+def find_bank_account_by_iban(iban: str) -> dict[str, Any] | None:
+    """Findet das erste hinterlegte eigene Bankkonto zur IBAN (über alle Scopes)."""
+    normalized = "".join(iban.split()).upper()
+    if not normalized:
+        return None
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT scope, iban, account_name, holder_name
+            FROM bank_accounts
+            WHERE UPPER(iban) = UPPER(?)
+            ORDER BY created_at ASC, id ASC
+            LIMIT 1
+            """,
+            (normalized,),
+        ).fetchone()
+    if row is None:
+        return None
+    return {
+        "scope": row["scope"],
+        "iban": row["iban"],
+        "account_name": row["account_name"],
+        "holder_name": row["holder_name"],
+    }
+
+
+def bank_accounts_by_scope(scope: str) -> list[dict[str, Any]]:
+    """Alle Konten eines Scopes inkl. holder_name (ohne Kredential-Zusatzfelder)."""
+    with get_connection() as connection:
+        return _load_bank_accounts(connection, scope)
+
+
 def bank_credentials_configured(scope: str | None = None) -> bool:
     return load_bank_credentials(scope) is not None
 
@@ -275,14 +319,20 @@ def upsert_bank_accounts(scope: str, accounts: list[dict[str, Any]]) -> None:
         _sync_bank_accounts(connection, scope, normalized_accounts)
 
 
-def update_bank_account(scope: str, iban: str, account_name: str | None = None, account_iban: str | None = None) -> bool:
+def update_bank_account(
+    scope: str,
+    iban: str,
+    account_name: str | None = None,
+    account_iban: str | None = None,
+    holder_name: str | None = None,
+) -> bool:
     normalized_iban = normalize_text(iban)
     if not normalized_iban:
         return False
 
     with get_connection() as connection:
         row = connection.execute(
-            "SELECT iban FROM bank_accounts WHERE scope = ? AND UPPER(iban) = UPPER(?)",
+            "SELECT iban, account_name, holder_name FROM bank_accounts WHERE scope = ? AND UPPER(iban) = UPPER(?)",
             (scope, normalized_iban),
         ).fetchone()
 
@@ -290,15 +340,18 @@ def update_bank_account(scope: str, iban: str, account_name: str | None = None, 
             return False
 
         new_iban = normalize_text(account_iban) or row["iban"]
-        new_name = normalize_text(account_name) or None
+        new_name = normalize_text(account_name) if account_name is not None else row["account_name"]
+        new_holder = (
+            normalize_text(holder_name) if holder_name is not None else row["holder_name"]
+        )
         now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
         connection.execute(
             """
             UPDATE bank_accounts
-            SET iban = ?, account_name = ?, updated_at = ?
+            SET iban = ?, account_name = ?, holder_name = ?, updated_at = ?
             WHERE scope = ? AND UPPER(iban) = UPPER(?)
             """,
-            (new_iban, new_name, now, scope, normalized_iban),
+            (new_iban, new_name, new_holder, now, scope, normalized_iban),
         )
         return True
 

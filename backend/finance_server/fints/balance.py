@@ -8,7 +8,7 @@ from finance_server.models.bank import BankCredentials
 from .common import to_decimal_or_none, to_jsonable
 from .client import (
     with_state_retry, make_client, bootstrap_client, save_state,
-    resolve_tan_until_done,
+    resolve_tan_until_done, _capture_tan_medium_from_challenge,
 )
 
 
@@ -21,6 +21,7 @@ def fetch_account_balance(creds: BankCredentials, iban: str) -> dict[str, Any]:
 
         with client:
             while isinstance(client.init_tan_response, NeedTANResponse):
+                _capture_tan_medium_from_challenge(client)
                 client.init_tan_response = resolve_tan_until_done(client, client.init_tan_response, None)
             save_state(client, creds)
 

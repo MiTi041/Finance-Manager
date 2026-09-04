@@ -14,7 +14,7 @@ Monatliche Budgets pro Kategorie (z.B. Lebensmittel 100 €, Freizeit 50 €) mi
 - **Kein Rollover**: nicht ausgegebenes Budget verfällt am Monatsende.
 - **Beliebige Kategorie-Ebene**: Budget kann auf Haupt- oder Unterkategorie gesetzt werden; ausgegeben = Summe der Transaktionen in der Kategorie **inkl. aller Unterkategorien** (rekursive CTE).
 - **Über alle Konten** (Kategorien sind global). Aktive Kontoauswahl wird ignoriert.
-- **Warnung**: Fortschrittsbalken (grün <70 %, gelb 70–100 %, rot >100 %) + Sidebar-Badge mit Anzahl überzogener Budgets.
+- **Warnung**: Fortschrittsbalken (grün <70 %, gelb 70-100 %, rot >100 %) + Sidebar-Badge mit Anzahl überzogener Budgets.
 
 ## Datenmodell
 

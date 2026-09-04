@@ -1,23 +1,23 @@
 """
-base_categorize.py – Kalt-Start-Kategorisierung und kombinierte Vorhersagen.
+base_categorize.py - Kalt-Start-Kategorisierung und kombinierte Vorhersagen.
 
 Problem:
   Das eigene TF-IDF-Modell (auto_categorize.py) braucht ausreichend kategorisierte
   Transaktionen als Trainingsbasis. Bei wenigen oder keinen Daten liefert es
   keine oder schwache Vorschläge.
 
-Lösung – drei Stufen, die in build_combined_predictions() orchestriert werden:
+Lösung - drei Stufen, die in build_combined_predictions() orchestriert werden:
 
-  Stufe 1 – Eigenes TF-IDF-Modell (auto_categorize.build_predictions):
+  Stufe 1 - Eigenes TF-IDF-Modell (auto_categorize.build_predictions):
     Nutzt die eigenen kategorisierten Transaktionen. Zuverlässig sobald
     ausreichend Beispiele vorhanden.
 
-  Stufe 2 – Regelbasierter Fallback (predict_rules):
+  Stufe 2 - Regelbasierter Fallback (predict_rules):
     Hardcodierte Keyword-Listen decken den häufigsten Alltag ab
     (REWE → Lebensmittel, Netflix → Streaming, …). Keine Daten nötig,
     sofort verfügbar, deterministisch.
 
-  Stufe 3 – Globales TF-IDF-Basis-Modell (predict_base):
+  Stufe 3 - Globales TF-IDF-Basis-Modell (predict_base):
     Verwendet alle kategorisierten Transaktionen aus der Datenbank.
     Da Kategorien global sind (nicht pro Nutzer), werden Label-Namen
     direkt aufgelöst. Das Basis-Modell lernt automatisch dazu.
@@ -74,7 +74,7 @@ logger = logging.getLogger(__name__)
 # ──────────────────────────────────────────────────────────────────────────────
 
 # Nutzer mit weniger als MIN_OWN_SAMPLES eigenen Trainingsdaten bekommen
-# immer Stufe 2 + 3 als Ergänzung angeboten – unabhängig vom eigenen Modell.
+# immer Stufe 2 + 3 als Ergänzung angeboten - unabhängig vom eigenen Modell.
 MIN_OWN_SAMPLES = 20
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -124,14 +124,14 @@ def _load_base_model() -> dict[str, Any] | None:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# STUFE 2 – Regelbasierter Keyword-Fallback
+# STUFE 2 - Regelbasierter Keyword-Fallback
 # ══════════════════════════════════════════════════════════════════════════════
 
 # Jede Regel ist ein Tupel (regex-Pattern, normalisierter Kategoriename, Typ).
 # Die Patterns werden case-insensitiv auf dem kombinierten Transaktionstext
 # (Verwendungszweck + Auftraggeber + Empfänger) geprüft.
 #
-# Wichtig: Reihenfolge ist signifikant – spezifischere Regeln stehen oben,
+# Wichtig: Reihenfolge ist signifikant - spezifischere Regeln stehen oben,
 # allgemeinere unten. Beim ersten Match wird abgebrochen.
 #
 # Normalisierter Kategoriename = Kleinschreibung, wie er auch im Basis-Modell
@@ -358,7 +358,7 @@ def _resolve_category_id(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# STUFE 3 – Globales TF-IDF-Basis-Modell
+# STUFE 3 - Globales TF-IDF-Basis-Modell
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _fetch_all_categorized_transactions() -> list[dict[str, Any]]:
@@ -416,7 +416,7 @@ def _build_base_model() -> dict[str, Any] | None:
     Kategorie-IDs sich unterscheiden.
 
     min_df=2: Terme, die nur in einer einzigen Transaktion vorkommen (z. B.
-    einmalige Auftragsnummern), werden ignoriert – sie generalisieren nicht.
+    einmalige Auftragsnummern), werden ignoriert - sie generalisieren nicht.
     """
     rows = _fetch_all_categorized_transactions()
     if not rows:
@@ -553,7 +553,7 @@ def predict_base(
     Rückgabe: Vorschlag mit Kategorie-ID, oder None wenn
     Ähnlichkeit < SIMILARITY_THRESHOLD oder keine Auflösung möglich.
 
-    Kategorien sind global – der Label (z. B. "Ausgabe::lebensmittel") wird
+    Kategorien sind global - der Label (z. B. "Ausgabe::lebensmittel") wird
     direkt via _resolve_category_id() auf eine existierende Kategorie-ID
     gemappt.
     """

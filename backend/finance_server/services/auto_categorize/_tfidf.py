@@ -5,7 +5,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 # Stoppwörter (Deutsch + juristische Formen), die TF-IDF ignorieren soll.
-# GmbH, AG, KG usw. sind in fast jedem Firmennamen – sie tragen nichts zur
+# GmbH, AG, KG usw. sind in fast jedem Firmennamen - sie tragen nichts zur
 # Unterscheidung bei und werden deshalb unterdrückt.
 GERMAN_STOP_WORDS = frozenset({
     "der", "die", "das", "den", "dem", "des", "ein", "eine", "einen",

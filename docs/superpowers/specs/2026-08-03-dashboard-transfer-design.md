@@ -5,7 +5,7 @@
 ## Ziel
 
 Von der Gesamtvermögen-Karte im Dashboard aus eine direkte SEPA-Überweisung auslösen:
-Empfänger → Verwendungszweck → Betrag (Slider 0–Kontostand) → „Ja, bezahlen" →
+Empfänger → Verwendungszweck → Betrag (Slider 0-Kontostand) → „Ja, bezahlen" →
 Bestätigungsdialog → fertig. Nur für Konten mit `can_transfer=true` („Transfer aktiv").
 
 ## Ansatz
@@ -13,7 +13,7 @@ Bestätigungsdialog → fertig. Nur für Konten mit `can_transfer=true` („Tran
 - **Backend:** 0 Änderungen. `POST /api/transfer` existiert bereits
   (`backend/finance_server/api/fints/transfer.py:14`, nimmt `TransferRequest`).
 - **Frontend:** Neuer Setup-Dialog + Button auf der Karte. Betrag via bestehendem
-  `PayoutSlider` (0–Kontostand, Presets 25/50/75/100 %), Bestätigung via bestehendem
+  `PayoutSlider` (0-Kontostand, Presets 25/50/75/100 %), Bestätigung via bestehendem
   `TransferDialog` (inkl. TAN-Handling).
 
 ## Ablauf
@@ -43,15 +43,15 @@ Bestätigungsdialog → fertig. Nur für Konten mit `can_transfer=true` („Tran
 
 ## Dateien
 
-| Datei | Aktion |
-|---|---|
-| `frontend/src/lib/transfer-utils.ts` | NEU — `isValidIban`, `buildTransferRequestBody`, `DirectTransferPayload` (dependency-frei, testbar) |
-| `frontend/src/lib/direct-transfer.test.ts` | NEU — node:assert-Tests |
-| `frontend/src/lib/direct-transfer.ts` | NEU — `executeDirectTransfer()` (POST `/transfer`) |
-| `frontend/src/pages/dashboard/components/transfer-setup-dialog.tsx` | NEU — Setup-Dialog |
-| `frontend/src/pages/dashboard/components/stat-card.tsx` | `action`-Prop (ReactNode) im Karten-Header |
-| `frontend/src/pages/dashboard/dashboard-page.tsx` | Button, Dialog-State, Verkabelung |
-| `frontend/src/hooks/use-finance-data.ts` | gibt `linkedBanks` zusätzlich zurück (IBAN→bankKey) |
+| Datei                                                               | Aktion                                                                                              |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `frontend/src/lib/transfer-utils.ts`                                | NEU — `isValidIban`, `buildTransferRequestBody`, `DirectTransferPayload` (dependency-frei, testbar) |
+| `frontend/src/lib/direct-transfer.test.ts`                          | NEU — node:assert-Tests                                                                             |
+| `frontend/src/lib/direct-transfer.ts`                               | NEU — `executeDirectTransfer()` (POST `/transfer`)                                                  |
+| `frontend/src/pages/dashboard/components/transfer-setup-dialog.tsx` | NEU — Setup-Dialog                                                                                  |
+| `frontend/src/pages/dashboard/components/stat-card.tsx`             | `action`-Prop (ReactNode) im Karten-Header                                                          |
+| `frontend/src/pages/dashboard/dashboard-page.tsx`                   | Button, Dialog-State, Verkabelung                                                                   |
+| `frontend/src/hooks/use-finance-data.ts`                            | gibt `linkedBanks` zusätzlich zurück (IBAN→bankKey)                                                 |
 
 ## Bewusst weggelassen
 

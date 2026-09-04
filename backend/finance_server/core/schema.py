@@ -614,6 +614,7 @@ def initialize_database(connection: sqlite3.Connection) -> None:
         "bank_accounts",
         {
             "balance": "REAL",
+            "holder_name": "TEXT",
         },
     )
 

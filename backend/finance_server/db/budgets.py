@@ -218,7 +218,7 @@ def _validate_categories(
     return category_ids
 
 
-# ponytail: keine Uniqueness über Budgets hinweg – Hashtags sind Freiform
+# ponytail: keine Uniqueness über Budgets hinweg - Hashtags sind Freiform
 def create_budget(
     name: str,
     category_ids: list[int],

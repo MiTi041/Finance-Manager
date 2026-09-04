@@ -11,6 +11,7 @@ class BankDefinition:
     fints_url: str
     bank_logo: str
     can_transfer: bool
+    needs_tan_medium_name: bool = False
 
 BANKS: tuple[BankDefinition, ...] = (
     BankDefinition(
@@ -36,6 +37,7 @@ BANKS: tuple[BankDefinition, ...] = (
         fints_url="https://fints.dkb.de/fints",
         bank_logo="images/bank-logos/dkb.png",
         can_transfer=True,
+        needs_tan_medium_name=True,
     ),
     BankDefinition(
         key="norisbank",
@@ -44,7 +46,24 @@ BANKS: tuple[BankDefinition, ...] = (
         fints_url="https://fints.norisbank.de/",
         bank_logo="images/bank-logos/norisbank.png",
         can_transfer=True,
-    )
+        needs_tan_medium_name=True,
+    ),
+    #BankDefinition(
+    #    key="1822direkt",
+    #    name="1822direkt",
+    #    blz="50050222",
+    #    fints_url="https://fints.1822direkt.com/fints/hbci",
+    #    bank_logo="images/bank-logos/1822-direkt.png",
+    #    can_transfer=True,
+    #),
+    BankDefinition(
+        key="consorsbank",
+        name="Consorsbank",
+        blz="70120400",
+        fints_url="https://brokerage-hbci.consorsbank.de/hbci",
+        bank_logo="images/bank-logos/consorsbank.png",
+        can_transfer=True,
+    ),
 )
 
 

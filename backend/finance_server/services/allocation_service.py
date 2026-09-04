@@ -488,14 +488,21 @@ class AllocationService:
             if recipient_iban:
                 with get_connection() as connection:
                     bank_row = connection.execute(
-                        "SELECT iban, account_name FROM bank_accounts WHERE UPPER(iban) = UPPER(?)",
+                        """
+                        SELECT iban, account_name, holder_name
+                        FROM bank_accounts WHERE UPPER(iban) = UPPER(?)
+                        """,
                         (recipient_iban,),
                     ).fetchone()
                 if not bank_row:
-                    raise HTTPException(status_code=400, detail="Empfänger-Bankkonto nicht gefunden")
+                    raise HTTPException(
+                        status_code=400, detail="Empfänger-Bankkonto nicht gefunden"
+                    )
                 recipient = {
                     "iban": bank_row["iban"],
-                    "recipient_name": bank_row["account_name"] or bank_row["iban"],
+                    "recipient_name": bank_row["holder_name"]
+                    or bank_row["account_name"]
+                    or bank_row["iban"],
                     "bic": None,
                 }
             else:

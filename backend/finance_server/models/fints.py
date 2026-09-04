@@ -31,6 +31,9 @@ class TransferRequest(BaseModel):
     sender_iban: str | None = None
     sender_name: str = Field(default="Finance-Manager", description="Name des Absenders auf dem Beleg")
     instant_payment: bool = Field(default=True, description="SEPA-Instant (Echtzeit) statt Standard-Überweisung")
+    vop_token: str | None = Field(
+        default=None, description="Token zur Bestätigung eines VOP-Namensabgleich-Mismatch"
+    )
 
 
 class ProductIdRequest(BaseModel):

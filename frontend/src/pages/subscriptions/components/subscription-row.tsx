@@ -55,7 +55,7 @@ export function SubscriptionRow({
   const logoUrl = rawLogo?.startsWith("/")
     ? `${getServerBaseUrl()}${rawLogo}`
     : rawLogo || undefined;
-  const displayName = subscription.datenbankName || subscription.name || "–";
+  const displayName = subscription.datenbankName || subscription.name || "-";
 
   const counterpartyKey = subscription._counterpartyName || subscription.name;
 
@@ -118,7 +118,8 @@ export function SubscriptionRow({
 
   const paidInPeriod = useMemo(() => {
     const now = new Date();
-    const periodMonths = subscription.frequency === "MONTHLY" ? 1 : subscription.frequency === "SEMI_ANNUAL" ? 6 : 12;
+    const periodMonths =
+      subscription.frequency === "MONTHLY" ? 1 : subscription.frequency === "SEMI_ANNUAL" ? 6 : 12;
     const cutoff = new Date(now.getFullYear(), now.getMonth() - periodMonths + 1, 1);
 
     for (const t of subscription.transactions) {
@@ -131,9 +132,12 @@ export function SubscriptionRow({
     return false;
   }, [subscription.transactions, subscription.frequency]);
 
-  const paidLabel = subscription.frequency === "MONTHLY" ? "Diesen Monat gezahlt"
-    : subscription.frequency === "SEMI_ANNUAL" ? "Dieses Halbjahr gezahlt"
-    : "Dieses Jahr gezahlt";
+  const paidLabel =
+    subscription.frequency === "MONTHLY"
+      ? "Diesen Monat gezahlt"
+      : subscription.frequency === "SEMI_ANNUAL"
+        ? "Dieses Halbjahr gezahlt"
+        : "Dieses Jahr gezahlt";
 
   const isDismissed = subscription.dismissed;
 
@@ -151,18 +155,30 @@ export function SubscriptionRow({
 
   return (
     <div className="w-full">
-      <div className={cn(
-        "flex w-full items-center border-b border-muted/60 text-left transition-colors",
-        isDismissed
-          ? "bg-muted/40 hover:bg-muted/60"
-          : "bg-background hover:bg-muted/40",
-      )}>
+      <div
+        className={cn(
+          "flex w-full items-center border-b border-muted/60 text-left transition-colors",
+          isDismissed ? "bg-muted/40 hover:bg-muted/60" : "bg-background hover:bg-muted/40",
+        )}
+      >
         <div
-          className={cn("flex w-full items-center gap-4 px-4 py-3", !isDismissed && "cursor-pointer")}
+          className={cn(
+            "flex w-full items-center gap-4 px-4 py-3",
+            !isDismissed && "cursor-pointer",
+          )}
           onClick={isDismissed ? undefined : handleRowClick}
           role={isDismissed ? undefined : "button"}
           tabIndex={isDismissed ? -1 : 0}
-          onKeyDown={isDismissed ? undefined : (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleRowClick?.(); } }}
+          onKeyDown={
+            isDismissed
+              ? undefined
+              : (e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    handleRowClick?.();
+                  }
+                }
+          }
         >
           <BrandIcon
             src={logoUrl}
@@ -175,7 +191,12 @@ export function SubscriptionRow({
 
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <p className={cn("truncate text-sm font-medium", isDismissed ? "text-muted-foreground" : "text-foreground")}>
+              <p
+                className={cn(
+                  "truncate text-sm font-medium",
+                  isDismissed ? "text-muted-foreground" : "text-foreground",
+                )}
+              >
                 {displayName}
                 {displayName !== subscription.name && subscription.name ? (
                   <span className="ml-1 text-xs text-muted-foreground">{subscription.name}</span>
@@ -216,7 +237,10 @@ export function SubscriptionRow({
                 size="sm"
                 variant="secondary"
                 disabled={saving}
-                onClick={(e) => { e.stopPropagation(); void handleRestore(); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void handleRestore();
+                }}
                 className="gap-1.5"
               >
                 {saving ? (
@@ -288,8 +312,14 @@ export function SubscriptionRow({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="max-w-[260px] space-y-2 text-xs">
-                  <p>Hierdurch wird die Erkennung als Abonnement für diese Buchung aufgehoben. Die Transaktionen bleiben erhalten und werden nicht gelöscht.</p>
-                  <p className="text-muted-foreground">Sollte die Buchung erneut als Abonnement erkannt werden, erscheint sie wieder in dieser Liste.</p>
+                  <p>
+                    Hierdurch wird die Erkennung als Abonnement für diese Buchung aufgehoben. Die
+                    Transaktionen bleiben erhalten und werden nicht gelöscht.
+                  </p>
+                  <p className="text-muted-foreground">
+                    Sollte die Buchung erneut als Abonnement erkannt werden, erscheint sie wieder in
+                    dieser Liste.
+                  </p>
                 </TooltipContent>
               </Tooltip>
             </div>
@@ -356,8 +386,16 @@ export function SubscriptionRow({
                     <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
                       Zahlungspartner ändern
                       <HelpButton>
-                        <p>Lege hier fest, welcher Zahlungspartner diesem Abonnement zugeordnet werden soll. Der ausgewählte Name wird in allen Analysen sowie in den Transaktionslisten als Empfänger angezeigt.</p>
-                        <p className="text-muted-foreground">Beispiel: Wird ein Abonnement über eine Privatperson abgewickelt, kannst du hier den tatsächlichen Dienstnamen (z. B. „Spotify") hinterlegen, damit dieser statt des privaten Namens in der Übersicht erscheint.</p>
+                        <p>
+                          Lege hier fest, welcher Zahlungspartner diesem Abonnement zugeordnet
+                          werden soll. Der ausgewählte Name wird in allen Analysen sowie in den
+                          Transaktionslisten als Empfänger angezeigt.
+                        </p>
+                        <p className="text-muted-foreground">
+                          Beispiel: Wird ein Abonnement über eine Privatperson abgewickelt, kannst
+                          du hier den tatsächlichen Dienstnamen (z. B. „Spotify") hinterlegen, damit
+                          dieser statt des privaten Namens in der Übersicht erscheint.
+                        </p>
                       </HelpButton>
                     </p>
                     <div className="flex flex-col gap-4 ">
@@ -466,7 +504,7 @@ export function SubscriptionRow({
                           {formatDate(t.date)}
                         </span>
                         <span className="truncate text-xs text-muted-foreground">
-                          {t.purpose || "–"}
+                          {t.purpose || "-"}
                         </span>
                         <span className="flex items-center gap-1.5">
                           {t.note ? (

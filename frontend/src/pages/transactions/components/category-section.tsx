@@ -11,13 +11,7 @@ import { type Transaction } from "@/types/transaction";
 
 import { useSplits } from "../hooks/use-splits";
 
-function SplitAmountInput({
-  value,
-  onCommit,
-}: {
-  value: number;
-  onCommit: (v: number) => void;
-}) {
+function SplitAmountInput({ value, onCommit }: { value: number; onCommit: (v: number) => void }) {
   const [text, setText] = useState(String(value));
   const focused = useRef(false);
 
@@ -167,9 +161,7 @@ export function CategorySection({
             <span
               className={cn(
                 "text-xs tabular-nums font-medium",
-                splits.splitOverTotal
-                  ? "text-destructive"
-                  : "text-green-600 dark:text-green-400",
+                splits.splitOverTotal ? "text-destructive" : "text-green-600 dark:text-green-400",
               )}
             >
               {formatAmount(splits.splitAbsSum, transaction.betrag.waehrung)}
@@ -274,7 +266,7 @@ export function CategorySection({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" className="max-w-[240px] text-xs">
-              Teilt eine Buchung auf mehrere Kategorien auf – z. B. Lebensmittel und Drogerie bei
+              Teilt eine Buchung auf mehrere Kategorien auf - z. B. Lebensmittel und Drogerie bei
               einem Einkauf.
             </TooltipContent>
           </Tooltip>

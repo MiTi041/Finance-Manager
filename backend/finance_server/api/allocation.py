@@ -5,7 +5,7 @@ from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path as ApiPath
 
-from finance_server.fints.common import TanRequired, TanTimeout
+from finance_server.fints.common import TanRequired, TanTimeout, VopConfirmationRequired
 from finance_server.fints.transfer import FinTSClientError, send_transfer
 from finance_server.models.allocation import (
     AllocationBucketUpdate,
@@ -98,6 +98,19 @@ def calculate_run(
     return service.get_or_create_run(target_month, force=force)
 
 
+def _vop_conflict(e: VopConfirmationRequired) -> HTTPException:
+    return HTTPException(status_code=409, detail={
+        "code": "VOP_REQUIRED",
+        "vop_token": e.vop_token,
+        "result": e.result,
+        "recipient_iban": e.recipient_iban,
+        "recipient_name": e.recipient_name,
+        "close_match_name": e.close_match_name,
+        "other_identification": e.other_identification,
+        "notice": e.notice,
+    })
+
+
 @router.post("/allocation/transfer/{run_bucket_id}")
 def execute_transfer(
     run_bucket_id: int = ApiPath(..., ge=1),
@@ -119,10 +132,13 @@ def execute_transfer(
         sender_name="Finance-Manager",
         tan=tan,
         instant_payment=(body or {}).get("instant", True),
+        vop_token=(body or {}).get("vop_token"),
     )
     try:
         result = send_transfer(req)
     except Exception as e:
+        if isinstance(e, VopConfirmationRequired):
+            raise _vop_conflict(e) from e
         if isinstance(e, TanRequired):
             raise HTTPException(
                 status_code=409,
@@ -210,10 +226,13 @@ def execute_savings_plan_transfer(
         sender_name=transfer_data.get("sender_name") or "Finance-Manager",
         tan=tan,
         instant_payment=(body or {}).get("instant", True),
+        vop_token=(body or {}).get("vop_token"),
     )
     try:
         result = send_transfer(req)
     except Exception as e:
+        if isinstance(e, VopConfirmationRequired):
+            raise _vop_conflict(e) from e
         if isinstance(e, TanRequired):
             raise HTTPException(
                 status_code=409,

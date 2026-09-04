@@ -52,10 +52,7 @@ export function PurposeSection({ transaction, purpose }: PurposeSectionProps) {
   };
 
   return (
-    <div
-      className="space-y-2 px-5 py-4"
-      onClick={(event) => event.stopPropagation()}
-    >
+    <div className="space-y-2 px-5 py-4" onClick={(event) => event.stopPropagation()}>
       <div className="mb-3 flex items-center justify-between gap-3">
         <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
           Verwendungszweck
@@ -121,14 +118,14 @@ export function PurposeSection({ transaction, purpose }: PurposeSectionProps) {
       ) : (
         <>
           {purposeText ? (
-            <p className="whitespace-normal break-words leading-relaxed text-foreground">{purposeText}</p>
+            <p className="whitespace-normal break-words leading-relaxed text-foreground">
+              {purposeText}
+            </p>
           ) : null}
 
           {additionalPurpose && additionalPurpose !== purposeText ? (
             <div
-              className={
-                purposeText ? "flex flex-col gap-0.5 border-t border-border/50 pt-2" : ""
-              }
+              className={purposeText ? "flex flex-col gap-0.5 border-t border-border/50 pt-2" : ""}
             >
               {purposeText ? (
                 <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/50">
@@ -141,7 +138,7 @@ export function PurposeSection({ transaction, purpose }: PurposeSectionProps) {
             </div>
           ) : null}
 
-          {!purposeText && !additionalPurpose ? <p className="text-muted-foreground">–</p> : null}
+          {!purposeText && !additionalPurpose ? <p className="text-muted-foreground">-</p> : null}
 
           {isEdited ? (
             <div className="flex items-start justify-between gap-2 border-t border-border/50 pt-2">

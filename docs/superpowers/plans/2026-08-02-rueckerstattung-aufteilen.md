@@ -23,37 +23,39 @@
 
 ## Dateistruktur
 
-| Datei | Verantwortung |
-|---|---|
-| `backend/finance_server/core/schema.py` | Tabelle `refund_links` + Migration (Backfill, DROP COLUMN) |
-| `backend/finance_server/db/transactions.py` | Link-CRUD, Invarianten, `refund_total`-Recalc, DTO `refund_links`/`refund_attributed` |
-| `backend/finance_server/models/transaction.py` | Request-Modell `RefundLinkCreateRequest` |
-| `backend/finance_server/services/transaction_service.py` | Thin Service-Methoden |
-| `backend/finance_server/api/transactions.py` | `POST …/refund-links`, `DELETE …/refund-links/{id}` |
-| `backend/finance_server/db/__init__.py` | Exporte anpassen |
-| `backend/finance_server/db/sync.py` | `refund_ref_transaction_id` aus `VALID_SYNC_COLUMNS` entfernen |
-| `backend/finance_server/db/analytics.py` | Einnahme-CASE auf `refund_links`-Subquery |
-| `backend/finance_server/services/allocation_service.py` | Einnahme-CASE + `_detect_income`-Filter |
-| `backend/finance_server/services/subscription_service.py` | Refund-Aggregation über `refund_links` |
-| `backend/tests/test_schema.py` | Migration-Test |
-| `backend/tests/test_refund_links.py` | Link-CRUD, Invarianten, Analytics (neu) |
-| `backend/tests/test_budgets.py` | Über-Refund-Test ersetzen |
-| `frontend/src/types/transaction.ts` | `RefundLink`, `refundLinks`, `refundAttributed` |
-| `frontend/src/lib/mappers.ts` | DTO → Typ |
-| `frontend/src/lib/transactions.ts` | `addRefundLink`/`removeRefundLink` |
-| `frontend/src/pages/transactions/hooks/use-transaction-derivations.ts` | Ableitungen aus `refundLinks` |
-| `frontend/src/pages/transactions/components/refund-section.tsx` | Incoming/Outgoing-UX |
-| `frontend/src/hooks/use-finance-data.ts`, `use-categories.ts`, `use-partner-analytics.ts` | `isRefund → 0` → `wert − refundAttributed` |
+| Datei                                                                                     | Verantwortung                                                                         |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `backend/finance_server/core/schema.py`                                                   | Tabelle `refund_links` + Migration (Backfill, DROP COLUMN)                            |
+| `backend/finance_server/db/transactions.py`                                               | Link-CRUD, Invarianten, `refund_total`-Recalc, DTO `refund_links`/`refund_attributed` |
+| `backend/finance_server/models/transaction.py`                                            | Request-Modell `RefundLinkCreateRequest`                                              |
+| `backend/finance_server/services/transaction_service.py`                                  | Thin Service-Methoden                                                                 |
+| `backend/finance_server/api/transactions.py`                                              | `POST …/refund-links`, `DELETE …/refund-links/{id}`                                   |
+| `backend/finance_server/db/__init__.py`                                                   | Exporte anpassen                                                                      |
+| `backend/finance_server/db/sync.py`                                                       | `refund_ref_transaction_id` aus `VALID_SYNC_COLUMNS` entfernen                        |
+| `backend/finance_server/db/analytics.py`                                                  | Einnahme-CASE auf `refund_links`-Subquery                                             |
+| `backend/finance_server/services/allocation_service.py`                                   | Einnahme-CASE + `_detect_income`-Filter                                               |
+| `backend/finance_server/services/subscription_service.py`                                 | Refund-Aggregation über `refund_links`                                                |
+| `backend/tests/test_schema.py`                                                            | Migration-Test                                                                        |
+| `backend/tests/test_refund_links.py`                                                      | Link-CRUD, Invarianten, Analytics (neu)                                               |
+| `backend/tests/test_budgets.py`                                                           | Über-Refund-Test ersetzen                                                             |
+| `frontend/src/types/transaction.ts`                                                       | `RefundLink`, `refundLinks`, `refundAttributed`                                       |
+| `frontend/src/lib/mappers.ts`                                                             | DTO → Typ                                                                             |
+| `frontend/src/lib/transactions.ts`                                                        | `addRefundLink`/`removeRefundLink`                                                    |
+| `frontend/src/pages/transactions/hooks/use-transaction-derivations.ts`                    | Ableitungen aus `refundLinks`                                                         |
+| `frontend/src/pages/transactions/components/refund-section.tsx`                           | Incoming/Outgoing-UX                                                                  |
+| `frontend/src/hooks/use-finance-data.ts`, `use-categories.ts`, `use-partner-analytics.ts` | `isRefund → 0` → `wert − refundAttributed`                                            |
 
 ---
 
 ### Task 1: Datenbank-Schema — `refund_links` + Migration
 
 **Files:**
+
 - Modify: `backend/finance_server/core/schema.py`
 - Test: `backend/tests/test_schema.py`
 
 **Interfaces:**
+
 - Consumes: `initialize_database(connection)` (bestehend).
 - Produces: `create_refund_links_table(connection)`, `migrate_refund_links(connection)`; Tabelle `refund_links(id, refund_transaction_id, expense_transaction_id, amount, created_at)`.
 
@@ -116,6 +118,7 @@ def test_initialize_database_creates_refund_links_table():
 ```bash
 cd backend && .venv/bin/python -m pytest tests/test_schema.py -q
 ```
+
 Erwartet: `FAILED` (Tabelle fehlt bzw. Spalte existiert noch).
 
 - [ ] **Step 3: Implementierung**
@@ -212,6 +215,7 @@ und den Block
 ```bash
 cd backend && .venv/bin/python -m pytest tests/test_schema.py -q
 ```
+
 Erwartet: `2 passed`.
 
 - [ ] **Step 5: Commit**
@@ -226,10 +230,12 @@ git commit -m "feat(refunds): add refund_links table and migrate legacy refund l
 ### Task 2: Backend-Link-CRUD mit Invarianten
 
 **Files:**
+
 - Modify: `backend/finance_server/db/transactions.py`
 - Test: `backend/tests/test_refund_links.py` (Create)
 
 **Interfaces:**
+
 - Consumes: `get_connection`, `_log` (bestehend).
 - Produces: `_refund_links_map(connection) -> dict[int, list[dict]]`, `add_refund_link(refund_transaction_id: int, expense_transaction_id: int, amount: float) -> dict | None`, `delete_refund_link(link_id: int) -> bool`, `_recalc_refund_total(tx_id: int, connection)`.
 
@@ -340,6 +346,7 @@ class TestDeleteRefundLink:
 ```bash
 cd backend && .venv/bin/python -m pytest tests/test_refund_links.py -q
 ```
+
 Erwartet: `FAILED` (Importfehler `add_refund_link`).
 
 - [ ] **Step 3: Implementierung**
@@ -450,6 +457,7 @@ Hinweis: `datetime` und `timezone` sind oben in `db/transactions.py` bereits imp
 ```bash
 cd backend && .venv/bin/python -m pytest tests/test_refund_links.py -q
 ```
+
 Erwartet: `8 passed`.
 
 - [ ] **Step 5: Commit**
@@ -464,10 +472,12 @@ git commit -m "feat(refunds): add/delete refund links with income and expense in
 ### Task 3: Löschen-Aufräumen + DTO `refund_links`/`refund_attributed`
 
 **Files:**
+
 - Modify: `backend/finance_server/db/transactions.py`
 - Test: `backend/tests/test_refund_links.py`
 
 **Interfaces:**
+
 - Consumes: `_recalc_refund_total`, `row_to_dict` (bestehend).
 - Produces: `row_to_dict(row, refund_links=None)` liefert `refund_links`-Liste, `refund_attributed`, `is_refund`; `fetch_transactions`/`fetch_latest_transaction` hängen Links an.
 
@@ -536,6 +546,7 @@ class TestDto:
 ```bash
 cd backend && .venv/bin/python -m pytest tests/test_refund_links.py -q
 ```
+
 Erwartet: `FAILED` (KeyError `refund_links` / `refund_attributed`).
 
 - [ ] **Step 3: Implementierung**
@@ -580,6 +591,7 @@ def row_to_dict(
 ```
 
 Ersetze dabei die bisherigen Zeilen:
+
 ```python
         "refund_ref_transaction_id": row["refund_ref_transaction_id"],
         "refund_total": row["refund_total"],
@@ -667,6 +679,7 @@ def delete_transactions_batch(transaction_ids: list[int]) -> int:
 ```bash
 cd backend && .venv/bin/python -m pytest tests/test_refund_links.py -q
 ```
+
 Erwartet: `13 passed`.
 
 - [ ] **Step 5: Commit**
@@ -681,12 +694,14 @@ git commit -m "feat(refunds): expose refund links in transaction DTO and clean u
 ### Task 4: API, Models, Service, Exporte
 
 **Files:**
+
 - Modify: `backend/finance_server/models/transaction.py`
 - Modify: `backend/finance_server/services/transaction_service.py`
 - Modify: `backend/finance_server/api/transactions.py`
 - Modify: `backend/finance_server/db/__init__.py`
 
 **Interfaces:**
+
 - Consumes: `add_refund_link`, `delete_refund_link` (Task 2).
 - Produces: `POST /db/transactions/{id}/refund-links`, `DELETE /db/transactions/{id}/refund-links/{link_id}`.
 
@@ -756,6 +771,7 @@ def remove_refund_link(
 ```bash
 cd backend && .venv/bin/python -m pytest tests/test_refund_links.py tests/test_budgets.py tests/test_allocation_service.py tests/test_schema.py -q
 ```
+
 Erwartet: alle Tests grün.
 
 - [ ] **Step 4: Commit**
@@ -770,6 +786,7 @@ git commit -m "feat(refunds): add refund-links API endpoints"
 ### Task 5: Sync-Spalten-Set bereinigen
 
 **Files:**
+
 - Modify: `backend/finance_server/db/sync.py`
 
 **Interfaces:** Keine.
@@ -783,6 +800,7 @@ In `backend/finance_server/db/sync.py`, Zeile 102, `"kategorie", "note", "splits
 ```bash
 cd backend && .venv/bin/python -m pytest tests/test_sync_apply.py tests/test_sync_crypto.py -q
 ```
+
 Erwartet: grün.
 
 - [ ] **Step 3: Commit**
@@ -797,12 +815,14 @@ git commit -m "chore(refunds): drop refund_ref_transaction_id from sync columns"
 ### Task 6: Reporting auf `refund_links` umstellen
 
 **Files:**
+
 - Modify: `backend/finance_server/db/analytics.py`
 - Modify: `backend/finance_server/services/allocation_service.py`
 - Modify: `backend/finance_server/services/subscription_service.py`
 - Test: `backend/tests/test_refund_links.py`
 
 **Interfaces:**
+
 - Consumes: Tabelle `refund_links` (Task 1).
 - Produces: Einnahmen = `Betrag − aufgeteilt`; Ausgaben = `ABS(Betrag) − refund_total` in allen Auswertungen.
 
@@ -853,6 +873,7 @@ class TestAnalytics:
 ```bash
 cd backend && .venv/bin/python -m pytest tests/test_refund_links.py -q
 ```
+
 Erwartet: `FAILED` (Analytics zählt Einnahmen noch falsch — nicht 0 bzw. nicht 10).
 
 - [ ] **Step 3: Implementierung**
@@ -860,28 +881,37 @@ Erwartet: `FAILED` (Analytics zählt Einnahmen noch falsch — nicht 0 bzw. nich
 `backend/finance_server/db/analytics.py`:
 
 - Zeile 44 (fetch_summary):
+
 ```sql
                 COALESCE(SUM(CASE WHEN amount > 0 AND refund_ref_transaction_id IS NULL THEN amount ELSE 0 END), 0) AS incomes,
 ```
+
 →
+
 ```sql
                 COALESCE(SUM(CASE WHEN amount > 0 THEN amount - COALESCE((SELECT SUM(amount) FROM refund_links rl WHERE rl.refund_transaction_id = umsaetze.id), 0) ELSE 0 END), 0) AS incomes,
 ```
 
 - Zeilen 140, 158, 170 (fetch_category_analytics, mit `u.`-Alias):
+
 ```sql
                     WHEN u.amount > 0 AND u.refund_ref_transaction_id IS NOT NULL THEN 0
 ```
+
 →
+
 ```sql
                     WHEN u.amount > 0 THEN u.amount - COALESCE((SELECT SUM(amount) FROM refund_links rl WHERE rl.refund_transaction_id = u.id), 0)
 ```
 
 - Zeilen 231, 242 (fetch_partner_analytics, ohne Alias):
+
 ```sql
                         WHEN amount > 0 AND refund_ref_transaction_id IS NOT NULL THEN 0
 ```
+
 →
+
 ```sql
                         WHEN amount > 0 THEN amount - COALESCE((SELECT SUM(amount) FROM refund_links rl WHERE rl.refund_transaction_id = umsaetze.id), 0)
 ```
@@ -891,19 +921,25 @@ Die Ausgabe-Zweige (`amount < 0 THEN … refund_total`) bleiben unverändert.
 `backend/finance_server/services/allocation_service.py`:
 
 - Zeile ~187:
+
 ```sql
                                 WHEN amount > 0 AND refund_ref_transaction_id IS NOT NULL THEN 0
 ```
+
 →
+
 ```sql
                                 WHEN amount > 0 THEN amount - COALESCE((SELECT SUM(amount) FROM refund_links rl WHERE rl.refund_transaction_id = umsaetze.id), 0)
 ```
 
 - Zeile ~351:
+
 ```sql
                      AND refund_ref_transaction_id IS NULL
 ```
+
 →
+
 ```sql
                      AND NOT EXISTS (SELECT 1 FROM refund_links rl WHERE rl.refund_transaction_id = umsaetze.id)
 ```
@@ -930,6 +966,7 @@ Die Ausgabe-Zweige (`amount < 0 THEN … refund_total`) bleiben unverändert.
 ```bash
 cd backend && .venv/bin/python -m pytest tests/test_refund_links.py tests/test_allocation_service.py tests/test_budgets.py -q
 ```
+
 Erwartet: grün.
 
 - [ ] **Step 5: Commit**
@@ -944,6 +981,7 @@ git commit -m "feat(refunds): report partially refunded incomes and expenses"
 ### Task 7: Budget-Test für Über-Erstattung ersetzen
 
 **Files:**
+
 - Modify: `backend/tests/test_budgets.py`
 
 **Interfaces:** Keine.
@@ -970,6 +1008,7 @@ In `backend/tests/test_budgets.py` den Test `test_over_refunded_transaction_coun
 ```bash
 cd backend && .venv/bin/python -m pytest tests/test_budgets.py -q
 ```
+
 Erwartet: grün.
 
 - [ ] **Step 3: Commit**
@@ -984,11 +1023,13 @@ git commit -m "test(refunds): pin full-refund-to-zero budget behavior, drop over
 ### Task 8: Frontend-Typen, Mapper, API-Funktionen
 
 **Files:**
+
 - Modify: `frontend/src/types/transaction.ts`
 - Modify: `frontend/src/lib/mappers.ts`
 - Modify: `frontend/src/lib/transactions.ts`
 
 **Interfaces:**
+
 - Consumes: Backend-DTO `refund_links`, `refund_attributed`, `is_refund`.
 - Produces: `RefundLink`-Typ; `transaction.technisch.refundLinks: RefundLink[]`, `refundAttributed: number`; `addRefundLink(transactionId, expenseTransactionId, amount)`, `removeRefundLink(transactionId, linkId)`.
 
@@ -1036,22 +1077,16 @@ export async function addRefundLink(
   expenseTransactionId: number,
   amount: number,
 ): Promise<void> {
-  const response = await fetch(
-    `${getApiBaseUrl()}/db/transactions/${transactionId}/refund-links`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ expense_transaction_id: expenseTransactionId, amount }),
-    },
-  );
+  const response = await fetch(`${getApiBaseUrl()}/db/transactions/${transactionId}/refund-links`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ expense_transaction_id: expenseTransactionId, amount }),
+  });
 
   await parseJsonResponse(response);
 }
 
-export async function removeRefundLink(
-  transactionId: number,
-  linkId: number,
-): Promise<void> {
+export async function removeRefundLink(transactionId: number, linkId: number): Promise<void> {
   const response = await fetch(
     `${getApiBaseUrl()}/db/transactions/${transactionId}/refund-links/${linkId}`,
     {
@@ -1068,6 +1103,7 @@ export async function removeRefundLink(
 ```bash
 pnpm --dir frontend exec tsc --noEmit
 ```
+
 Erwartet: Fehler nur noch in `refund-section.tsx` und `use-transaction-derivations.ts` (werden in Task 9/10 behoben). Falls zusätzliche Stellen `refundRefTransactionId` nutzen, dort ebenfalls auf `refundLinks` umstellen und im Task 9/10 aufnehmen.
 
 - [ ] **Step 3: Commit**
@@ -1082,12 +1118,14 @@ git commit -m "feat(refunds): frontend types, mapper and refund-link API client"
 ### Task 9: Ableitungen im Frontend-Hook
 
 **Files:**
+
 - Modify: `frontend/src/pages/transactions/hooks/use-transaction-derivations.ts`
 - Modify: `frontend/src/hooks/use-finance-data.ts`
 - Modify: `frontend/src/hooks/use-categories.ts`
 - Modify: `frontend/src/hooks/use-partner-analytics.ts`
 
 **Interfaces:**
+
 - Consumes: `transaction.technisch.refundLinks`, `refundAttributed` (Task 8).
 - Produces: `isRefund`, `linkedRefundTotal`, `refundRemaining`, `showRefundSection`, `displayAmount` aus Links.
 
@@ -1096,41 +1134,39 @@ git commit -m "feat(refunds): frontend types, mapper and refund-link API client"
 `frontend/src/pages/transactions/hooks/use-transaction-derivations.ts`:
 
 ```ts
-  const isRefund =
-    transaction.betrag.wert > 0 && transaction.technisch.refundLinks.length > 0;
+const isRefund = transaction.betrag.wert > 0 && transaction.technisch.refundLinks.length > 0;
 
-  const linkedRefundTotal = useMemo(() => {
-    if (transaction.betrag.wert >= 0) return 0;
-    return allTransactions.reduce(
-      (sum, t) =>
-        sum +
-        t.technisch.refundLinks
-          .filter((link) => link.expenseTransactionId === transaction.id)
-          .reduce((s, link) => s + link.amount, 0),
-      0,
-    );
-  }, [transaction, allTransactions]);
-
-  const refundRemaining = useMemo(
-    () =>
-      Math.max(0, transaction.betrag.wert - transaction.technisch.refundAttributed),
-    [transaction.betrag.wert, transaction.technisch.refundAttributed],
+const linkedRefundTotal = useMemo(() => {
+  if (transaction.betrag.wert >= 0) return 0;
+  return allTransactions.reduce(
+    (sum, t) =>
+      sum +
+      t.technisch.refundLinks
+        .filter((link) => link.expenseTransactionId === transaction.id)
+        .reduce((s, link) => s + link.amount, 0),
+    0,
   );
+}, [transaction, allTransactions]);
 
-  const hasRefunds = linkedRefundTotal > 0;
+const refundRemaining = useMemo(
+  () => Math.max(0, transaction.betrag.wert - transaction.technisch.refundAttributed),
+  [transaction.betrag.wert, transaction.technisch.refundAttributed],
+);
 
-  const displayAmount = useMemo(() => {
-    if (isRefund) return refundRemaining;
-    if (hasRefunds) return Math.min(0, transaction.betrag.wert + linkedRefundTotal);
-    return transaction.betrag.wert;
-  }, [transaction.betrag.wert, linkedRefundTotal, isRefund, hasRefunds, refundRemaining]);
+const hasRefunds = linkedRefundTotal > 0;
 
-  const showRefundSection =
-    transaction.betrag.wert > 0 ||
-    (transaction.betrag.wert < 0 &&
-      allTransactions.some((t) =>
-        t.technisch.refundLinks.some((link) => link.expenseTransactionId === transaction.id),
-      ));
+const displayAmount = useMemo(() => {
+  if (isRefund) return refundRemaining;
+  if (hasRefunds) return Math.min(0, transaction.betrag.wert + linkedRefundTotal);
+  return transaction.betrag.wert;
+}, [transaction.betrag.wert, linkedRefundTotal, isRefund, hasRefunds, refundRemaining]);
+
+const showRefundSection =
+  transaction.betrag.wert > 0 ||
+  (transaction.betrag.wert < 0 &&
+    allTransactions.some((t) =>
+      t.technisch.refundLinks.some((link) => link.expenseTransactionId === transaction.id),
+    ));
 ```
 
 Die `linkedOriginalAmount`-Memo (Zeilen 30-36) komplett entfernen; im Rückgabeobjekt (Zeilen 88-105) `linkedOriginalAmount` entfernen und `refundRemaining` behalten. `displayAmount`-Abhängigkeit enthält `refundRemaining` (siehe oben).
@@ -1141,9 +1177,7 @@ Die `linkedOriginalAmount`-Memo (Zeilen 30-36) komplett entfernen; im Rückgabeo
 function calculateIncomes(transactions: Transaction[]) {
   return transactions.reduce(
     (total, t) =>
-      t.betrag.wert > 0
-        ? total + t.betrag.wert - t.technisch.refundAttributed
-        : total,
+      t.betrag.wert > 0 ? total + t.betrag.wert - t.technisch.refundAttributed : total,
     0,
   );
 }
@@ -1152,23 +1186,23 @@ function calculateIncomes(transactions: Transaction[]) {
 `frontend/src/hooks/use-categories.ts` (Zeilen 72-77):
 
 ```ts
-      let effective = t.betrag.wert;
-      if (t.betrag.wert < 0) {
-        effective = t.betrag.wert + t.betrag.refundTotal;
-      } else if (t.betrag.wert > 0) {
-        effective = t.betrag.wert - t.technisch.refundAttributed;
-      }
+let effective = t.betrag.wert;
+if (t.betrag.wert < 0) {
+  effective = t.betrag.wert + t.betrag.refundTotal;
+} else if (t.betrag.wert > 0) {
+  effective = t.betrag.wert - t.technisch.refundAttributed;
+}
 ```
 
 `frontend/src/hooks/use-partner-analytics.ts` (Zeilen 30-35):
 
 ```ts
-      let effective = t.betrag.wert;
-      if (t.betrag.wert < 0) {
-        effective = t.betrag.wert + t.betrag.refundTotal;
-      } else if (t.betrag.wert > 0) {
-        effective = t.betrag.wert - t.technisch.refundAttributed;
-      }
+let effective = t.betrag.wert;
+if (t.betrag.wert < 0) {
+  effective = t.betrag.wert + t.betrag.refundTotal;
+} else if (t.betrag.wert > 0) {
+  effective = t.betrag.wert - t.technisch.refundAttributed;
+}
 ```
 
 - [ ] **Step 2: Verifikation**
@@ -1176,6 +1210,7 @@ function calculateIncomes(transactions: Transaction[]) {
 ```bash
 pnpm --dir frontend exec tsc --noEmit
 ```
+
 Erwartet: Fehler nur noch in `refund-section.tsx` (wird in Task 10 behoben).
 
 - [ ] **Step 3: Commit**
@@ -1190,9 +1225,11 @@ git commit -m "feat(refunds): derive refund state from refund links in frontend 
 ### Task 10: Refund-Section (Incoming + Outgoing) umbauen
 
 **Files:**
+
 - Modify: `frontend/src/pages/transactions/components/refund-section.tsx`
 
 **Interfaces:**
+
 - Consumes: `addRefundLink`, `removeRefundLink` (Task 8); `transaction.technisch.refundLinks`/`refundAttributed`; `Transaction`-Typ.
 - Produces: Incoming = Link-Liste + Betragseingabe + "Rest"-Anzeige, Add-Button nur wenn `Rest > 0`; Outgoing = Link-Beträge statt Vollbeträge.
 
@@ -1323,7 +1360,9 @@ export function RefundSectionIncoming({
                 <div className="flex items-center gap-3 min-w-0">
                   <BrandIcon
                     src={expense?.zahlungspartner.logoUrl || undefined}
-                    alt={expense?.zahlungspartner.datenbankName || expense?.zahlungspartner.name || "?"}
+                    alt={
+                      expense?.zahlungspartner.datenbankName || expense?.zahlungspartner.name || "?"
+                    }
                     sizeClassName="size-8 shrink-0"
                     backgroundClassName={
                       expense?.zahlungspartner.logoWhiteBackground ? "bg-white" : "bg-zinc-900"
@@ -1335,10 +1374,10 @@ export function RefundSectionIncoming({
                     <p className="truncate text-sm font-medium text-foreground">
                       {expense?.zahlungspartner.datenbankName ||
                         expense?.zahlungspartner.name ||
-                        "–"}
+                        "-"}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {expense ? formatDate(expense.daten.buchungsdatum) : "–"}
+                      {expense ? formatDate(expense.daten.buchungsdatum) : "-"}
                     </p>
                   </div>
                 </div>
@@ -1420,7 +1459,7 @@ export function RefundSectionIncoming({
                     />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-foreground">
-                        {t.zahlungspartner.datenbankName || t.zahlungspartner.name || "–"}
+                        {t.zahlungspartner.datenbankName || t.zahlungspartner.name || "-"}
                       </p>
                       <p className="truncate text-xs text-muted-foreground">
                         {formatDate(t.daten.buchungsdatum)}
@@ -1442,8 +1481,12 @@ export function RefundSectionIncoming({
           <DialogHeader className="p-5 pb-2">
             <DialogTitle>Betrag der Rückerstattung</DialogTitle>
             <DialogDescription>
-              Wie viel der {formatAmount(transaction.betrag.wert, transaction.betrag.waehrung)} entfällt auf{" "}
-              {selectedExpense?.zahlungspartner.datenbankName || selectedExpense?.zahlungspartner.name || "diese Ausgabe"}?
+              Wie viel der {formatAmount(transaction.betrag.wert, transaction.betrag.waehrung)}{" "}
+              entfällt auf{" "}
+              {selectedExpense?.zahlungspartner.datenbankName ||
+                selectedExpense?.zahlungspartner.name ||
+                "diese Ausgabe"}
+              ?
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 p-5 pt-2">
@@ -1458,8 +1501,12 @@ export function RefundSectionIncoming({
             />
             {selectedExpense && (
               <p className="text-xs text-muted-foreground">
-                Maximal {formatAmount(Math.min(remaining, expenseRemainingFor(selectedExpense)), transaction.betrag.waehrung)} —
-                Rest der Gutschrift und Rest der Ausgabe
+                Maximal{" "}
+                {formatAmount(
+                  Math.min(remaining, expenseRemainingFor(selectedExpense)),
+                  transaction.betrag.waehrung,
+                )}{" "}
+                — Rest der Gutschrift und Rest der Ausgabe
               </p>
             )}
             <div className="flex justify-end gap-2">
@@ -1505,7 +1552,10 @@ export function RefundSectionOutgoing({
   const handleUnlink = async (linkId: number) => {
     setUnlinkingId(linkId);
     try {
-      await removeRefundLink(refundLinks.find((l) => l.id === linkId)?.income.id ?? transaction.id, linkId);
+      await removeRefundLink(
+        refundLinks.find((l) => l.id === linkId)?.income.id ?? transaction.id,
+        linkId,
+      );
       onRefundLinkChange();
     } finally {
       setUnlinkingId(null);
@@ -1528,7 +1578,11 @@ export function RefundSectionOutgoing({
             <div className="flex items-center gap-3 min-w-0">
               <BrandIcon
                 src={link.income.zahlungspartner.logoUrl || undefined}
-                alt={link.income.zahlungspartner.datenbankName || link.income.zahlungspartner.name || "?"}
+                alt={
+                  link.income.zahlungspartner.datenbankName ||
+                  link.income.zahlungspartner.name ||
+                  "?"
+                }
                 sizeClassName="size-8 shrink-0"
                 backgroundClassName={
                   link.income.zahlungspartner.logoWhiteBackground ? "bg-white" : "bg-zinc-900"
@@ -1538,7 +1592,9 @@ export function RefundSectionOutgoing({
               />
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-foreground">
-                  {link.income.zahlungspartner.datenbankName || link.income.zahlungspartner.name || "–"}
+                  {link.income.zahlungspartner.datenbankName ||
+                    link.income.zahlungspartner.name ||
+                    "-"}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {formatDate(link.income.daten.buchungsdatum)}
@@ -1580,6 +1636,7 @@ export function RefundSectionOutgoing({
 ```bash
 pnpm --dir frontend exec tsc --noEmit
 ```
+
 Erwartet: 0 Fehler. Falls `@/components/ui/input` nicht existiert, stattdessen das bestehende Input-Muster aus dem Codebase (z. B. aus `dialog`-Nutzern) verwenden und Verifikation wiederholen.
 
 - [ ] **Step 3: Commit**
@@ -1600,6 +1657,7 @@ git commit -m "feat(refunds): split refund income across multiple expenses in UI
 ```bash
 cd backend && .venv/bin/python -m pytest -q
 ```
+
 Erwartet: alle Tests grün.
 
 - [ ] **Step 2: Frontend-Typecheck**
@@ -1607,6 +1665,7 @@ Erwartet: alle Tests grün.
 ```bash
 pnpm --dir frontend exec tsc --noEmit
 ```
+
 Erwartet: 0 Fehler.
 
 - [ ] **Step 3: Frontend-Build**
@@ -1614,6 +1673,7 @@ Erwartet: 0 Fehler.
 ```bash
 pnpm --dir frontend build
 ```
+
 Erwartet: Build erfolgreich.
 
 - [ ] **Step 4: Manueller Smoke-Test (optional)**
@@ -1625,6 +1685,7 @@ App starten (`pnpm run dev`), Gutschrift öffnen, zwei Ausgaben mit Teilbeträge
 ## Self-Review
 
 **Spec-Coverage:**
+
 - `refund_links`-Tabelle + Migration + DROP COLUMN → Task 1 ✓
 - Link-CRUD mit beiden Invarianten → Task 2 ✓
 - `refund_total`-Cache und Recalc → Tasks 1-3 ✓

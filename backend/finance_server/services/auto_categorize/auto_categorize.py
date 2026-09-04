@@ -1,5 +1,5 @@
 """
-auto_categorize.py – TF-IDF-basierter Kategorisierungs-Vorschlag für Banktransaktionen.
+auto_categorize.py - TF-IDF-basierter Kategorisierungs-Vorschlag für Banktransaktionen.
 
 Funktionsprinzip:
   1. Alle bereits kategorisierten Transaktionen dienen als Trainings-Datensatz.
@@ -39,7 +39,7 @@ from finance_server.services.auto_categorize._tfidf import (
 logger = logging.getLogger(__name__)
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Globaler Cache – wird von build_predictions() verwaltet.
+# Globaler Cache - wird von build_predictions() verwaltet.
 # _model_cache: enthält Vectorizer und vorberechnete Train-Vektoren.
 # _pred_cache:  enthält die fertigen Vorschlagslisten.
 # _cache_lock:  schützt beide Caches bei nebenläufigen Requests.
@@ -166,7 +166,7 @@ def _fetch_uncategorized_hash() -> str:
     """Berechnet einen SHA-256 über alle noch nicht kategorisierten Transaktionen.
 
     Ändert sich dieser Hash (neue Transaktionen importiert), muss die
-    Vorhersageliste neu gebaut werden – aber nicht zwingend der Vectorizer.
+    Vorhersageliste neu gebaut werden - aber nicht zwingend der Vectorizer.
     """
     with get_connection() as connection:
         rows = connection.execute(
@@ -231,7 +231,7 @@ def _compute_predictions(
 
     Ablauf pro Transaktion:
       1. Text kombinieren + in TF-IDF-Raum transformieren (Batch über alle
-         unkategorisierten Transaktionen gleichzeitig – deutlich schneller als
+         unkategorisierten Transaktionen gleichzeitig - deutlich schneller als
          einzelne transform()-Aufrufe in einer Schleife).
       2. Kosinus-Ähnlichkeit zur gesamten Trainingsmenge berechnen.
       3. Bestes Match: wenn Ähnlichkeit ≥ SIMILARITY_THRESHOLD, Vorschlag erzeugen.
@@ -243,7 +243,7 @@ def _compute_predictions(
     # Texte für alle unkategorisierten Transaktionen vorbereiten
     texts = [_combine_text(tx) for tx in uncategorized]
 
-    # Leere Texte merken – sie bekommen keinen Vorschlag
+    # Leere Texte merken - sie bekommen keinen Vorschlag
     non_empty_mask = [bool(t.strip()) for t in texts]
 
     if not any(non_empty_mask):
@@ -300,13 +300,13 @@ def _compute_predictions(
 def build_predictions() -> list[dict[str, Any]]:
     """Gibt alle aktuellen Kategorie-Vorschläge zurück (mit zwei Caching-Ebenen).
 
-    Cache-Ebene 1 – Modell (Vectorizer + Train-Vektoren):
+    Cache-Ebene 1 - Modell (Vectorizer + Train-Vektoren):
       Wird nur neu gebaut, wenn sich der Hash der kategorisierten Transaktionen
       geändert hat (neue Transaktionen kategorisiert oder Kategorie geändert).
 
-    Cache-Ebene 2 – Vorhersagen:
+    Cache-Ebene 2 - Vorhersagen:
       Werden nur neu berechnet, wenn sich der Hash der *unkategorisierten*
-      Transaktionen geändert hat (neue Imports) – oder wenn Level 1 neu gebaut
+      Transaktionen geändert hat (neue Imports) - oder wenn Level 1 neu gebaut
       wurde (veränderte Trainingsgrundlage).
 
     Der threading.Lock stellt sicher, dass parallele Requests nicht gleichzeitig
@@ -325,7 +325,7 @@ def build_predictions() -> list[dict[str, Any]]:
         )
 
         if model_stale:
-            logger.info("Modell-Cache veraltet – trainiere neu (hash=%s)", categorized_hash[:8])
+            logger.info("Modell-Cache veraltet - trainiere neu (hash=%s)", categorized_hash[:8])
             all_tx      = _fetch_all_transactions()
             categorized = [t for t in all_tx if t.get("kategorie") is not None]
             model       = _build_model(categorized)
@@ -346,7 +346,7 @@ def build_predictions() -> list[dict[str, Any]]:
         )
 
         if pred_stale:
-            logger.info("Vorhersage-Cache veraltet – berechne neu (hash=%s)", uncategorized_hash[:8])
+            logger.info("Vorhersage-Cache veraltet - berechne neu (hash=%s)", uncategorized_hash[:8])
             all_tx        = _fetch_all_transactions()
             uncategorized = [t for t in all_tx if t.get("kategorie") is None and t.get("id")]
             predictions   = _compute_predictions(uncategorized, _model_cache)  # type: ignore[arg-type]
@@ -359,7 +359,7 @@ def apply_prediction(transaction_id: int, category_id: int | None) -> None:
     """Übernimmt einen Kategorie-Vorschlag und schreibt ihn in die Datenbank.
 
     Nach dem Schreiben ist der nächste Aufruf von build_predictions() ein
-    Cache-Miss auf Level 1 (neues Trainingsbeispiel) – das Modell wird
+    Cache-Miss auf Level 1 (neues Trainingsbeispiel) - das Modell wird
     automatisch aktualisiert.
     """
     update_transaction_category(transaction_id, category_id)

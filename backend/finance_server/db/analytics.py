@@ -45,7 +45,10 @@ def fetch_summary(
                 COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) - COALESCE(refund_total, 0) ELSE 0 END), 0) AS expenses,
                 COUNT(*) AS transaction_count
             FROM umsaetze
+            LEFT JOIN (SELECT DISTINCT iban FROM bank_accounts) AS ba
+                ON umsaetze.account_iban = ba.iban
             WHERE {where_sql}
+              AND ba.iban IS NOT NULL
             """,
             params,
         ).fetchone()

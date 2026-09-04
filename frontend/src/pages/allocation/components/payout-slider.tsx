@@ -19,6 +19,8 @@ const sanitizeEuros = (s: string): string => {
   return `${intPart},${decPart}`;
 };
 
+const roundToCents = (v: number): number => Math.round(v * 100) / 100;
+
 export function PayoutSlider({
   value,
   max,
@@ -81,7 +83,7 @@ export function PayoutSlider({
     if (!track || max <= 0) return;
     const rect = track.getBoundingClientRect();
     const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-    onChange(resolveValue(Math.min(max, Math.round(ratio * max))));
+    onChange(resolveValue(Math.min(max, roundToCents(ratio * max))));
   };
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -100,13 +102,15 @@ export function PayoutSlider({
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (max <= 0) return;
-    const step = e.shiftKey ? Math.max(1, Math.round(max / 20)) : 1;
+    const coarseStep = Math.max(0.01, Math.round(max / 20 * 100) / 100);
+    const fineStep = max < 2 ? 0.01 : 1;
+    const step = e.shiftKey ? coarseStep : fineStep;
     if (e.key === "ArrowRight" || e.key === "ArrowUp") {
       e.preventDefault();
-      onChange(Math.min(max, value + step));
+      onChange(roundToCents(Math.min(max, value + step)));
     } else if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
       e.preventDefault();
-      onChange(Math.max(0, value - step));
+      onChange(roundToCents(Math.max(0, value - step)));
     } else if (e.key === "Home") {
       e.preventDefault();
       onChange(0);
@@ -281,7 +285,7 @@ export function PayoutSlider({
 
       <div className="flex items-center gap-1.5">
         {presets.map((p) => {
-          const presetValue = Math.min(max, Math.round(max * p));
+          const presetValue = p === 1 ? max : roundToCents(Math.min(max, max * p));
           const isActive = !atAnchor && Math.abs(value - presetValue) < 1;
           return (
             <button

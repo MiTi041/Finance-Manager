@@ -7,7 +7,6 @@ import {
   TrendingUp,
   TrendingDown,
   Receipt,
-  CircleDashed,
   ArrowUpRight,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -27,6 +26,8 @@ import {
   type RecipientAccountRecord,
 } from "@/lib/recipient-accounts";
 import { executeDirectTransfer } from "@/lib/direct-transfer";
+import { VopRequiredError, type VopRequiredInfo } from "@/lib/allocation";
+import { VopConfirmDialog } from "@/components/vop-confirm-dialog";
 import {
   TransferSetupDialog,
   type TransferSetupResult,
@@ -43,11 +44,11 @@ import { DashboardSkeleton } from "./components/dashboard-skeleton";
 
 function computeDateFooter(dateFilter: DateFilterValue) {
   if (dateFilter.timeSpan) {
-    return `${format(dateFilter.timeSpan.from, "dd.MM.yy")} – ${format(dateFilter.timeSpan.until, "dd.MM.yy")}`;
+    return `${format(dateFilter.timeSpan.from, "dd.MM.yy")} - ${format(dateFilter.timeSpan.until, "dd.MM.yy")}`;
   }
   if (dateFilter.timeRange) {
     const span = getTimeSpanForRange(dateFilter.timeRange);
-    return `${format(span.from, "dd.MM.yy")} – ${format(span.until, "dd.MM.yy")}`;
+    return `${format(span.from, "dd.MM.yy")} - ${format(span.until, "dd.MM.yy")}`;
   }
   return null;
 }
@@ -74,6 +75,10 @@ export default function DashboardPage() {
   const [recipientAccounts, setRecipientAccounts] = useState<RecipientAccountRecord[]>([]);
   const [setupOpen, setSetupOpen] = useState(false);
   const [presetSenderIban, setPresetSenderIban] = useState<string | undefined>(undefined);
+  const [vopState, setVopState] = useState<{
+    info: VopRequiredInfo;
+    result: TransferSetupResult;
+  } | null>(null);
 
   useEffect(() => {
     void fetchAvailableBanks().then((banks) =>
@@ -146,6 +151,39 @@ export default function DashboardPage() {
     [linkedAccounts],
   );
 
+  const runTransfer = useCallback(
+    async (result: TransferSetupResult, vopToken?: string) => {
+      const tid = toast.loading("Überweisung wird durchgeführt…");
+      try {
+        await executeDirectTransfer(
+          {
+            senderIban: result.senderIban,
+            recipientName: result.recipientName,
+            recipientIban: result.recipientIban,
+            recipientBic: result.recipientBic,
+            amount: result.amount,
+            reason: result.purpose || "Überweisung",
+            instant: result.instant,
+          },
+          undefined,
+          vopToken,
+        );
+        toast.success("Überweisung erfolgreich!", { id: tid });
+        triggerRefresh();
+        return true;
+      } catch (e) {
+        toast.dismiss(tid);
+        if (e instanceof VopRequiredError) {
+          setVopState({ info: e.info, result });
+          return false;
+        }
+        toast.error(getErrorMessage(e, "Überweisung fehlgeschlagen."));
+        return false;
+      }
+    },
+    [triggerRefresh],
+  );
+
   const confirmSetup = useCallback(
     async (result: TransferSetupResult) => {
       if (result.saveRecipient) {
@@ -156,26 +194,17 @@ export default function DashboardPage() {
           recipient_name: result.recipientName,
         }).catch(() => toast.error("Empfängerkonto konnte nicht gespeichert werden."));
       }
-      const tid = toast.loading("Überweisung wird durchgeführt…");
-      try {
-        await executeDirectTransfer({
-          senderIban: result.senderIban,
-          recipientName: result.recipientName,
-          recipientIban: result.recipientIban,
-          recipientBic: result.recipientBic,
-          amount: result.amount,
-          reason: result.purpose || "Überweisung",
-          instant: result.instant,
-        });
-        toast.success("Überweisung erfolgreich!", { id: tid });
-        triggerRefresh();
-      } catch (e) {
-        toast.dismiss(tid);
-        toast.error(getErrorMessage(e, "Überweisung fehlgeschlagen."));
-      }
+      await runTransfer(result);
     },
-    [triggerRefresh],
+    [runTransfer],
   );
+
+  const confirmVopTransfer = useCallback(async () => {
+    if (!vopState) return;
+    const { result, info } = vopState;
+    const ok = await runTransfer(result, info.vop_token);
+    if (ok) setVopState(null);
+  }, [vopState, runTransfer]);
 
   if (error) {
     return (
@@ -201,8 +230,6 @@ export default function DashboardPage() {
 
       {loading ? (
         <DashboardSkeleton />
-      ) : transactions.length === 0 ? (
-        <EmptyState title="Es gibt noch keine Daten" illustration={<CircleDashed />} />
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3.5 xl:grid-cols-4">
@@ -270,8 +297,12 @@ export default function DashboardPage() {
             />
           </div>
 
-          <BalanceChart transactions={transactions} currentBalance={balance} />
-          <MonthlyChart transactions={transactions} />
+          {transactions.length > 0 && (
+            <>
+              <BalanceChart transactions={transactions} currentBalance={balance} />
+              <MonthlyChart transactions={transactions} />
+            </>
+          )}
         </>
       )}
 
@@ -282,6 +313,15 @@ export default function DashboardPage() {
         recipientAccounts={recipientAccounts}
         ownAccounts={ownAccounts}
         onConfirm={confirmSetup}
+      />
+
+      <VopConfirmDialog
+        open={!!vopState}
+        onOpenChange={(next) => {
+          if (!next) setVopState(null);
+        }}
+        info={vopState?.info ?? null}
+        onConfirm={confirmVopTransfer}
       />
     </div>
   );

@@ -100,9 +100,9 @@ export function TransactionRow({
   const refundTargetId =
     transaction.refundLinks.length > 0
       ? transaction.refundLinks[0].expense_transaction_id
-      : allTransactions.find((t) =>
+      : (allTransactions.find((t) =>
           t.refundLinks.some((l) => l.expense_transaction_id === transaction.id),
-        )?.id ?? null;
+        )?.id ?? null);
 
   const [confirmCloseDialogOpen, setConfirmCloseDialogOpen] = useState(false);
   const pendingToggleAction = useRef<(() => void) | null>(null);
@@ -111,8 +111,7 @@ export function TransactionRow({
 
   const isKontotransfer = Boolean(
     partnerBank ||
-      (ownerId != null &&
-        zahlungspartnerOptions.some((o) => o.id === ownerId && o.is_own_account)),
+    (ownerId != null && zahlungspartnerOptions.some((o) => o.id === ownerId && o.is_own_account)),
   );
 
   useEffect(() => {
@@ -167,7 +166,7 @@ export function TransactionRow({
         onSaveSplits(transaction.id, splits.splitDrafts);
       }
     } catch {
-      // ignore – user can still discard or cancel
+      // ignore - user can still discard or cancel
     } finally {
       note.setSavingNote(false);
       purpose.setSavingPurpose(false);

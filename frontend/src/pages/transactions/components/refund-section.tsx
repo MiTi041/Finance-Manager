@@ -57,8 +57,7 @@ export function RefundSectionIncoming({
     return map;
   }, [allTransactions]);
 
-  const expenseRefundedFor = (expense: Transaction) =>
-    refundedByExpense.get(expense.id) ?? 0;
+  const expenseRefundedFor = (expense: Transaction) => refundedByExpense.get(expense.id) ?? 0;
 
   const expenseRemainingFor = (expense: Transaction) =>
     Math.max(0, Math.abs(expense.betrag.wert) - expenseRefundedFor(expense));
@@ -134,7 +133,9 @@ export function RefundSectionIncoming({
                 <div className="flex items-center gap-3 min-w-0">
                   <BrandIcon
                     src={expense?.zahlungspartner.logoUrl || undefined}
-                    alt={expense?.zahlungspartner.datenbankName || expense?.zahlungspartner.name || "?"}
+                    alt={
+                      expense?.zahlungspartner.datenbankName || expense?.zahlungspartner.name || "?"
+                    }
                     sizeClassName="size-8 shrink-0"
                     backgroundClassName={
                       expense?.zahlungspartner.logoWhiteBackground ? "bg-white" : "bg-zinc-900"
@@ -146,10 +147,10 @@ export function RefundSectionIncoming({
                     <p className="truncate text-sm font-medium text-foreground">
                       {expense?.zahlungspartner.datenbankName ||
                         expense?.zahlungspartner.name ||
-                        "–"}
+                        "-"}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {expense ? formatDate(expense.daten.buchungsdatum) : "–"}
+                      {expense ? formatDate(expense.daten.buchungsdatum) : "-"}
                     </p>
                   </div>
                 </div>
@@ -235,7 +236,7 @@ export function RefundSectionIncoming({
                     />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-foreground">
-                        {t.zahlungspartner.datenbankName || t.zahlungspartner.name || "–"}
+                        {t.zahlungspartner.datenbankName || t.zahlungspartner.name || "-"}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {formatDate(t.daten.buchungsdatum)}
@@ -271,8 +272,12 @@ export function RefundSectionIncoming({
           <DialogHeader className="p-5 pb-2">
             <DialogTitle>Betrag der Rückerstattung</DialogTitle>
             <DialogDescription>
-              Wie viel der {formatAmount(transaction.betrag.wert, transaction.betrag.waehrung)} entfällt auf{" "}
-              {selectedExpense?.zahlungspartner.datenbankName || selectedExpense?.zahlungspartner.name || "diese Ausgabe"}?
+              Wie viel der {formatAmount(transaction.betrag.wert, transaction.betrag.waehrung)}{" "}
+              entfällt auf{" "}
+              {selectedExpense?.zahlungspartner.datenbankName ||
+                selectedExpense?.zahlungspartner.name ||
+                "diese Ausgabe"}
+              ?
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 p-5 pt-2">
@@ -287,8 +292,12 @@ export function RefundSectionIncoming({
             />
             {selectedExpense && (
               <p className="text-xs text-muted-foreground">
-                Maximal {formatAmount(Math.min(remaining, expenseRemainingFor(selectedExpense)), transaction.betrag.waehrung)} —
-                Rest der Gutschrift und Rest der Ausgabe
+                Maximal{" "}
+                {formatAmount(
+                  Math.min(remaining, expenseRemainingFor(selectedExpense)),
+                  transaction.betrag.waehrung,
+                )}{" "}
+                — Rest der Gutschrift und Rest der Ausgabe
               </p>
             )}
             <div className="flex justify-end gap-2">
@@ -334,7 +343,10 @@ export function RefundSectionOutgoing({
   const handleUnlink = async (linkId: number) => {
     setUnlinkingId(linkId);
     try {
-      await deleteRefundLink(refundLinks.find((l) => l.id === linkId)?.income.id ?? transaction.id, linkId);
+      await deleteRefundLink(
+        refundLinks.find((l) => l.id === linkId)?.income.id ?? transaction.id,
+        linkId,
+      );
       onRefundLinkChange();
     } finally {
       setUnlinkingId(null);
@@ -357,7 +369,11 @@ export function RefundSectionOutgoing({
             <div className="flex items-center gap-3 min-w-0">
               <BrandIcon
                 src={link.income.zahlungspartner.logoUrl || undefined}
-                alt={link.income.zahlungspartner.datenbankName || link.income.zahlungspartner.name || "?"}
+                alt={
+                  link.income.zahlungspartner.datenbankName ||
+                  link.income.zahlungspartner.name ||
+                  "?"
+                }
                 sizeClassName="size-8 shrink-0"
                 backgroundClassName={
                   link.income.zahlungspartner.logoWhiteBackground ? "bg-white" : "bg-zinc-900"
@@ -367,7 +383,9 @@ export function RefundSectionOutgoing({
               />
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-foreground">
-                  {link.income.zahlungspartner.datenbankName || link.income.zahlungspartner.name || "–"}
+                  {link.income.zahlungspartner.datenbankName ||
+                    link.income.zahlungspartner.name ||
+                    "-"}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {formatDate(link.income.daten.buchungsdatum)}

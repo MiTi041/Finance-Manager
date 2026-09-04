@@ -13,7 +13,7 @@
 - Scope: **nur Budgets-Seite** (`budgets-page.tsx`). Keine Änderung an Sidebar, anderen Seiten, Backend.
 - Keine neuen Dependencies.
 - Logik-Änderungen nur, wo nötig: Farb-Regel `ratio > 1 → rot, >= 0.7 → gelb, sonst grün` und `is_over`-Verhalten bleiben unverändert.
-- Status-Pill: `< 70 %` „Im Plan" grün, `70–100 %` „Fast erreicht" gelb, `> 100 %` „Überzogen" rot.
+- Status-Pill: `< 70 %` „Im Plan" grün, `70-100 %` „Fast erreicht" gelb, `> 100 %` „Überzogen" rot.
 - Löschen direkt ohne Bestätigungsdialog; Bearbeiten über Dialog auf Seiten-Ebene.
 - Alle klickbaren Elemente bekommen `cursor-pointer`.
 - Commit-Message: `style(budgets): ...`.
@@ -23,9 +23,11 @@
 ### Task 1: Budgets-Seite aufpolieren
 
 **Files:**
+
 - Modify: `frontend/src/pages/budgets/budgets-page.tsx`
 
 **Interfaces:**
+
 - Consumes: `formatAmount` (`@/lib/utils/format`), `cn` (`@/lib/utils`), `Progress` (`@/components/ui/progress`), `Popover*` (`@/components/ui/popover`), bestehende `Budget`/`FinanceCategory`-Typen. Lucide-Icons `ChevronLeft/Right`, `Loader2`, `MoreVertical`, `Pencil`, `PiggyBank`, `Plus`, `Receipt`, `Trash2`, `Wallet`.
 - Produces: unverändert exportierte Default-Komponente `BudgetsPage`.
 
@@ -56,7 +58,13 @@ import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
@@ -82,7 +90,8 @@ function BudgetRow({
   onDelete: (id: number) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const ratio = budget.monthly_amount > 0 ? budget.spent / budget.monthly_amount : budget.spent > 0 ? 1 : 0;
+  const ratio =
+    budget.monthly_amount > 0 ? budget.spent / budget.monthly_amount : budget.spent > 0 ? 1 : 0;
   const color = ratio > 1 ? "bg-red-500" : ratio >= 0.7 ? "bg-amber-500" : "bg-emerald-500";
   const status =
     ratio > 1
@@ -202,11 +211,15 @@ function AddBudgetDialog({
               <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted">
                 {c.icon ?? "🏷️"}
               </span>
-              <span className="truncate">{c.parent_name ? `${c.parent_name} / ${c.name}` : c.name}</span>
+              <span className="truncate">
+                {c.parent_name ? `${c.parent_name} / ${c.name}` : c.name}
+              </span>
             </button>
           ))}
           {available.length === 0 && (
-            <p className="text-sm text-muted-foreground">Alle Ausgabe-Kategorien haben bereits ein Budget.</p>
+            <p className="text-sm text-muted-foreground">
+              Alle Ausgabe-Kategorien haben bereits ein Budget.
+            </p>
           )}
         </div>
         <div className="relative">
@@ -349,22 +362,42 @@ export default function BudgetsPage() {
       <Card className="border-none bg-muted/40 shadow-none">
         <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="size-7" onClick={() => setMonth((m) => shiftMonth(m, -1))} aria-label="Vorheriger Monat">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              onClick={() => setMonth((m) => shiftMonth(m, -1))}
+              aria-label="Vorheriger Monat"
+            >
               <ChevronLeft className="size-4" />
             </Button>
             <span className="min-w-24 text-center font-medium tabular-nums">{month}</span>
-            <Button variant="ghost" size="icon" className="size-7" onClick={() => setMonth((m) => shiftMonth(m, 1))} aria-label="Nächster Monat">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              onClick={() => setMonth((m) => shiftMonth(m, 1))}
+              aria-label="Nächster Monat"
+            >
               <ChevronRight className="size-4" />
             </Button>
             {month !== currentMonth() && (
-              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setMonth(currentMonth())}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setMonth(currentMonth())}
+              >
                 Heute
               </Button>
             )}
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
             {statBlocks.map(({ label, value, Icon }, i) => (
-              <div key={label} className={cn("flex items-center gap-2", i > 0 && "border-l border-border pl-4")}>
+              <div
+                key={label}
+                className={cn("flex items-center gap-2", i > 0 && "border-l border-border pl-4")}
+              >
                 <Icon className="size-4 text-muted-foreground" />
                 <div>
                   <p className="text-xs text-muted-foreground">{label}</p>
@@ -372,7 +405,12 @@ export default function BudgetsPage() {
                 </div>
               </div>
             ))}
-            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setAddOpen(true)}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setAddOpen(true)}
+            >
               <Plus /> Budget hinzufügen
             </Button>
           </div>

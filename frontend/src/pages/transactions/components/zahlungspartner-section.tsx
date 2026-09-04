@@ -65,9 +65,7 @@ export function ZahlungspartnerSection({
         </p>
 
         <p className="font-medium leading-tight text-foreground flex flex-col gap-0 items-start">
-          {transaction.zahlungspartner.name ||
-            (isEntgeltabschluss && "Entgeldabschluss") ||
-            "–"}
+          {transaction.zahlungspartner.name || (isEntgeltabschluss && "Entgeldabschluss") || "-"}
           {deviateApplicant !== transaction.zahlungspartner.name && deviateApplicant ? (
             <span className="text-xs text-muted-foreground">{deviateApplicant}</span>
           ) : null}
@@ -92,9 +90,9 @@ export function ZahlungspartnerSection({
                 <p className="text-[10px] text-muted-foreground">via Abonnement</p>
                 <HelpButton className="!size-3 !text-[8px]">
                   <p>
-                    Diese Transaktion ist einem Abonnement zugeordnet. Der hier
-                    hinterlegte Name überschreibt den ursprünglichen Empfängernamen der
-                    Bank und wird stattdessen in der Übersicht angezeigt.
+                    Diese Transaktion ist einem Abonnement zugeordnet. Der hier hinterlegte Name
+                    überschreibt den ursprünglichen Empfängernamen der Bank und wird stattdessen in
+                    der Übersicht angezeigt.
                   </p>
                 </HelpButton>
               </div>
@@ -102,21 +100,18 @@ export function ZahlungspartnerSection({
           </div>
         ) : null}
 
-        {!transaction.zahlungspartner.iban &&
-          transaction.konto.blz == ING_BLZ && (
-            <div className="rounded-md bg-orange-500/10 border border-orange-500/30 p-2 flex items-center gap-3">
-              <CircleAlert className="size-4 shrink-0 text-orange-500" />
-              <p className="text-xs text-orange-500">
-                ING Diba überliefert keine IBAN für eingehende Transaktionen
-              </p>
-            </div>
-          )}
+        {!transaction.zahlungspartner.iban && transaction.konto.blz == ING_BLZ && (
+          <div className="rounded-md bg-orange-500/10 border border-orange-500/30 p-2 flex items-center gap-3">
+            <CircleAlert className="size-4 shrink-0 text-orange-500" />
+            <p className="text-xs text-orange-500">
+              ING Diba überliefert keine IBAN für eingehende Transaktionen
+            </p>
+          </div>
+        )}
 
         <div className="flex flex-col items-start gap-0 pt-1">
           {partnerBank ? (
-            <p className="text-xs text-muted-foreground">
-              {partnerBank.accountName || "–"}
-            </p>
+            <p className="text-xs text-muted-foreground">{partnerBank.accountName || "-"}</p>
           ) : null}
           <div className="flex items-center gap-2 pt-1">
             {partnerBank ? (
@@ -166,9 +161,7 @@ export function ZahlungspartnerSection({
                       }
                       sizeClassName="size-12 shrink-0"
                       backgroundClassName={
-                        transaction.zahlungspartner.logoWhiteBackground
-                          ? "bg-white"
-                          : "bg-zinc-900"
+                        transaction.zahlungspartner.logoWhiteBackground ? "bg-white" : "bg-zinc-900"
                       }
                       kind={transaction.zahlungspartner.isCompany ? "company" : "person"}
                       className="rounded-[5px]"
@@ -192,10 +185,9 @@ export function ZahlungspartnerSection({
                   Unbekannte IBAN
                   <HelpButton className="!size-3 !text-[8px]">
                     <p>
-                      Die IBAN dieses Zahlungspartners ist noch keinem Eintrag zugeordnet.
-                      Ordne sie einem bestehenden Zahlungspartner zu oder lege einen neuen
-                      an, damit die Transaktion korrekt in Analysen und Übersichten
-                      erscheint.
+                      Die IBAN dieses Zahlungspartners ist noch keinem Eintrag zugeordnet. Ordne sie
+                      einem bestehenden Zahlungspartner zu oder lege einen neuen an, damit die
+                      Transaktion korrekt in Analysen und Übersichten erscheint.
                     </p>
                   </HelpButton>
                 </p>
@@ -244,15 +236,11 @@ export function ZahlungspartnerSection({
 
                   {/* Create new owner */}
                   <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground">
-                      Neuen Zahlungspartner anlegen
-                    </p>
+                    <p className="text-xs text-muted-foreground">Neuen Zahlungspartner anlegen</p>
                     <div className="flex gap-2 flex-wrap items-center">
                       <Input
                         value={newZahlungspartnerName}
-                        onChange={(event) =>
-                          setNewZahlungspartnerName(event.target.value)
-                        }
+                        onChange={(event) => setNewZahlungspartnerName(event.target.value)}
                         onKeyDown={(event) => event.stopPropagation()}
                         placeholder="Name …"
                         className="h-8 min-w-30 flex-1 rounded-md border border-input bg-background px-3 text-xs text-foreground shadow-xs outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"

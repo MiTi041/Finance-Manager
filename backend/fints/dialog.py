@@ -71,7 +71,11 @@ class FinTSDialog:
                 ),
             ]
 
-            if self.client.mode == FinTSClientMode.INTERACTIVE and self.client.get_tan_mechanisms():
+            if (
+                self.client.mode == FinTSClientMode.INTERACTIVE
+                and self.client.get_tan_mechanisms()
+                and not getattr(self.client, '_finance_skip_init_tan', False)
+            ):
                 tan_seg = self.client._get_tan_segment(segments[0], '4')
                 segments.append(tan_seg)
             else:

@@ -7,6 +7,7 @@ export type BankDefinition = {
   fints_url: string;
   bank_logo: string;
   can_transfer: boolean;
+  needs_tan_medium_name?: boolean;
 };
 
 export async function fetchAvailableBanks(): Promise<BankDefinition[]> {

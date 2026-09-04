@@ -30,12 +30,14 @@ type SettingsFormState = {
   bank_key: string;
   username: string;
   pin: string;
+  tan_medium: string;
 };
 
 const INITIAL_FORM_STATE: SettingsFormState = {
   bank_key: "",
   username: "",
   pin: "",
+  tan_medium: "",
 };
 
 export function BankAccessTab() {
@@ -143,6 +145,7 @@ export function BankAccessTab() {
         bank_key: form.bank_key,
         username: form.username,
         pin: form.pin,
+        tan_medium: form.tan_medium.trim() || undefined,
       });
 
       setCheckMessage("Bankzugang ist gültig. Speichere jetzt ...");
@@ -151,9 +154,11 @@ export function BankAccessTab() {
         bank_key: form.bank_key,
         username: form.username,
         pin: form.pin,
+        tan_medium: form.tan_medium.trim() || undefined,
         accounts: discoveredAccounts.accounts.map((account) => ({
           iban: account.iban,
-          account_name: account.account_name ?? account.iban,
+          account_name: account.account_name ?? account.product_name ?? account.iban,
+          holder_name: account.holder_name,
         })),
       });
 
@@ -202,8 +207,13 @@ export function BankAccessTab() {
     }
   };
 
+  const selectedBank = availableBanks.find((bank) => bank.key === form.bank_key);
+
   const canCheck =
-    form.bank_key.trim() !== "" && form.username.trim() !== "" && form.pin.trim() !== "";
+    form.bank_key.trim() !== "" &&
+    form.username.trim() !== "" &&
+    form.pin.trim() !== "" &&
+    (!selectedBank?.needs_tan_medium_name || form.tan_medium.trim() !== "");
 
   return (
     <div className="grid gap-6">
@@ -229,6 +239,25 @@ export function BankAccessTab() {
                 banks={availableBanks}
               />
             </div>
+
+            {selectedBank?.needs_tan_medium_name ? (
+              <div className="grid gap-2">
+                <label className="text-sm font-medium" htmlFor="tan_medium">
+                  TAN-Medium-Name (BestSign-Push)
+                </label>
+                <Input
+                  id="tan_medium"
+                  value={form.tan_medium}
+                  onChange={(event) => handleChange("tan_medium", event.target.value)}
+                  placeholder="z. B. Michis IPhone"
+                  autoComplete="off"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Die Norisbank verlangt den Namen deines registrierten BestSign-Push-Geräts. Du
+                  findest ihn in der Norisbank-App bzw. im Online-Banking unter TAN-Verwaltung.
+                </p>
+              </div>
+            ) : null}
 
             <div className="grid gap-2">
               <label className="text-sm font-medium" htmlFor="username">
@@ -303,7 +332,7 @@ export function BankAccessTab() {
                   <p>
                     {checkTanRequired.decoupled
                       ? "Öffne deine Banking-App und bestätige die Verbindung. Der Vorgang wird automatisch fortgesetzt, sobald die Freigabe erteilt wurde."
-                      : `Gib den folgenden Challenge-Code in deinem TAN-Generator ein:\n${checkTanRequired.challenge ?? "–"}`}
+                      : `Gib den folgenden Challenge-Code in deinem TAN-Generator ein:\n${checkTanRequired.challenge ?? "-"}`}
                   </p>
                 </div>
               </div>

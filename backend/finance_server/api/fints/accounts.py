@@ -8,7 +8,7 @@ from finance_server.fints.accounts import fetch_accounts
 from finance_server.fints.client import (
     resolve_bank_credentials, resolve_bank_connection_details,
 )
-from finance_server.fints.common import TanRequired
+from finance_server.fints.common import TanRequired, BankLoginRejected
 from finance_server.services.rate_limiter import enforce_rate_limit
 
 router = APIRouter()
@@ -29,5 +29,7 @@ def get_accounts(request: AccountsRequest) -> dict[str, Any]:
             "challenge": err.challenge,
             "decoupled": err.decoupled,
         })
+    except BankLoginRejected as err:
+        raise HTTPException(status_code=401, detail=err.to_detail())
     except FinTSClientError as err:
         raise HTTPException(status_code=502, detail=f"FinTS-Initialisierung fehlgeschlagen. Originalfehler: {err}")

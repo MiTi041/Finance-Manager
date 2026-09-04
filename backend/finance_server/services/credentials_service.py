@@ -44,6 +44,8 @@ class CredentialsService:
             "blz": bank.blz if bank else "",
             "bank_logo": bank.bank_logo if bank else "",
             "username": credentials.get("username", ""),
+            "tan_medium": credentials.get("tan_medium"),
+            "auto_sync": credentials.get("auto_sync", True),
             "fints_url": bank.fints_url if bank else "",
             "scope": credentials.get("scope", ""),
             "account_iban": credentials.get("account_iban", ""),
@@ -79,7 +81,7 @@ class CredentialsService:
             return {"error": "credentials_not_found"}
 
         credentials = dict(credentials)
-        for key in ("account_name", "account_iban", "username", "bank_key"):
+        for key in ("account_name", "account_iban", "username", "bank_key", "tan_medium", "auto_sync"):
             if key in payload:
                 credentials[key] = payload[key]
 
@@ -106,6 +108,7 @@ class CredentialsService:
             iban,
             account_name=payload.get("account_name"),
             account_iban=payload.get("account_iban"),
+            holder_name=payload.get("holder_name"),
         )
         if not updated:
             return {"error": "account_not_found"}
@@ -159,6 +162,7 @@ class CredentialsService:
                     "fints_url": bank.fints_url,
                     "bank_logo": bank.bank_logo,
                     "can_transfer": bank.can_transfer,
+                    "needs_tan_medium_name": bank.needs_tan_medium_name,
                 }
                 for bank in list_bank_definitions()
             ]

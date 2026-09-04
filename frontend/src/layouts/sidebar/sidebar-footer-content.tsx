@@ -6,12 +6,13 @@ import { Settings } from "lucide-react";
 
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
 import { ModeToggle } from "@/components/dark-mode-toggle";
-import { SyncButton } from "./sync-button";
+import { SyncButton, type SyncStatusRow } from "./sync-button";
 
 export type SidebarFooterContentProps = {
   isSyncing: boolean;
   syncStatusText: string;
   cacheAgeText: string;
+  syncStatusRows?: SyncStatusRow[];
   refreshFinanceData: () => void;
 };
 
@@ -19,6 +20,7 @@ export function SidebarFooterContent({
   isSyncing,
   syncStatusText,
   cacheAgeText,
+  syncStatusRows,
   refreshFinanceData,
 }: SidebarFooterContentProps) {
   return (
@@ -28,6 +30,7 @@ export function SidebarFooterContent({
           isSyncing={isSyncing}
           syncStatusText={syncStatusText}
           cacheAgeText={cacheAgeText}
+          syncStatusRows={syncStatusRows}
           refreshFinanceData={refreshFinanceData}
         />
 

@@ -13,6 +13,7 @@ import { fetchBankCredentials } from "@/lib/bank/credentials";
 import { importFromFintsServer, RateLimitError } from "@/lib/upload-helper";
 import { getErrorMessage } from "@/lib/utils/error";
 import { dispatchRefresh } from "@/lib/refresh-store";
+import { readFintsSyncCache, rememberSyncRun } from "@/lib/sync-cache";
 
 const FALLBACK_SYNC_DAYS = Number(
   import.meta.env.VITE_FINTS_DAYS ?? "730",
@@ -59,7 +60,11 @@ export default function FintsAutoSync() {
           );
           rememberSyncRun(daysToSync);
         } else {
-          for (const bank of banksToSync) {
+          const eligibleBanks =
+            source === "auto"
+              ? banksToSync.filter((bank) => bank.auto_sync !== false)
+              : banksToSync;
+          for (const bank of eligibleBanks) {
             try {
               const accountIbans =
                 bank.accounts
@@ -93,7 +98,7 @@ export default function FintsAutoSync() {
                 },
                 { scope: bank.scope },
               );
-              rememberSyncRun(daysToSync);
+              rememberSyncRun(daysToSync, bank.scope);
             } catch (error) {
               console.error(
                 `Sync fehlgeschlagen für ${bank.bank_name || bank.account_name || bank.username || bank.scope}`,
@@ -125,23 +130,9 @@ export default function FintsAutoSync() {
     };
 
     const isAutoSyncDue = () => {
-      try {
-        const syncRaw = window.localStorage.getItem("fintsSyncCache");
-        if (!syncRaw) return true;
-
-        const parsed = JSON.parse(syncRaw);
-        const syncedAt = Number(
-          parsed?.syncedAt ??
-            parsed?.synced_at ??
-            parsed?.syncedAtMs ??
-            parsed?.lastSynced,
-        );
-        if (!Number.isFinite(syncedAt) || syncedAt <= 0) return true;
-
-        return Date.now() - syncedAt >= AUTO_SYNC_INTERVAL_MS;
-      } catch {
-        return true;
-      }
+      const cache = readFintsSyncCache();
+      if (!cache) return true;
+      return Date.now() - cache.syncedAt >= AUTO_SYNC_INTERVAL_MS;
     };
 
     const onManualSyncRequest = () => {
@@ -183,17 +174,6 @@ function emitSyncStatus(
       detail: { running, source, ...extra },
     }),
   );
-}
-
-function rememberSyncRun(days: number) {
-  try {
-    localStorage.setItem(
-      "fintsSyncCache",
-      JSON.stringify({ syncedAt: Date.now(), days }),
-    );
-  } catch {
-    // ignore storage write errors
-  }
 }
 
 function parseFlexibleDate(value: unknown): Date | null {

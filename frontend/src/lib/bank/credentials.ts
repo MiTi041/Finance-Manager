@@ -11,9 +11,12 @@ export type StoredBankCredentials = {
   account_name?: string;
   account_iban?: string;
   username?: string;
+  tan_medium?: string;
+  auto_sync?: boolean;
   accounts?: Array<{
     iban?: string;
     account_name?: string;
+    holder_name?: string | null;
     balance?: number | null;
   }>;
 };
@@ -24,9 +27,12 @@ export type BankCredentials = {
   account_iban?: string;
   username: string;
   pin: string;
+  tan_medium?: string;
+  auto_sync?: boolean;
   accounts?: Array<{
     iban?: string;
     account_name?: string;
+    holder_name?: string | null;
   }>;
 };
 
@@ -67,6 +73,8 @@ export type BankAccountDiscoveryResponse = {
   accounts: Array<{
     iban?: string;
     account_name?: string;
+    product_name?: string;
+    holder_name?: string | null;
     iban_label?: string;
     bank_name?: string;
   }>;
@@ -79,6 +87,7 @@ export type BankDefinition = {
   fints_url: string;
   bank_logo: string;
   can_transfer: boolean;
+  needs_tan_medium_name?: boolean;
 };
 
 export async function fetchBankCredentialsStatus(): Promise<BankCredentialsStatus> {
@@ -212,7 +221,7 @@ export async function updateBankCredentials(
 export async function updateBankAccount(
   scope: string,
   iban: string,
-  payload: { account_name?: string; account_iban?: string },
+  payload: { account_name?: string; account_iban?: string; holder_name?: string },
 ): Promise<BankCredentialsStatus> {
   const response = await fetch(
     `${getApiBaseUrl()}/bank-credentials/${scope}/accounts/${encodeURIComponent(

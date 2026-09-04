@@ -14,7 +14,7 @@ from finance_server.models.bank import BankCredentials
 from finance_server.fints.banks import get_bank_definition
 from finance_server.fints.common import (
     BASE_DIR, WORKSPACE_DIR, STATE_FILE,
-    TanRequired, TanTimeout,
+    TanRequired, TanTimeout, BankLoginRejected,
 )
 
 try:
@@ -75,6 +75,7 @@ def resolve_bank_connection_details(credentials: BankCredentials) -> BankCredent
         username=credentials.username,
         account_name=credentials.account_name,
         pin=credentials.pin,
+        tan_medium=credentials.tan_medium,
     )
 
 
@@ -172,8 +173,128 @@ def should_retry_without_state(err: Exception) -> bool:
     )
 
 
+def _collect_bank_feedback(client: FinTS3PinTanClient) -> list[tuple[str, str]]:
+    """Extrahiert Rückmeldungscodes/-texte aus den letzten Bank-Antworten."""
+    history = getattr(getattr(client, "connection", None), "_finance_responses", None)
+    if not isinstance(history, list):
+        return []
+
+    feedback: list[tuple[str, str]] = []
+    for message in history:
+        try:
+            for seg in message.find_segments(("HIRMG", "HIRMS")):
+                for response in getattr(seg, "responses", []):
+                    code = str(getattr(response, "code", "") or "")
+                    text = str(getattr(response, "text", "") or "")
+                    if code:
+                        feedback.append((code, text))
+        except Exception:
+            continue
+    return feedback
+
+
+def _bootstrap_with_forced_tan_mechanism(
+    client: FinTS3PinTanClient, mechanism: str, medium: str | None = None
+) -> None:
+    """Wie minimal_interactive_cli_bootstrap, erzwingt aber den angegebenen
+    TAN-Mechanismus, nachdem die Bank die verfügbaren Mechanismen gemeldet hat.
+
+    Norisbank (BestSign-Push, 921) verlangt den Namen des registrierten
+    TAN-Mediums (HKTAB ohne SCA nicht abrufbar). Ist kein fester Medium-Name
+    hinterlegt, wird das Medium leer gelassen (wie beim PushTAN-Workaround
+    der Sparkasse in python-fints).
+    """
+    if not client.get_tan_mechanisms():
+        client.fetch_tan_mechanisms()
+
+    if mechanism not in client.get_tan_mechanisms():
+        minimal_interactive_cli_bootstrap(client)
+        return
+
+    client.set_tan_mechanism(mechanism)
+    if client.is_tan_media_required():
+        if medium:
+            client.selected_tan_medium = medium
+        elif client.selected_tan_medium is None:
+            client.selected_tan_medium = ""
+
+
+def _forced_tan_mechanism(client: FinTS3PinTanClient) -> str | None:
+    forced = getattr(client, "_finance_force_tan_mechanism", None)
+    return forced if isinstance(forced, str) and forced else None
+
+
+def _forced_tan_medium(client: FinTS3PinTanClient) -> str | None:
+    medium = getattr(client, "_finance_force_tan_medium", None)
+    return medium if isinstance(medium, str) and medium else None
+
+
+def _capture_tan_medium_from_challenge(
+    client: FinTS3PinTanClient, response: Any | None = None
+) -> None:
+    """Übernimmt den vom Institut im HITAN-Challenge genannten TAN-Medium-Namen
+    in den Client-State, damit spätere Requests das korrekte Medium senden.
+    """
+    if client.selected_tan_medium:
+        return
+    if response is None:
+        response = getattr(client, "init_tan_response", None)
+    if response is None:
+        return
+    name = getattr(getattr(response, "tan_request", None), "tan_medium_name", None)
+    if name:
+        client.selected_tan_medium = name
+
+
 def bootstrap_client(client: FinTS3PinTanClient) -> None:
-    minimal_interactive_cli_bootstrap(client)
+    try:
+        forced = _forced_tan_mechanism(client)
+        if forced:
+            _bootstrap_with_forced_tan_mechanism(client, forced, _forced_tan_medium(client))
+        else:
+            minimal_interactive_cli_bootstrap(client)
+    except ValueError as err:
+        if "Could not find system_id" not in str(err):
+            raise
+
+        feedback = _collect_bank_feedback(client)
+        codes = [code for code, _ in feedback]
+        texts = dict(feedback)
+        bank_messages = [f"{code}: {text}" for code, text in feedback if (text or "").strip()]
+        bank_detail = " | ".join(bank_messages)
+
+        if "9078" in codes:
+            raise BankLoginRejected(
+                "Die Bank hat die Anmeldung abgebrochen: Das FinTS-Produkt "
+                f"'{client.product_name}' ist bei diesem Institut nicht registriert bzw. "
+                "nicht freigeschaltet. "
+                "Bitte das Produkt im Online-Banking der Bank freischalten bzw. beim "
+                "Institut registrieren lassen (ggf. Support kontaktieren).",
+                codes=codes,
+                bank_messages=bank_messages,
+            ) from err
+
+        if "9040" in codes:
+            raise BankLoginRejected(
+                "Anmeldung bei der Bank fehlgeschlagen (Bankmeldung 9040 "
+                "'Anmeldung fehlgeschlagen'). Bitte prüfen: "
+                "1) Benutzerkennung/Kundenkennung und PIN sind korrekt. Bei Instituten "
+                "der Deutsche-Bank-Gruppe (Norisbank) muss die FinTS-Kennung bzw. die "
+                "neue Norisbank-ID als Benutzerkennung verwendet werden. "
+                "2) Das FinTS-Produkt ist für diesen Zugang registriert bzw. freigeschaltet. "
+                "3) Der Zugang ist nicht vorübergehend gesperrt.",
+                codes=codes,
+                bank_messages=bank_messages,
+            ) from err
+
+        detail = texts.get("9900") or bank_detail
+        suffix = f" Bankmeldung: {detail}" if detail else ""
+        raise BankLoginRejected(
+            "Anmeldung bei der Bank fehlgeschlagen. Bitte Benutzerkennung und PIN prüfen "
+            "(falsche PIN, unbekannte Kennung oder vorübergehend gesperrter Zugang)." + suffix,
+            codes=codes,
+            bank_messages=bank_messages,
+        ) from err
 
 
 def resolve_product_id() -> str:
@@ -190,17 +311,60 @@ def resolve_product_id() -> str:
     return pid
 
 
+def _record_connection_responses(client: FinTS3PinTanClient) -> None:
+    connection = getattr(client, "connection", None)
+    if connection is None or getattr(connection, "_finance_responses", None) is not None:
+        return
+
+    connection._finance_responses = []
+    original_send = connection.send
+
+    def _recording_send(message):
+        retval = original_send(message)
+        history = connection._finance_responses
+        history.append(retval)
+        if len(history) > 50:
+            del history[:-50]
+        return retval
+
+    connection.send = _recording_send
+
+
+def _require_norisbank_tan_medium(creds: BankCredentials) -> str:
+    medium = (creds.tan_medium or "").strip()
+    if medium:
+        return medium
+    from fastapi import HTTPException
+    raise HTTPException(
+        status_code=400,
+        detail={
+            "code": "NORISBANK_TAN_MEDIUM_REQUIRED",
+            "message": (
+                "Für die Norisbank wird der Name deines BestSign-Push-Geräts benötigt. "
+                "Bitte trage ihn bei den Bankzugangsdaten unter 'TAN-Medium-Name' ein "
+                "(zu finden in der Norisbank-App bzw. im Online-Banking unter TAN-Verwaltung)."
+            ),
+        },
+    )
+
+
 def make_client(creds: BankCredentials, from_data: bytes | None) -> FinTS3PinTanClient:
     bank = get_bank_definition(creds.bank_key)
-    return FinTS3PinTanClient(
+    client = FinTS3PinTanClient(
         bank_identifier=bank.blz,
         user_id=creds.username,
         pin=creds.pin,
         server=bank.fints_url,
         product_id=resolve_product_id(),
+        product_version='1.0.0',
         customer_id=creds.username,
         from_data=from_data,
     )
+    if creds.bank_key.strip().lower() == "norisbank":
+        client._finance_force_tan_mechanism = "921"
+        client._finance_force_tan_medium = _require_norisbank_tan_medium(creds)
+    _record_connection_responses(client)
+    return client
 
 
 def validate_transfer_result(result: Any) -> None:

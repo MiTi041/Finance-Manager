@@ -51,7 +51,7 @@ export const transactionTutorialSlides: Slide[] = [
       <div className="space-y-3">
         <p>
           Oben in der Liste findest du die <strong>Suchleiste</strong>. Gib einfach einen Begriff
-          ein – die Liste filtert sofort nach Zahlungspartner, Verwendungszweck, IBAN, Datum und
+          ein - die Liste filtert sofort nach Zahlungspartner, Verwendungszweck, IBAN, Datum und
           mehr.
         </p>
         <div className="flex items-center gap-3 rounded-lg border bg-muted/50 px-4 py-3">
@@ -125,7 +125,7 @@ export const transactionTutorialSlides: Slide[] = [
               <CheckIcon className="mt-0.5 size-4 shrink-0 text-violet-500" />
               <div>
                 <strong>{label}</strong>
-                <span className="text-muted-foreground"> – {desc}</span>
+                <span className="text-muted-foreground"> - {desc}</span>
               </div>
             </div>
           ))}
@@ -225,7 +225,7 @@ export const transactionTutorialSlides: Slide[] = [
     description: (
       <div className="space-y-3">
         <p>
-          Jede Transaktion bekommt eine Kategorie – z.&nbsp;B. "Lebensmittel", "Miete" oder
+          Jede Transaktion bekommt eine Kategorie - z.&nbsp;B. "Lebensmittel", "Miete" oder
           "Gehalt". So behältst du den Überblick über deine Finanzen.
         </p>
         <div className="flex items-center gap-3 rounded-lg border bg-muted/50 px-4 py-3">
@@ -244,7 +244,7 @@ export const transactionTutorialSlides: Slide[] = [
           </span>
         </div>
         <p className="text-xs text-muted-foreground">
-          Du kannst nach Kategorien suchen – einfach anfangen zu tippen.
+          Du kannst nach Kategorien suchen - einfach anfangen zu tippen.
         </p>
       </div>
     ),
@@ -261,7 +261,7 @@ export const transactionTutorialSlides: Slide[] = [
         <div className="flex items-center gap-3 rounded-lg border border-violet-500/20 bg-violet-500/5 px-4 py-3">
           <Sparkles className="size-5 shrink-0 text-violet-500" />
           <span className="text-sm">
-            Die <strong>Konfidenz</strong> (0–100%) zeigt, wie sicher die KI ist. Je höher, desto
+            Die <strong>Konfidenz</strong> (0-100%) zeigt, wie sicher die KI ist. Je höher, desto
             zuverlässiger.
           </span>
         </div>
@@ -310,14 +310,14 @@ export const transactionTutorialSlides: Slide[] = [
     description: (
       <div className="space-y-3">
         <p>
-          In der geöffneten Transaktion kannst du <strong>Notizen</strong> hinzufügen – z.&nbsp;B.
+          In der geöffneten Transaktion kannst du <strong>Notizen</strong> hinzufügen - z.&nbsp;B.
           für nützliche Infos oder Merkhinweise.
         </p>
         <div className="flex items-center gap-3 rounded-lg border bg-muted/50 px-4 py-3">
           <Tags className="size-5 shrink-0 text-violet-500" />
           <span className="text-sm">
-            Schreibe <strong>#hashtags</strong> oder <strong>tag.namen</strong> in die Notiz – sie werden
-            automatisch als violette Tags angezeigt
+            Schreibe <strong>#hashtags</strong> oder <strong>tag.namen</strong> in die Notiz - sie
+            werden automatisch als violette Tags angezeigt
           </span>
         </div>
         <div className="flex items-center gap-3 rounded-lg border bg-amber-500/5 border-amber-500/20 px-4 py-3">

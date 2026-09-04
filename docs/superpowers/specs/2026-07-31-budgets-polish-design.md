@@ -14,7 +14,7 @@ Budgets-Seite (`frontend/src/pages/budgets/budgets-page.tsx`) optisch und intera
 - **Kopfzeile:** Icon in runder Badge (`size-9 rounded-full bg-muted`) + Name links; rechts **Status-Pill** + `⋮`-Dropdown (Popover wie bei Sparplänen, `align="end"`, `w-44 p-1`).
 - **Status-Pill** nach Verbrauch (Badge-Style `rounded-full px-2 py-0.5 text-xs font-medium`):
   - `< 70 %` → „Im Plan" (`bg-emerald-500/10 text-emerald-600 dark:text-emerald-400`)
-  - `70–100 %` → „Fast erreicht" (`bg-amber-500/10 text-amber-600 dark:text-amber-400`)
+  - `70-100 %` → „Fast erreicht" (`bg-amber-500/10 text-amber-600 dark:text-amber-400`)
   - `> 100 %` → „Überzogen" (`bg-red-500/10 text-red-600 dark:text-red-400`)
 - **Dropdown (Popover, Muster `savings-plans-card.tsx`):**
   - **Bearbeiten** (Pencil) → öffnet Bearbeiten-Dialog; schließt das Popover vorher.

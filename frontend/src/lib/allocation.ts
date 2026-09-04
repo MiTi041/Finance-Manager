@@ -139,18 +139,62 @@ export class TanRequiredError extends Error {
   }
 }
 
+export type VopRequiredInfo = {
+  vop_token: string;
+  result?: string | null;
+  recipient_iban?: string;
+  recipient_name?: string;
+  close_match_name?: string | null;
+  other_identification?: string | null;
+  notice?: string | null;
+};
+
+export class VopRequiredError extends Error {
+  constructor(public readonly info: VopRequiredInfo) {
+    super(
+      "Die Bank konnte den Empfängernamen nicht mit der IBAN abgleichen. Bitte bestätige die Überweisung.",
+    );
+    this.name = "VopRequiredError";
+  }
+}
+
+export function throwForTransfer409(detail: Record<string, unknown> | undefined): void {
+  if (!detail) return;
+  if (detail.code === "TAN_REQUIRED") {
+    throw new TanRequiredError(
+      typeof detail.challenge === "string" ? detail.challenge : null,
+      Boolean(detail.decoupled),
+    );
+  }
+  if (detail.code === "VOP_REQUIRED") {
+    throw new VopRequiredError({
+      vop_token: String(detail.vop_token ?? ""),
+      result: detail.result ? String(detail.result) : null,
+      recipient_iban: detail.recipient_iban ? String(detail.recipient_iban) : undefined,
+      recipient_name: detail.recipient_name ? String(detail.recipient_name) : undefined,
+      close_match_name: detail.close_match_name ? String(detail.close_match_name) : null,
+      other_identification: detail.other_identification
+        ? String(detail.other_identification)
+        : null,
+      notice: detail.notice ? String(detail.notice) : null,
+    });
+  }
+}
+
 export async function executeTransfer(
   runBucketId: number,
   tan?: string,
   amount?: number,
   instant?: boolean,
   tilgung?: boolean,
+  vopToken?: string,
 ): Promise<{ status: string; transfer: unknown }> {
   const body: Record<string, unknown> = {};
   if (tan) body.tan = tan;
   if (amount != null) body.amount = amount;
   if (instant != null) body.instant = instant;
   if (tilgung != null) body.tilgung = tilgung;
+  if (vopToken) body.vop_token = vopToken;
   const response = await fetch(`${getApiBaseUrl()}/allocation/transfer/${runBucketId}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -159,10 +203,7 @@ export async function executeTransfer(
 
   if (response.status === 409) {
     const payload = await response.json().catch(() => ({}));
-    const detail = payload?.detail || {};
-    if (detail?.code === "TAN_REQUIRED") {
-      throw new TanRequiredError(detail.challenge, detail.decoupled);
-    }
+    throwForTransfer409(payload?.detail || {});
   }
 
   const result = await parseJsonResponse(response);
@@ -300,11 +341,13 @@ export async function executeSavingsPlanTransfer(
   tan?: string,
   amount?: number,
   instant?: boolean,
+  vopToken?: string,
 ): Promise<{ status: string; transfer: unknown }> {
   const body: Record<string, unknown> = {};
   if (tan) body.tan = tan;
   if (amount != null) body.amount = amount;
   if (instant != null) body.instant = instant;
+  if (vopToken) body.vop_token = vopToken;
   const response = await fetch(`${getApiBaseUrl()}/allocation/savings-plans/${planId}/transfer`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -313,10 +356,7 @@ export async function executeSavingsPlanTransfer(
 
   if (response.status === 409) {
     const payload = await response.json().catch(() => ({}));
-    const detail = payload?.detail || {};
-    if (detail?.code === "TAN_REQUIRED") {
-      throw new TanRequiredError(detail.challenge, detail.decoupled);
-    }
+    throwForTransfer409(payload?.detail || {});
   }
 
   const result = await parseJsonResponse(response);

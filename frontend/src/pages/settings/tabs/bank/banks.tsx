@@ -17,10 +17,12 @@ import {
   adjustBankAccountBalance,
   type StoredBankCredentials,
   updateBankAccount,
+  updateBankCredentials,
 } from "@/lib/bank/credentials";
 import { EmptyState } from "@/components/empty-state";
-import { Check, Loader2, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { Check, Info, Loader2, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import { BankLogo } from "@/components/bank-logo";
+import { ToggleRow } from "@/components/toggle-row";
 
 type BanksProps = {
   linkedBanks: StoredBankCredentials[];
@@ -33,6 +35,7 @@ type EditingState = {
   scope: string;
   iban: string;
   accountName: string;
+  holderName: string;
 } | null;
 
 type AccountDeleteState = {
@@ -55,6 +58,7 @@ function getAccounts(credential: StoredBankCredentials) {
     return accounts.map((account, index) => ({
       iban: account.iban ?? credential.account_iban ?? "",
       account_name: account.account_name ?? credential.account_name ?? "",
+      holder_name: account.holder_name ?? "",
       fallback: index === 0 && !account.iban && credential.account_iban,
     }));
   }
@@ -62,6 +66,7 @@ function getAccounts(credential: StoredBankCredentials) {
     {
       iban: credential.account_iban ?? "",
       account_name: credential.account_name ?? "",
+      holder_name: "",
       fallback: true,
     },
   ];
@@ -82,6 +87,7 @@ export function Banks({
   const [accountToDelete, setAccountToDelete] = useState<AccountDeleteState>(null);
   const [discardChangesOpen, setDiscardChangesOpen] = useState(false);
   const [balanceError, setBalanceError] = useState<string | null>(null);
+  const [autoSyncSaving, setAutoSyncSaving] = useState<string | null>(null);
 
   const bankCount = useMemo(() => linkedBanks.length, [linkedBanks.length]);
 
@@ -94,18 +100,34 @@ export function Banks({
     );
   }
 
-  const isDirty = (accountName: string) =>
-    Boolean(editing && editing.accountName.trim() !== accountName.trim());
+  const isDirty = (accountName: string, holderName: string) =>
+    Boolean(
+      editing &&
+        (editing.accountName.trim() !== accountName.trim() ||
+          editing.holderName.trim() !== holderName.trim()),
+    );
 
   const handleSaveAndDiscard = async () => {
     if (!editing) return;
     setSaving(true);
     try {
-      await updateBankAccount(editing.scope, editing.iban, { account_name: editing.accountName });
+      await updateBankAccount(editing.scope, editing.iban, {
+        account_name: editing.accountName,
+        holder_name: editing.holderName.trim() || undefined,
+      });
       setEditing(null);
       setDiscardChangesOpen(false);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleToggleAutoSync = async (scope: string, checked: boolean) => {
+    setAutoSyncSaving(scope);
+    try {
+      await updateBankCredentials(scope, { auto_sync: checked });
+    } finally {
+      setAutoSyncSaving(null);
     }
   };
 
@@ -204,7 +226,30 @@ export function Banks({
 
             {/* ── Accounts list ── */}
             <CardContent className="px-0 pb-0">
-              <div className="border-t divide-y">
+              <div className="border-b border-t px-5 py-3">
+                <ToggleRow
+                  title="Automatische Synchronisation"
+                  description={
+                    bank.auto_sync !== false
+                      ? "Wird automatisch im Hintergrund synchronisiert."
+                      : "Wird nur noch manuell synchronisiert."
+                  }
+                  icon={<RefreshCw className="size-4" />}
+                  size="sm"
+                  checked={bank.auto_sync !== false}
+                  disabled={autoSyncSaving === bank.scope}
+                  pill={autoSyncSaving === bank.scope ? "…" : undefined}
+                  onCheckedChange={(checked) => void handleToggleAutoSync(bank.scope, checked)}
+                />
+                <p className="mt-2 flex items-center gap-1.5 text-[11px] leading-snug text-muted-foreground">
+                  <Info className="size-3.5 shrink-0" />
+                  <span>
+                    Auto-Sync-Deaktivierung ist empfohlen bei Banken, die für jede Aktion eine
+                    TAN-Bestätigung benötigen.
+                  </span>
+                </p>
+              </div>
+              <div className="divide-y">
                 {accounts.map((account) => {
                   const accountKey = `${bank.scope}:${account.iban || account.account_name}`;
                   const isEditing = editing?.scope === bank.scope && editing?.iban === account.iban;
@@ -235,6 +280,7 @@ export function Banks({
                                 scope: bank.scope,
                                 iban: account.iban,
                                 accountName: account.account_name || "",
+                                holderName: account.holder_name || "",
                               })
                             }
                           >
@@ -273,7 +319,7 @@ export function Banks({
                         onOpenChange={(open) => {
                           if (open) return;
 
-                          if (isDirty(account.account_name || "")) {
+                          if (isDirty(account.account_name || "", account.holder_name || "")) {
                             setDiscardChangesOpen(true);
                             return;
                           }
@@ -284,7 +330,7 @@ export function Banks({
                         <DialogContent>
                           <DialogHeader>
                             <DialogTitle>Konto bearbeiten</DialogTitle>
-                            <DialogDescription>Name für dieses Konto ändern.</DialogDescription>
+                            <DialogDescription>Name und Kontoinhaber für dieses Konto ändern.</DialogDescription>
                           </DialogHeader>
                           <div className="grid gap-2">
                             <label className="text-sm font-medium" htmlFor="account-name">
@@ -300,12 +346,31 @@ export function Banks({
                               }
                               autoComplete="off"
                             />
+                            <label className="text-sm font-medium" htmlFor="account-holder">
+                              Kontoinhaber
+                            </label>
+                            <Input
+                              id="account-holder"
+                              value={editing?.holderName ?? ""}
+                              onChange={(e) =>
+                                setEditing((cur) =>
+                                  cur ? { ...cur, holderName: e.target.value } : cur,
+                                )
+                              }
+                              placeholder="z. B. Michael Tissen"
+                              autoComplete="off"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Der Kontoinhaber wird als Empfängername bei Überweisungen an dieses
+                              Konto verwendet (wichtig für den Namensabgleich der Bank). Er wird
+                              automatisch aus den Bankdaten übernommen, sofern verfügbar.
+                            </p>
                           </div>
                           <DialogFooter className="justify-end">
                             <Button
                               disabled={
                                 saving ||
-                                !isDirty(account.account_name || "") ||
+                                !isDirty(account.account_name || "", account.holder_name || "") ||
                                 !editing?.accountName.trim()
                               }
                               onClick={async () => {
@@ -314,6 +379,7 @@ export function Banks({
                                 try {
                                   await updateBankAccount(editing.scope, editing.iban, {
                                     account_name: editing.accountName,
+                                    holder_name: editing.holderName.trim() || undefined,
                                   });
                                   setEditing(null);
                                 } finally {

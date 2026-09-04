@@ -166,7 +166,7 @@ export function TransferSetupDialog({
               <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
                 <Info className="mt-0.5 size-4 shrink-0" />
                 <span>
-                  Kontostand ist 0 oder unbekannt – von diesem Konto kann nicht überwiesen werden.
+                  Kontostand ist 0 oder unbekannt. Von diesem Konto kann nicht überwiesen werden.
                 </span>
               </div>
             )
@@ -207,7 +207,7 @@ export function TransferSetupDialog({
                 return (
                   <div className="flex w-full flex-col items-start gap-0">
                     <span className="truncate text-sm leading-tight">
-                      {isBank ? a.name : (a as RecipientAccountRecord).account_name}
+                      {isBank ? (a as OwnAccount).name : (a as RecipientAccountRecord).account_name}
                     </span>
                     <span className="truncate font-mono text-[11px] text-muted-foreground leading-tight">
                       {formatIban(a.iban)}
@@ -224,7 +224,7 @@ export function TransferSetupDialog({
                 return (
                   <div className="flex flex-col gap-0.5 py-1">
                     <span className="font-medium text-sm leading-tight">
-                      {isBank ? a.name : (a as RecipientAccountRecord).account_name}
+                      {isBank ? (a as OwnAccount).name : (a as RecipientAccountRecord).account_name}
                     </span>
                     <span className="text-xs text-muted-foreground leading-tight">
                       {isBank ? "Eigenes Konto" : (a as RecipientAccountRecord).recipient_name}
@@ -286,35 +286,35 @@ export function TransferSetupDialog({
                 />
               </div>
             </div>
-              {!manualIbanValid && (
-                <p className="flex items-center gap-1.5 text-xs text-destructive">
-                  <TriangleAlert className="size-3 shrink-0" /> IBAN ist ungültig.
-                </p>
-              )}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="save-recipient"
-                    checked={saveRecipient}
-                    onCheckedChange={(c) => setSaveRecipient(c === true)}
-                  />
-                  <Label htmlFor="save-recipient" className="font-normal cursor-pointer">
-                    Als Empfängerkonto speichern
-                  </Label>
-                </div>
-                {saveRecipient && (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="account-name">Name für das Empfängerkonto</Label>
-                    <Input
-                      id="account-name"
-                      value={accountName}
-                      onChange={(e) => setAccountName(e.target.value)}
-                      placeholder={manualName || "z. B. Stromrechnung"}
-                    />
-                  </div>
-                )}
+            {!manualIbanValid && (
+              <p className="flex items-center gap-1.5 text-xs text-destructive">
+                <TriangleAlert className="size-3 shrink-0" /> IBAN ist ungültig.
+              </p>
+            )}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="save-recipient"
+                  checked={saveRecipient}
+                  onCheckedChange={(c) => setSaveRecipient(c === true)}
+                />
+                <Label htmlFor="save-recipient" className="font-normal cursor-pointer">
+                  Als Empfängerkonto speichern
+                </Label>
               </div>
+              {saveRecipient && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="account-name">Name für das Empfängerkonto</Label>
+                  <Input
+                    id="account-name"
+                    value={accountName}
+                    onChange={(e) => setAccountName(e.target.value)}
+                    placeholder={manualName || "z. B. Stromrechnung"}
+                  />
+                </div>
+              )}
             </div>
+          </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="purpose">Verwendungszweck</Label>

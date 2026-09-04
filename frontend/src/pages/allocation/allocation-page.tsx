@@ -195,7 +195,7 @@ export default function AllocationPage() {
   );
 
   const confirmTransfer = useCallback(
-    async (tan?: string) => {
+    async (tan?: string, vopToken?: string) => {
       const tid = toast.loading("Überweisung wird durchgeführt…");
       try {
         if (savingsPlanIdRef.current) {
@@ -204,6 +204,7 @@ export default function AllocationPage() {
             tan,
             savingsPlanAmountRef.current || undefined,
             transferState.instant,
+            vopToken,
           );
           savingsPlanIdRef.current = 0;
           savingsPlanAmountRef.current = 0;
@@ -214,6 +215,7 @@ export default function AllocationPage() {
             runBucketAmountRef.current > 0 ? runBucketAmountRef.current : undefined,
             transferState.instant,
             transferState.tilgung,
+            vopToken,
           );
         }
         toast.success("Überweisung erfolgreich!", { id: tid });

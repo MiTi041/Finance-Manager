@@ -2,29 +2,117 @@ import datetime
 import logging
 from typing import Any
 
-from fints.client import NeedTANResponse
-
-from finance_server.models.bank import BankCredentials
-
 from finance_server.db import (
     compute_and_store_balance_corrections,
+)
+from finance_server.db import (
     fetch_latest_transaction as fetch_local_latest_transaction,
+)
+from finance_server.db import (
     fetch_transactions as fetch_local_transactions,
+)
+from finance_server.db import (
     insert_transactions as insert_local_transactions,
-    replace_pending_transactions as replace_local_pending_transactions,
+)
+from finance_server.db import (
     load_bank_credentials as load_stored_bank_credentials,
 )
-
-from .common import (
-    MAX_DAYS, INITIAL_SYNC_DAYS,
-    to_decimal_or_none, to_jsonable,
-    build_transactions_cache_key, get_cached_transactions, set_cached_transactions,
+from finance_server.db import (
+    replace_pending_transactions as replace_local_pending_transactions,
 )
-from .client import (
-    with_state_retry, make_client, bootstrap_client, save_state, resolve_tan_until_done,
-)
-from finance_server.services.payroll_parsing import enrich_paypal_merchant
+from finance_server.models.bank import BankCredentials
 from finance_server.services.overdraw_notify import check_pending_overdraw
+from finance_server.services.payroll_parsing import enrich_paypal_merchant
+from fints.client import NeedTANResponse
+
+from .accounts import _extract_account_details, _store_holder_names
+from .client import (
+    _capture_tan_medium_from_challenge,
+    bootstrap_client,
+    make_client,
+    resolve_tan_until_done,
+    save_state,
+    with_state_retry,
+)
+from .common import (
+    INITIAL_SYNC_DAYS,
+    MAX_DAYS,
+    build_transactions_cache_key,
+    get_cached_transactions,
+    set_cached_transactions,
+    to_decimal_or_none,
+    to_jsonable,
+)
+
+
+def _iter_descending_date_chunks(
+    start_date: datetime.date, end_date: datetime.date, chunk_days: int
+):
+    """Liefert (start, end)-Fenster rückwärts vom jüngsten Datum."""
+    cursor = end_date
+    while cursor >= start_date:
+        chunk_start = max(start_date, cursor - datetime.timedelta(days=chunk_days - 1))
+        yield chunk_start, cursor
+        cursor = chunk_start - datetime.timedelta(days=1)
+
+
+def _is_out_of_range_error(err: Exception) -> bool:
+    return "Abrufzeitraum" in str(err)
+
+
+def _fetch_account_transactions(
+    client, account, start_date, end_date, tan_value
+):
+    """Ruft Transaktionen im Zeitraum ab. Manche Institute (z. B. Norisbank)
+    begrenzen den Abrufzeitraum je Anfrage bzw. durch das Kundenprodukt.
+    Lehnt die Bank den kompletten Zeitraum ab, wird rückwärts in Blöcken
+    abgefragt und am ältesten nicht mehr unterstützten Block gestoppt.
+    """
+    def resolve(result):
+        nonlocal tan_value
+        if isinstance(result, NeedTANResponse):
+            _capture_tan_medium_from_challenge(client, result)
+            result = resolve_tan_until_done(client, result, tan_value)
+            tan_value = None
+        return result
+
+    try:
+        result = client.get_transactions(
+            account,
+            start_date=start_date,
+            end_date=end_date,
+            include_pending=True,
+        )
+    except Exception as err:
+        if not _is_out_of_range_error(err):
+            raise
+    else:
+        return resolve(result), tan_value
+
+    for size in (90, 30, 7):
+        merged: list = []
+        first_chunk = True
+        range_too_large = False
+        for chunk_start, chunk_end in _iter_descending_date_chunks(start_date, end_date, size):
+            try:
+                result = client.get_transactions(
+                    account,
+                    start_date=chunk_start,
+                    end_date=chunk_end,
+                    include_pending=(chunk_end == end_date),
+                )
+            except Exception as err:
+                if not _is_out_of_range_error(err):
+                    raise
+                if first_chunk:
+                    range_too_large = True
+                break
+            first_chunk = False
+            merged.extend(resolve(result))
+        if merged or not range_too_large:
+            return merged, tan_value
+
+    return [], tan_value
 
 
 def store_transactions_in_local_db(transactions: list[dict[str, Any]]) -> int:
@@ -86,8 +174,11 @@ def fetch_transactions(
 
         with client:
             while isinstance(client.init_tan_response, NeedTANResponse):
+                _capture_tan_medium_from_challenge(client)
                 client.init_tan_response = resolve_tan_until_done(client, client.init_tan_response, tan_value)
                 tan_value = None
+            holder_by_iban, _ = _extract_account_details(client)
+            _store_holder_names(creds, holder_by_iban)
             save_state(client, creds)
 
             min_start_date: datetime.date | None = None
@@ -127,15 +218,13 @@ def fetch_transactions(
                     else:
                         start_date = datetime.date.today() - datetime.timedelta(days=INITIAL_SYNC_DAYS)
 
-                result = client.get_transactions(account, start_date=start_date, end_date=end, include_pending=True)
+                result, tan_value = _fetch_account_transactions(
+                    client, account, start_date, end, tan_value
+                )
 
                 if start_date is not None:
                     if min_start_date is None or start_date < min_start_date:
                         min_start_date = start_date
-
-                if isinstance(result, NeedTANResponse):
-                    result = resolve_tan_until_done(client, result, tan_value)
-                    tan_value = None
 
                 for item in result:
                     data = item.data if hasattr(item, "data") and isinstance(item.data, dict) else {}

@@ -24,11 +24,13 @@
 ### Task 1: Backend — `budgets`-Tabelle (Schema + Sync-Registry)
 
 **Files:**
+
 - Modify: `backend/finance_server/core/schema.py`
 - Modify: `backend/finance_server/db/sync.py`
 - Test: `backend/tests/test_schema.py` (neu)
 
 **Interfaces:**
+
 - Consumes: bestehende `initialize_database`-Struktur in `schema.py:428`.
 - Produces: Tabelle `budgets` (Spalten `id`, `category_id`, `monthly_amount`, `created_at`, `updated_at`); Sync-Whitelist erweitert.
 
@@ -81,6 +83,7 @@ In `initialize_database` nach `create_allocation_run_buckets_table(connection)` 
 ```
 
 In `backend/finance_server/db/sync.py`:
+
 - Zeile 78 (`VALID_SYNC_TABLES`) ergänzen:
 
 ```python
@@ -111,10 +114,12 @@ git commit -m "feat(budgets): add budgets table schema and sync whitelist"
 ### Task 2: Backend — `db/budgets.py` (CRUD + Ausgaben-Berechnung)
 
 **Files:**
+
 - Create: `backend/finance_server/db/budgets.py`
 - Test: `backend/tests/test_budgets.py` (neu)
 
 **Interfaces:**
+
 - Consumes: Tabelle `budgets` aus Task 1.
 - Produces:
   - `list_budgets(month: str) -> list[dict[str, Any]]`
@@ -462,11 +467,13 @@ git commit -m "feat(budgets): add budget CRUD and spent calculation"
 ### Task 3: Backend — API (`models/budget.py`, `api/budgets.py`, Router-Wiring)
 
 **Files:**
+
 - Create: `backend/finance_server/models/budget.py`
 - Create: `backend/finance_server/api/budgets.py`
 - Modify: `backend/finance_server/main.py`
 
 **Interfaces:**
+
 - Consumes: `db.budgets` Funktionen aus Task 2.
 - Produces: Router `budgets_router` (importierbar als `from finance_server.api.budgets import router as budgets_router`), Endpunkte:
   - `GET /api/db/budgets?month=YYYY-MM` → `{"budgets": [...]}`
@@ -545,6 +552,7 @@ def delete_budget_endpoint(budget_id: int) -> dict[str, Any]:
 - [ ] **Step 3: Wire router in main.py**
 
 In `backend/finance_server/main.py`:
+
 - Import nach Zeile 23 (`from finance_server.api.sync import router as sync_router`):
 
 ```python
@@ -565,6 +573,7 @@ cd backend
 .venv/bin/python -m ruff check finance_server/api/budgets.py finance_server/models/budget.py finance_server/main.py
 .venv/bin/python -m pytest tests/ -q
 ```
+
 Expected: `ok`, ruff grün, alle Tests PASS.
 
 - [ ] **Step 5: Commit**
@@ -579,10 +588,12 @@ git commit -m "feat(budgets): add budgets REST API"
 ### Task 4: Frontend — `lib/budgets.ts` + Progress-Farben
 
 **Files:**
+
 - Create: `frontend/src/lib/budgets.ts`
 - Modify: `frontend/src/components/ui/progress.tsx`
 
 **Interfaces:**
+
 - Produces:
   - `type Budget = { id: number; category_id: number; name: string; icon: string | null; monthly_amount: number; spent: number; remaining: number; is_over: boolean }`
   - `fetchBudgets(month: string): Promise<Budget[]>`
@@ -666,10 +677,7 @@ function Progress({
   return (
     <div
       data-slot="progress"
-      className={cn(
-        "relative h-2 w-full overflow-hidden rounded-full bg-muted",
-        className,
-      )}
+      className={cn("relative h-2 w-full overflow-hidden rounded-full bg-muted", className)}
     >
       <motion.div
         className={cn("h-full w-full rounded-full bg-primary", indicatorClassName)}
@@ -695,9 +703,11 @@ git commit -m "feat(budgets): add frontend budgets API client and colored progre
 ### Task 5: Frontend — Budgets-Seite
 
 **Files:**
+
 - Create: `frontend/src/pages/budgets/budgets-page.tsx`
 
 **Interfaces:**
+
 - Consumes: `lib/budgets.ts` (Task 4), `fetchCategories` aus `lib/categories/api.ts`, `formatAmount` aus `lib/utils/format`, UI-Komponenten aus `components/ui/*`.
 - Produces: Default-Export `BudgetsPage` mit Monats-Navigation, Header-Karte, Budget-Karten, Hinzufügen-Dialog.
 
@@ -717,7 +727,13 @@ import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 
@@ -742,7 +758,8 @@ function BudgetRow({
   onDelete: (id: number) => void;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
-  const ratio = budget.monthly_amount > 0 ? budget.spent / budget.monthly_amount : budget.spent > 0 ? 1 : 0;
+  const ratio =
+    budget.monthly_amount > 0 ? budget.spent / budget.monthly_amount : budget.spent > 0 ? 1 : 0;
   const color = ratio >= 1 ? "bg-red-500" : ratio >= 0.7 ? "bg-amber-500" : "bg-emerald-500";
 
   const commit = () => {
@@ -773,7 +790,13 @@ function BudgetRow({
                 }}
                 className="h-7 w-24 text-right text-sm tabular-nums"
               />
-              <Button variant="ghost" size="icon" className="size-7" onClick={() => onDelete(budget.id)} aria-label={`Budget für ${budget.name} löschen`}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7"
+                onClick={() => onDelete(budget.id)}
+                aria-label={`Budget für ${budget.name} löschen`}
+              >
                 <Trash2 className="size-4" />
               </Button>
             </div>
@@ -826,11 +849,15 @@ function AddBudgetDialog({
               )}
             >
               <span>{c.icon ?? "🏷️"}</span>
-              <span className="truncate">{c.parent_name ? `${c.parent_name} / ${c.name}` : c.name}</span>
+              <span className="truncate">
+                {c.parent_name ? `${c.parent_name} / ${c.name}` : c.name}
+              </span>
             </button>
           ))}
           {available.length === 0 && (
-            <p className="text-sm text-muted-foreground">Alle Ausgabe-Kategorien haben bereits ein Budget.</p>
+            <p className="text-sm text-muted-foreground">
+              Alle Ausgabe-Kategorien haben bereits ein Budget.
+            </p>
           )}
         </div>
         <Input
@@ -945,11 +972,23 @@ export default function BudgetsPage() {
       <Card className="border-none bg-muted/40 shadow-none">
         <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="size-7" onClick={() => setMonth((m) => shiftMonth(m, -1))} aria-label="Vorheriger Monat">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              onClick={() => setMonth((m) => shiftMonth(m, -1))}
+              aria-label="Vorheriger Monat"
+            >
               <ChevronLeft className="size-4" />
             </Button>
             <span className="min-w-24 text-center font-medium tabular-nums">{month}</span>
-            <Button variant="ghost" size="icon" className="size-7" onClick={() => setMonth((m) => shiftMonth(m, 1))} aria-label="Nächster Monat">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              onClick={() => setMonth((m) => shiftMonth(m, 1))}
+              aria-label="Nächster Monat"
+            >
               <ChevronRight className="size-4" />
             </Button>
           </div>
@@ -966,7 +1005,12 @@ export default function BudgetsPage() {
               <p className="text-muted-foreground">Übrig</p>
               <p className="font-semibold tabular-nums">{formatAmount(totals.remaining)}</p>
             </div>
-            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setAddOpen(true)}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setAddOpen(true)}
+            >
               <Plus /> Budget hinzufügen
             </Button>
           </div>
@@ -1017,18 +1061,21 @@ git commit -m "feat(budgets): add budgets page"
 ### Task 6: Frontend — Routing, Sidebar-Badge, Breadcrumb
 
 **Files:**
+
 - Modify: `frontend/src/App.tsx`
 - Modify: `frontend/src/layouts/app-sidebar.tsx`
 - Modify: `frontend/src/components/nav-main.tsx`
 - Modify: `frontend/src/layouts/breadcrumb.tsx`
 
 **Interfaces:**
+
 - Consumes: `fetchBudgets` (Task 4), `BudgetsPage` (Task 5).
 - Produces: Route `/budgets`, Sidebar-Eintrag "Budgets" mit Icon `Target` und rotem Badge (Anzahl überzogener Budgets im aktuellen Monat).
 
 - [ ] **Step 1: Add route**
 
 In `frontend/src/App.tsx`:
+
 - Lazy-Import nach Zeile 16 (`const AllocationPage = ...`):
 
 ```tsx
@@ -1038,12 +1085,19 @@ const BudgetsPage = lazy(() => import("@/pages/budgets/budgets-page"));
 - Route nach Zeile 60:
 
 ```tsx
-<Route path="/budgets" element={<ErrorBoundary pageName="Budgets"><BudgetsPage /></ErrorBoundary>} />
+<Route
+  path="/budgets"
+  element={
+    <ErrorBoundary pageName="Budgets">
+      <BudgetsPage />
+    </ErrorBoundary>
+  }
+/>
 ```
 
 - [ ] **Step 2: Add breadcrumb title**
 
-In `frontend/src/layouts/breadcrumb.tsx`, im `titles`-Objekt (Zeile 100–107) ergänzen:
+In `frontend/src/layouts/breadcrumb.tsx`, im `titles`-Objekt (Zeile 100-107) ergänzen:
 
 ```ts
 budgets: "Budgets",
@@ -1052,7 +1106,8 @@ budgets: "Budgets",
 - [ ] **Step 3: Add badge support to NavMain**
 
 In `frontend/src/components/nav-main.tsx`:
-- Item-Typ erweitern (Zeile 23–32):
+
+- Item-Typ erweitern (Zeile 23-32):
 
 ```tsx
   items: {
@@ -1071,63 +1126,67 @@ In `frontend/src/components/nav-main.tsx`:
 - Im `!hasChildren`-Zweig, nach `<span>{item.title}</span>` **in beiden** Branches (aktiv, Zeile 57, und Link, Zeile 62) einfügen:
 
 ```tsx
-{item.badge != null && item.badge > 0 && (
-  <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-semibold text-white">
-    {item.badge}
-  </span>
-)}
+{
+  item.badge != null && item.badge > 0 && (
+    <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-semibold text-white">
+      {item.badge}
+    </span>
+  );
+}
 ```
 
 - [ ] **Step 4: Add sidebar entry + badge fetch**
 
 In `frontend/src/layouts/app-sidebar.tsx`:
+
 - Imports anpassen (Zeile 2 und nach Zeile 16):
 
 ```tsx
 import { FileText, Gauge, Repeat, ScanSearch, Target, Wallet } from "lucide-react";
 ```
+
 ```tsx
 import { fetchBudgets } from "@/lib/budgets";
 ```
 
-- Modul-`navData` (Zeile 21–50) löschen und im Component-Body (vor `return`) neu aufbauen; das Component bekommt State + Callback:
+- Modul-`navData` (Zeile 21-50) löschen und im Component-Body (vor `return`) neu aufbauen; das Component bekommt State + Callback:
 
 ```tsx
-  const [overBudgetCount, setOverBudgetCount] = React.useState(0);
+const [overBudgetCount, setOverBudgetCount] = React.useState(0);
 
-  const refreshOverBudget = React.useCallback(async () => {
-    try {
-      const d = new Date();
-      const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      const rows = await fetchBudgets(month);
-      setOverBudgetCount(rows.filter((b) => b.is_over).length);
-    } catch {
-      setOverBudgetCount(0);
-    }
-  }, []);
+const refreshOverBudget = React.useCallback(async () => {
+  try {
+    const d = new Date();
+    const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const rows = await fetchBudgets(month);
+    setOverBudgetCount(rows.filter((b) => b.is_over).length);
+  } catch {
+    setOverBudgetCount(0);
+  }
+}, []);
 
-  const navData = {
-    navMain: [
-      { title: "Dashboard", url: "/dashboard", icon: Gauge },
-      { title: "Transaktionen", url: "/transactions", icon: FileText },
-      { title: "Abonnements", url: "/subscriptions", icon: Repeat },
-      { title: "Analyse", url: "/analytics", icon: ScanSearch },
-      { title: "Finanzplan", url: "/finance-plan", icon: Wallet },
-      { title: "Budgets", url: "/budgets", icon: Target, badge: overBudgetCount },
-    ],
-  };
+const navData = {
+  navMain: [
+    { title: "Dashboard", url: "/dashboard", icon: Gauge },
+    { title: "Transaktionen", url: "/transactions", icon: FileText },
+    { title: "Abonnements", url: "/subscriptions", icon: Repeat },
+    { title: "Analyse", url: "/analytics", icon: ScanSearch },
+    { title: "Finanzplan", url: "/finance-plan", icon: Wallet },
+    { title: "Budgets", url: "/budgets", icon: Target, badge: overBudgetCount },
+  ],
+};
 ```
 
 - Im Mount-`useEffect` (nach `void updateCacheAge();`) einfügen:
 
 ```tsx
-    void refreshOverBudget();
+void refreshOverBudget();
 ```
 
-- Im `handleRefresh`-Callback (Zeile 187–190) einfügen:
+- Im `handleRefresh`-Callback (Zeile 187-190) einfügen:
 
 ```tsx
-      void refreshOverBudget();
+void refreshOverBudget();
 ```
 
 - Die Dependency-Liste des Mount-`useEffect` um `refreshOverBudget` ergänzen (Zeile ~228, sonst warnt `eslint-plugin-react-hooks`):
@@ -1155,6 +1214,7 @@ git commit -m "feat(budgets): wire budgets route, sidebar entry and over-budget 
 ```bash
 cd backend && .venv/bin/python -m pytest tests/ -q
 ```
+
 Expected: alle PASS.
 
 - [ ] **Step 2: Backend-Lint**
@@ -1162,6 +1222,7 @@ Expected: alle PASS.
 ```bash
 cd backend && .venv/bin/python -m ruff check finance_server/ tests/
 ```
+
 Expected: keine Fehler.
 
 - [ ] **Step 3: Frontend-Typecheck + Build**
@@ -1169,6 +1230,7 @@ Expected: keine Fehler.
 ```bash
 cd frontend && npx tsc --noEmit && pnpm build
 ```
+
 Expected: keine Fehler.
 
 - [ ] **Step 4: Manueller Smoke-Test**
@@ -1187,4 +1249,5 @@ Expected: keine Fehler.
 ```bash
 git add -A && git commit -m "feat(budgets): fix review findings"
 ```
+
 Nur ausführen, wenn Step 4 Änderungen ergeben hat; sonst überspringen.

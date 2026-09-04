@@ -1,5 +1,5 @@
 import { getApiBaseUrl, parseJsonResponse } from "./api";
-import { TanRequiredError } from "./allocation";
+import { throwForTransfer409 } from "./allocation";
 import { emitReferenceChange } from "./events";
 import { buildTransferRequestBody, type DirectTransferPayload } from "./transfer-utils";
 
@@ -8,9 +8,11 @@ export { isValidIban } from "./transfer-utils";
 export async function executeDirectTransfer(
   payload: DirectTransferPayload,
   tan?: string,
+  vopToken?: string,
 ): Promise<{ status: string; transfer: unknown }> {
   const body = buildTransferRequestBody(payload);
   if (tan) body.tan = tan;
+  if (vopToken) body.vop_token = vopToken;
   const response = await fetch(`${getApiBaseUrl()}/transfer`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -19,10 +21,7 @@ export async function executeDirectTransfer(
 
   if (response.status === 409) {
     const data = await response.json().catch(() => ({}));
-    const detail = data?.detail || {};
-    if (detail?.code === "TAN_REQUIRED") {
-      throw new TanRequiredError(detail.challenge, detail.decoupled);
-    }
+    throwForTransfer409(data?.detail || {});
   }
 
   const result = await parseJsonResponse(response);

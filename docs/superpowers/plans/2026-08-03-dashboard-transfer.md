@@ -22,11 +22,13 @@
 ### Task 1: IBAN-Validierung + Transfer-Request-Builder
 
 **Files:**
+
 - Create: `frontend/src/lib/transfer-utils.ts` (dependency-frei: `isValidIban`, `buildTransferRequestBody`, `DirectTransferPayload`)
 - Create: `frontend/src/lib/direct-transfer.ts` (`executeDirectTransfer` — POST `/transfer`, 409-TAN-Handling, `emitReferenceChange`)
 - Test: `frontend/src/lib/direct-transfer.test.ts`
 
 **Steps:**
+
 - [x] Test schreiben (Checksumme, Body-Mapping).
 - [x] `transfer-utils.ts` + `direct-transfer.ts` implementieren.
 - [x] `node --test src/lib/direct-transfer.test.ts` grün.
@@ -35,9 +37,11 @@
 ### Task 2: StatCard action-Prop
 
 **Files:**
+
 - Modify: `frontend/src/pages/dashboard/components/stat-card.tsx`
 
 **Steps:**
+
 - [x] `action?: ReactNode` im Header-Row (nach Titel, vor Icon).
 - [x] `pnpm --dir frontend build` ok.
 - [x] Commit: `feat(dashboard): support action slot on stat card`
@@ -45,22 +49,26 @@
 ### Task 3: Transfer-Setup-Dialog
 
 **Files:**
+
 - Create: `frontend/src/pages/dashboard/components/transfer-setup-dialog.tsx`
 
 **Steps:**
+
 - [x] Absender-Dropdown (nur Transfer-aktive, Balance sichtbar, vorbelegt).
 - [x] Empfänger (gespeichert + eigene + manuell mit „speichern"-Checkbox).
-- [x] Verwendungszweck-Feld, PayoutSlider 0–Kontostand (Klemmen bei Absenderwechsel).
+- [x] Verwendungszweck-Feld, PayoutSlider 0-Kontostand (Klemmen bei Absenderwechsel).
 - [x] „Ja, bezahlen"-Validierung, State-Reset beim Öffnen.
 - [x] Build ok. Commit: `feat(dashboard): add transfer setup dialog`
 
 ### Task 4: Dashboard-Verkabelung
 
 **Files:**
+
 - Modify: `frontend/src/hooks/use-finance-data.ts` (gibt `linkedBanks` zurück)
 - Modify: `frontend/src/pages/dashboard/dashboard-page.tsx`
 
 **Steps:**
+
 - [x] `canTransferMap` + `recipientAccounts` laden; `senderAccounts`/`ownAccounts` bauen.
 - [x] StatCard `action`-Button „Überweisen" (nur wenn `senderAccounts.length > 0`).
 - [x] Setup-Dialog → bei `saveRecipient` `createRecipientAccount` (best-effort) → `pendingTransfer` → TransferDialog.

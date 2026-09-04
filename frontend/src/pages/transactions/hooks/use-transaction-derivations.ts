@@ -16,11 +16,9 @@ export function useTransactionDerivations(
   transaction: Transaction,
   subscriptionOverride: SubscriptionOverride | null,
 ) {
-  const isRefund =
-    transaction.betrag.wert > 0 && transaction.refundLinks.length > 0;
+  const isRefund = transaction.betrag.wert > 0 && transaction.refundLinks.length > 0;
 
-  const linkedRefundTotal =
-    transaction.betrag.wert < 0 ? transaction.betrag.refundTotal : 0;
+  const linkedRefundTotal = transaction.betrag.wert < 0 ? transaction.betrag.refundTotal : 0;
 
   const refundRemaining = useMemo(
     () => Math.max(0, transaction.betrag.wert - transaction.refundAttributed),
@@ -36,8 +34,7 @@ export function useTransactionDerivations(
   }, [transaction, linkedRefundTotal, isRefund, hasRefunds, refundRemaining]);
 
   const showRefundSection =
-    transaction.betrag.wert > 0 ||
-    (transaction.betrag.wert < 0 && linkedRefundTotal > 0);
+    transaction.betrag.wert > 0 || (transaction.betrag.wert < 0 && linkedRefundTotal > 0);
 
   const purpose = transaction.texte.verwendungszweck || "";
   const additionalPurpose = transaction.texte.zusatzVerwendungszweck || "";
@@ -62,7 +59,7 @@ export function useTransactionDerivations(
       subscriptionOverride?.name ||
       transaction.zahlungspartner.datenbankName ||
       transaction.zahlungspartner.name ||
-      "–";
+      "-";
 
   const overridePartnerName =
     subscriptionOverride && transaction.zahlungspartner.name !== displayName
