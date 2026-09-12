@@ -113,10 +113,24 @@ export function BudgetCard({
           ))}
         </div>
 
-        <p className="text-sm font-semibold tabular-nums">
-          {formatAmount(budget.spent)} <span className="font-normal text-muted-foreground">/</span>{" "}
-          {formatAmount(budget.amount)}
-        </p>
+        <div className="flex flex-col gap-0.5">
+          <p className="text-sm font-semibold tabular-nums">
+            {formatAmount(budget.spent)} <span className="font-normal text-muted-foreground">/</span>{" "}
+            {formatAmount(budget.amount)}
+          </p>
+          <p
+            className={cn(
+              "text-sm font-semibold tabular-nums",
+              budget.remaining < 0
+                ? "text-red-600 dark:text-red-400"
+                : "text-emerald-600 dark:text-emerald-400",
+            )}
+          >
+            {budget.remaining < 0
+              ? `${formatAmount(Math.abs(budget.remaining))} überzogen`
+              : `${formatAmount(budget.remaining)} übrig`}
+          </p>
+        </div>
 
         <div className="flex flex-col gap-1">
           <Progress value={ratio * 100} indicatorClassName={color} className="h-2.5 w-full" />

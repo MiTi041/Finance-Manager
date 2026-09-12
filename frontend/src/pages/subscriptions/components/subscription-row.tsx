@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, FileText, Loader2, Pencil, Plus, RotateCcw, Trash2, Undo2, X } from "lucide-react";
+import { Archive, Check, FileText, Loader2, Pencil, Plus, RotateCcw, Trash2, Undo2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { BrandIcon } from "@/components/bank-logo";
 import { HelpButton } from "@/components/ui/help-button";
@@ -30,8 +30,10 @@ type Props = {
     name: string,
   ) => Promise<void>;
   onDismissIdentity: (counterpartyName: string, amount: number) => Promise<void>;
+  onEndSubscription?: (counterpartyName: string, amount: number) => Promise<void>;
   onRemoveIdentity: (counterpartyName: string, amount: number) => Promise<void>;
   onRestoreSubscription?: (identityId: number) => Promise<void>;
+  onReactivateSubscription?: (identityId: number) => Promise<void>;
 };
 
 export function SubscriptionRow({
@@ -42,8 +44,10 @@ export function SubscriptionRow({
   onLinkIdentity,
   onCreateAndLinkIdentity,
   onDismissIdentity,
+  onEndSubscription,
   onRemoveIdentity,
   onRestoreSubscription,
+  onReactivateSubscription,
 }: Props) {
   const hasOverride =
     subscription._counterpartyName !== undefined &&
@@ -103,6 +107,16 @@ export function SubscriptionRow({
     }
   };
 
+  const handleEnd = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await onEndSubscription?.(counterpartyKey, subscription.amount);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleRemove = async () => {
     if (saving) return;
     setSaving(true);
@@ -140,6 +154,7 @@ export function SubscriptionRow({
         : "Dieses Jahr gezahlt";
 
   const isDismissed = subscription.dismissed;
+  const isHidden = isDismissed || subscription.ended;
 
   const handleRestore = async () => {
     if (!onRestoreSubscription || !subscription.subscriptionIdentityId || saving) return;
@@ -151,26 +166,36 @@ export function SubscriptionRow({
     }
   };
 
-  const handleRowClick = isDismissed ? undefined : onToggle;
+  const handleReactivate = async () => {
+    if (!onReactivateSubscription || !subscription.subscriptionIdentityId || saving) return;
+    setSaving(true);
+    try {
+      await onReactivateSubscription(subscription.subscriptionIdentityId);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRowClick = isHidden ? undefined : onToggle;
 
   return (
     <div className="w-full">
       <div
         className={cn(
           "flex w-full items-center border-b border-muted/60 text-left transition-colors",
-          isDismissed ? "bg-muted/40 hover:bg-muted/60" : "bg-background hover:bg-muted/40",
+          isHidden ? "bg-muted/40 hover:bg-muted/60" : "bg-background hover:bg-muted/40",
         )}
       >
         <div
           className={cn(
             "flex w-full items-center gap-4 px-4 py-3",
-            !isDismissed && "cursor-pointer",
+            !isHidden && "cursor-pointer",
           )}
-          onClick={isDismissed ? undefined : handleRowClick}
-          role={isDismissed ? undefined : "button"}
-          tabIndex={isDismissed ? -1 : 0}
+          onClick={isHidden ? undefined : handleRowClick}
+          role={isHidden ? undefined : "button"}
+          tabIndex={isHidden ? -1 : 0}
           onKeyDown={
-            isDismissed
+            isHidden
               ? undefined
               : (e) => {
                   if (e.key === "Enter" || e.key === " ") {
@@ -194,7 +219,7 @@ export function SubscriptionRow({
               <p
                 className={cn(
                   "truncate text-sm font-medium",
-                  isDismissed ? "text-muted-foreground" : "text-foreground",
+                  isHidden ? "text-muted-foreground" : "text-foreground",
                 )}
               >
                 {displayName}
@@ -202,16 +227,16 @@ export function SubscriptionRow({
                   <span className="ml-1 text-xs text-muted-foreground">{subscription.name}</span>
                 ) : null}
               </p>
-              {isDismissed ? (
+              {isHidden ? (
                 <span className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                  Ausgeblendet
+                  {isDismissed ? "Ausgeblendet" : "Nicht mehr aktiv"}
                 </span>
               ) : (
                 <Badge variant="secondary" className="shrink-0 px-1.5 py-0 text-[10px] leading-4">
                   {subscription.frequencyLabel}
                 </Badge>
               )}
-              {paidInPeriod && !isDismissed && (
+              {paidInPeriod && !isHidden && (
                 <span className="inline-flex items-center gap-1 rounded-md bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium text-green-600 dark:text-green-400">
                   <Check className="size-3" />
                   {paidLabel}
@@ -222,7 +247,7 @@ export function SubscriptionRow({
               <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
                 Nächste: {new Intl.DateTimeFormat("de-DE").format(nextDate)}
               </span>
-              {daysUntil >= 0 && daysUntil <= 7 && !isDismissed && (
+              {daysUntil >= 0 && daysUntil <= 7 && !isHidden && (
                 <Badge variant="destructive" className="px-1.5 py-0 text-[10px] leading-4">
                   in {daysUntil} {daysUntil === 1 ? "Tag" : "Tagen"}
                 </Badge>
@@ -231,7 +256,7 @@ export function SubscriptionRow({
           </div>
 
           <div className="flex shrink-0 items-center gap-3">
-            {isDismissed ? (
+            {isHidden ? (
               <Button
                 type="button"
                 size="sm"
@@ -239,7 +264,7 @@ export function SubscriptionRow({
                 disabled={saving}
                 onClick={(e) => {
                   e.stopPropagation();
-                  void handleRestore();
+                  void (isDismissed ? handleRestore() : handleReactivate());
                 }}
                 className="gap-1.5"
               >
@@ -248,7 +273,7 @@ export function SubscriptionRow({
                 ) : (
                   <RotateCcw className="size-3.5" />
                 )}
-                Wiederherstellen
+                {isDismissed ? "Wiederherstellen" : "Wieder aktivieren"}
               </Button>
             ) : (
               <>
@@ -268,7 +293,7 @@ export function SubscriptionRow({
                 </span>
               </>
             )}
-            {!isDismissed && (
+            {!isHidden && (
               <span
                 className={cn(
                   "text-muted-foreground/40 transition-transform duration-200",
@@ -293,10 +318,36 @@ export function SubscriptionRow({
         </div>
       </div>
 
-      {!isDismissed && isExpanded && (
+      {!isHidden && isExpanded && (
         <div className="border-b border-muted/60 bg-muted/20 text-sm">
           <div className="flex w-full flex-col">
             <div className="flex justify-end px-4 py-2 gap-2 border-b border-muted">
+              {onEndSubscription && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={saving}
+                      onClick={() => void handleEnd()}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      <Archive className="size-3.5" />
+                      Nicht mehr aktiv
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-[260px] space-y-2 text-xs">
+                    <p>
+                      Markiert dieses Abonnement als beendet. Es verschwindet aus der Liste, die
+                      bisherigen Buchungen bleiben aber historisch im Diagramm erhalten.
+                    </p>
+                    <p className="text-muted-foreground">
+                      Über „Ausgeblendete anzeigen" kannst du es später wieder aktivieren.
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button

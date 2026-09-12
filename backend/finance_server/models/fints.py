@@ -10,6 +10,7 @@ from finance_server.models.bank import BankCredentials
 
 class AccountsRequest(BaseModel):
     credentials: BankCredentials | None = None
+    tan: str | None = None
 
 
 class TransactionsRequest(BaseModel):

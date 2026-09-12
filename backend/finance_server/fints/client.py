@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from fints.client import FinTS3PinTanClient, NeedTANResponse, TransactionResponse
-from fints.exceptions import FinTSClientError
+from fints.exceptions import FinTSClientError, FinTSConnectionError
 from fints.utils import minimal_interactive_cli_bootstrap
 
 from finance_server.core.config import settings
@@ -161,6 +161,12 @@ def with_state_retry(
             clear_state_files_for_creds(creds)
             return run_fn(None, *args, **kwargs)
         raise
+    except FinTSConnectionError as err:
+        # Transportfehler (z. B. Bank schliesst die Verbindung ohne Antwort).
+        # Einmalig mit frischem Dialog/State wiederholen.
+        logging.warning("FinTS transport error, retrying with fresh state: %s", err)
+        clear_state_files_for_creds(creds)
+        return run_fn(None, *args, **kwargs)
 
 
 def should_retry_without_state(err: Exception) -> bool:
@@ -253,6 +259,7 @@ def bootstrap_client(client: FinTS3PinTanClient) -> None:
             _bootstrap_with_forced_tan_mechanism(client, forced, _forced_tan_medium(client))
         else:
             minimal_interactive_cli_bootstrap(client)
+        client._bootstrap_mode = False
     except ValueError as err:
         if "Could not find system_id" not in str(err):
             raise
@@ -348,6 +355,24 @@ def _require_norisbank_tan_medium(creds: BankCredentials) -> str:
     )
 
 
+def _apply_bank_specific_client_config(
+    client: FinTS3PinTanClient, creds: BankCredentials
+) -> None:
+    """Setzt institutsspezifische Client-Flags (TAN-Verfahren etc.)."""
+    bank_key = creds.bank_key.strip().lower()
+    if bank_key == "norisbank":
+        client._finance_force_tan_mechanism = "921"
+        client._finance_force_tan_medium = _require_norisbank_tan_medium(creds)
+    elif bank_key == "consorsbank":
+        # Consorsbank/myPrivateBank-App (Decoupled, 901) verlangt eine
+        # PSD2-Login-SCA. Das HKTAN-Segment im Dialog-Init wird benoetigt; die
+        # 0030/3955-Antwort kommt am HKIDN-Segment an (siehe fints/dialog.py).
+        client._finance_force_tan_mechanism = "901"
+        # Trotz HKKAZ:N in HIPINS lehnt Consorsbank den Umsatzabruf ohne HKTAN
+        # mit 9010 "Verarbeitung nicht moeglich" ab.
+        client.force_twostep_tan = {"HKKAZ"}
+
+
 def make_client(creds: BankCredentials, from_data: bytes | None) -> FinTS3PinTanClient:
     bank = get_bank_definition(creds.bank_key)
     client = FinTS3PinTanClient(
@@ -360,9 +385,7 @@ def make_client(creds: BankCredentials, from_data: bytes | None) -> FinTS3PinTan
         customer_id=creds.username,
         from_data=from_data,
     )
-    if creds.bank_key.strip().lower() == "norisbank":
-        client._finance_force_tan_mechanism = "921"
-        client._finance_force_tan_medium = _require_norisbank_tan_medium(creds)
+    _apply_bank_specific_client_config(client, creds)
     _record_connection_responses(client)
     return client
 

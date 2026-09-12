@@ -95,16 +95,21 @@ export default function DashboardPage() {
   const expensePct = ((expenses / (incomes + expenses || 1)) * 100).toFixed(0);
   const incomePct = ((incomes / (incomes + expenses || 1)) * 100).toFixed(0);
 
-  const bankKeyByIban = useMemo(() => {
-    const map = new Map<string, string>();
+  const canTransferByIban = useMemo(() => {
+    const map = new Map<string, boolean>();
     for (const bank of linkedBanks) {
+      const bankCanTransfer = canTransferMap.get(bank.bank_key);
       for (const acc of bank.accounts ?? []) {
         const iban = normalizeIban(acc.iban);
-        if (iban) map.set(iban, bank.bank_key);
+        if (!iban) continue;
+        map.set(
+          iban,
+          acc.can_transfer != null ? acc.can_transfer : bankCanTransfer === true,
+        );
       }
     }
     return map;
-  }, [linkedBanks]);
+  }, [linkedBanks, canTransferMap]);
 
   const senderAccounts: SenderAccount[] = useMemo(
     () =>
@@ -112,7 +117,7 @@ export default function DashboardPage() {
         .filter(
           (a) =>
             (activeAccountIban === "all" || a.accountIban === activeAccountIban) &&
-            canTransferMap.get(bankKeyByIban.get(a.accountIban) ?? "") === true,
+            canTransferByIban.get(a.accountIban) === true,
         )
         .map((a) => ({
           iban: a.accountIban,
@@ -120,7 +125,7 @@ export default function DashboardPage() {
           bankName: a.bankName,
           balance: a.balance,
         })),
-    [accountBalances, canTransferMap, bankKeyByIban, activeAccountIban],
+    [accountBalances, canTransferByIban, activeAccountIban],
   );
 
   const transferableIbanSet = useMemo(

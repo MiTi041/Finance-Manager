@@ -99,6 +99,17 @@ def send_transfer(req: TransferRequest) -> dict[str, Any]:
     try:
         sender_account = _send_prepare(client, req.sender_iban or "")
 
+        stored_sender = find_bank_account_by_iban(sender_account.iban)
+        if stored_sender and stored_sender.get("can_transfer") is False:
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "SENDER_TRANSFER_NOT_SUPPORTED",
+                    "message": "Dieses Konto unterstützt keine Überweisungen.",
+                },
+            )
+
         if req.vop_token:
             # Nutzer hat den Namens-Mismatch bestätigt → ursprünglichen Auftrag
             # (gleiche VOP-ID / derselbe command_seg) autorisieren. Der Token

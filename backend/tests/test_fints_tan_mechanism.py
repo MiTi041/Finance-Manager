@@ -5,11 +5,13 @@ from unittest.mock import patch
 
 import finance_server.services  # noqa: F401  breaks fints circular import
 from finance_server.fints.client import (
+    _apply_bank_specific_client_config,
     _bootstrap_with_forced_tan_mechanism,
     _capture_tan_medium_from_challenge,
     _forced_tan_mechanism,
     _forced_tan_medium,
 )
+from finance_server.models.bank import BankCredentials
 
 
 class FakeTanClient:
@@ -111,6 +113,59 @@ def test_forced_tan_mechanism_marker_only_for_real_clients():
     assert _forced_tan_medium(Marker()) == "Michis IPhone"
     assert _forced_tan_medium(NoMarker()) is None
     assert _forced_tan_medium(object()) is None
+
+
+def test_consorsbank_forces_decoupled_mechanism_without_skipping_init_tan():
+    client = SimpleNamespace()
+    _apply_bank_specific_client_config(
+        client, BankCredentials(bank_key="consorsbank", username="u", pin="p")
+    )
+    assert client._finance_force_tan_mechanism == "901"
+    assert client.force_twostep_tan == {"HKKAZ"}
+    assert not getattr(client, "_finance_skip_init_tan", False)
+
+
+def test_norisbank_forces_bestsign_mechanism():
+    client = SimpleNamespace()
+    _apply_bank_specific_client_config(
+        client,
+        BankCredentials(bank_key="norisbank", username="u", pin="p", tan_medium="Mein Handy"),
+    )
+    assert client._finance_force_tan_mechanism == "921"
+    assert client._finance_force_tan_medium == "Mein Handy"
+    assert not getattr(client, "_finance_skip_init_tan", False)
+
+
+def test_other_banks_have_no_forced_tan_config():
+    client = SimpleNamespace()
+    _apply_bank_specific_client_config(
+        client, BankCredentials(bank_key="dkb", username="u", pin="p")
+    )
+    assert not getattr(client, "_finance_force_tan_mechanism", None)
+    assert not getattr(client, "_finance_skip_init_tan", False)
+
+
+def test_forced_twostep_tan_segment_overrides_missing_hipins():
+    from fints.client import FinTS3PinTanClient
+
+    client = SimpleNamespace(
+        selected_security_function="901",
+        force_twostep_tan={"HKKAZ"},
+        bpd=SimpleNamespace(find_segment_first=lambda _: None),
+    )
+    seg = SimpleNamespace(header=SimpleNamespace(type="HKKAZ"))
+    assert FinTS3PinTanClient._need_twostep_tan_for_segment(client, seg) is True
+
+
+def test_forced_twostep_tan_ignored_for_onestep():
+    from fints.client import FinTS3PinTanClient
+
+    client = SimpleNamespace(
+        selected_security_function="999",
+        force_twostep_tan={"HKKAZ"},
+    )
+    seg = SimpleNamespace(header=SimpleNamespace(type="HKKAZ"))
+    assert FinTS3PinTanClient._need_twostep_tan_for_segment(client, seg) is False
 
 
 def test_capture_tan_medium_from_init_challenge():

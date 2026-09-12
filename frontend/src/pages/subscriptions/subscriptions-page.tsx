@@ -16,6 +16,7 @@ import { VirtualizedList, type VirtualizedListRef } from "@/components/virtualiz
 import {
   createSubscriptionIdentity,
   deleteSubscriptionIdentity,
+  fetchChartSubscriptions,
   listSubscriptionIdentities,
   updateSubscriptionIdentity,
   useSubscriptions,
@@ -65,12 +66,47 @@ export default function SubscriptionsPage() {
   const { loading, error, grouped, subscriptions, reload, removeSubscription, includeDismissed, setIncludeDismissed } = useSubscriptions();
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [zahlungspartnerList, setZahlungspartnerList] = useState<ZahlungspartnerRecord[]>([]);
+  const [chartSubscriptions, setChartSubscriptions] = useState<Subscription[]>([]);
+  const [chartLoading, setChartLoading] = useState(true);
+  const [hasHiddenIdentities, setHasHiddenIdentities] = useState(false);
+  const [hiddenLoaded, setHiddenLoaded] = useState(false);
   const [frequencyFilter, setFrequencyFilter] = useState<"ALL" | SubscriptionFrequency>("ALL");
   const [sortKey, setSortKey] = useState<SortKey | null>("nextDate");
   const [sortAsc, setSortAsc] = useState(true);
   const [searchParams, setSearchParams] = useSearchParams();
   const virtualListRef = useRef<VirtualizedListRef>(null);
   const highlightRef = useRef(false);
+
+  const refreshChart = useCallback(() => {
+    setChartLoading(true);
+    fetchChartSubscriptions()
+      .then((data) => setChartSubscriptions(data))
+      .catch(() => {})
+      .finally(() => setChartLoading(false));
+  }, []);
+
+  useEffect(() => {
+    refreshChart();
+  }, [refreshChart]);
+
+  useEffect(() => {
+    let cancelled = false;
+    listSubscriptionIdentities()
+      .then((data) => {
+        if (!cancelled) {
+          setHasHiddenIdentities(
+            (data.identities ?? []).some((identity) => identity.dismissed || identity.ended),
+          );
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setHiddenLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const name = searchParams.get("name");
@@ -149,6 +185,7 @@ export default function SubscriptionsPage() {
           amount,
           dismissed: true,
         });
+        refreshChart();
         toast.success("Abonnement ausgeblendet");
       } catch (err) {
         await reload();
@@ -157,7 +194,42 @@ export default function SubscriptionsPage() {
         );
       }
     },
-    [reload, removeSubscription],
+    [reload, removeSubscription, refreshChart],
+  );
+
+  const handleEndSubscription = useCallback(
+    async (counterpartyName: string, amount: number) => {
+      removeSubscription(counterpartyName, amount);
+      try {
+        await createSubscriptionIdentity({
+          counterpartyName,
+          amount,
+          ended: true,
+        });
+        refreshChart();
+        toast.success("Abonnement als nicht mehr aktiv markiert");
+      } catch (err) {
+        await reload();
+        toast.error(
+          err instanceof Error ? err.message : "Abonnement konnte nicht als beendet markiert werden",
+        );
+      }
+    },
+    [reload, removeSubscription, refreshChart],
+  );
+
+  const handleReactivateSubscription = useCallback(
+    async (identityId: number) => {
+      try {
+        await updateSubscriptionIdentity(identityId, { ended: false });
+        await reload();
+        refreshChart();
+        toast.success("Abonnement wieder aktiviert");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Abonnement konnte nicht wieder aktiviert werden");
+      }
+    },
+    [reload, refreshChart],
   );
 
   const handleRemoveIdentity = useCallback(
@@ -184,12 +256,13 @@ export default function SubscriptionsPage() {
       try {
         await updateSubscriptionIdentity(identityId, { dismissed: false });
         await reload();
+        refreshChart();
         toast.success("Abonnement wiederhergestellt");
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Abonnement konnte nicht wiederhergestellt werden");
       }
     },
-    [reload],
+    [reload, refreshChart],
   );
 
   const flatItems = useMemo<ListItem[]>(() => {
@@ -291,8 +364,9 @@ export default function SubscriptionsPage() {
   }
 
   const hasSubscriptions = FREQUENCY_ORDER.some((f) => grouped[f].length > 0);
+  const hasAnySubscriptions = hasSubscriptions || chartSubscriptions.length > 0;
 
-  if (!loading && !hasSubscriptions) {
+  if (!loading && !chartLoading && hiddenLoaded && !hasAnySubscriptions && !hasHiddenIdentities) {
     return (
       <EmptyState
         title="Keine Abonnements gefunden"
@@ -393,15 +467,17 @@ export default function SubscriptionsPage() {
               onLinkIdentity={handleLinkIdentity}
               onCreateAndLinkIdentity={handleCreateAndLinkIdentity}
               onDismissIdentity={handleDismissIdentity}
+              onEndSubscription={handleEndSubscription}
               onRemoveIdentity={handleRemoveIdentity}
               onRestoreSubscription={handleRestoreSubscription}
+              onReactivateSubscription={handleReactivateSubscription}
             />
           );
         }}
       />
       </div>
-      {!loading && subscriptions.length > 0 && (
-        <SubscriptionMonthlyChart subscriptions={subscriptions} />
+      {chartSubscriptions.length > 0 && (
+        <SubscriptionMonthlyChart subscriptions={chartSubscriptions} />
       )}
     </div>
   );

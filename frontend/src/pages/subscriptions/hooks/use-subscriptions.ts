@@ -37,6 +37,8 @@ export interface Subscription {
   transactions: SubscriptionTransaction[];
   sequenztyp: string;
   dismissed?: boolean;
+  ended?: boolean;
+  active?: boolean;
   subscriptionIdentityId?: number;
 }
 
@@ -47,6 +49,7 @@ export interface SubscriptionIdentity {
   displayName: string | null;
   zahlungspartnerId: number | null;
   dismissed: boolean;
+  ended: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -57,6 +60,7 @@ export async function createSubscriptionIdentity(payload: {
   displayName?: string | null;
   zahlungspartnerId?: number | null;
   dismissed?: boolean;
+  ended?: boolean;
 }): Promise<SubscriptionIdentity> {
   const response = await fetch(`${getApiBaseUrl()}/db/subscriptions/identities`, {
     method: "POST",
@@ -72,6 +76,7 @@ export async function updateSubscriptionIdentity(
     displayName: string;
     zahlungspartnerId: number | null;
     dismissed: boolean;
+    ended: boolean;
   }>,
 ): Promise<SubscriptionIdentity> {
   const response = await fetch(`${getApiBaseUrl()}/db/subscriptions/identities/${identityId}`, {
@@ -95,6 +100,16 @@ export async function listSubscriptionIdentities(): Promise<{
 }> {
   const response = await fetch(`${getApiBaseUrl()}/db/subscriptions/identities`);
   return parseJsonResponse(response);
+}
+
+export async function fetchChartSubscriptions(): Promise<Subscription[]> {
+  const url = `${getApiBaseUrl()}/db/subscriptions?include_inactive=true`;
+  const response = await fetch(url);
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload?.detail ?? "Abonnements konnten nicht geladen werden");
+  }
+  return payload.subscriptions ?? [];
 }
 
 export function useSubscriptions() {

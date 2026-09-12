@@ -746,7 +746,7 @@ export function BucketSettingsDialog(props: Props) {
                 options={bankAccounts
                   .filter(
                     (a) =>
-                      canTransferMap.get(a.bankKey) !== false && a.iban !== config.recipient_iban,
+                      canTransferMap.get(a.iban) !== false && a.iban !== config.recipient_iban,
                   )
                   .map((a) => ({
                     value: a.iban,

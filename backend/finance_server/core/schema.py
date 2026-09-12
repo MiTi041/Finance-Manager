@@ -206,6 +206,7 @@ def create_bank_accounts_table(connection: sqlite3.Connection) -> None:
             scope TEXT NOT NULL,
             iban TEXT NOT NULL,
             account_name TEXT,
+            can_transfer INTEGER,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(scope, iban),
@@ -402,6 +403,7 @@ def create_subscription_identities_table(connection: sqlite3.Connection) -> None
             display_name TEXT,
             f_zahlungspartner_id INTEGER,
             dismissed INTEGER NOT NULL DEFAULT 0,
+            ended INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (f_zahlungspartner_id) REFERENCES zahlungspartner (id) ON DELETE SET NULL,
@@ -547,6 +549,7 @@ def migrate_subscription_identities(connection: sqlite3.Connection) -> None:
         "subscription_identities",
         {
             "dismissed": "INTEGER NOT NULL DEFAULT 0",
+            "ended": "INTEGER NOT NULL DEFAULT 0",
         },
     )
 
@@ -615,6 +618,7 @@ def initialize_database(connection: sqlite3.Connection) -> None:
         {
             "balance": "REAL",
             "holder_name": "TEXT",
+            "can_transfer": "INTEGER",
         },
     )
 

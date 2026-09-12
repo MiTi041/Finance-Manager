@@ -1,10 +1,11 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 import type { Subscription } from "@/pages/subscriptions/hooks/use-subscriptions";
 import { SectionHeading } from "@/pages/dashboard/components/section-heading";
+import { SubscriptionMonthBreakdownDialog } from "./subscription-month-breakdown-dialog";
 
 const RED = "#ff5c6c";
 const SUBTLE = "#2a2a40";
@@ -19,31 +20,69 @@ function fmtShort(value: number) {
   }).format(value);
 }
 
-type DataPoint = {
+export type MonthSubscriptionContribution = {
+  subscription: Subscription;
+  paidAmount: number;
+  projectedAmount: number;
+  projectedDate: string | null;
+};
+
+export type DataPoint = {
   month: string;
   fullLabel: string;
   ausgaben: number;
+  contributions: MonthSubscriptionContribution[];
 };
+
+function getSubKey(sub: Subscription) {
+  return `${sub._counterpartyName || sub.name}|${sub.amount}`;
+}
 
 function buildMonthlySubscriptionSpending(subscriptions: Subscription[]): DataPoint[] {
   const now = new Date();
   const currentMonth = format(now, "yyyy-MM");
 
-  const months: Record<string, number> = {};
+  const months: Record<string, Record<string, MonthSubscriptionContribution>> = {};
+
+  const ensureContribution = (monthKey: string, sub: Subscription) => {
+    const bucket = (months[monthKey] ??= {});
+    const key = getSubKey(sub);
+    bucket[key] ??= {
+      subscription: sub,
+      paidAmount: 0,
+      projectedAmount: 0,
+      projectedDate: null,
+    };
+    return bucket[key];
+  };
 
   for (const sub of subscriptions) {
+    if (sub.dismissed) continue;
+    if (!sub.transactions || sub.transactions.length === 0) continue;
+
     for (const tx of sub.transactions) {
       const key = format(new Date(tx.date), "yyyy-MM");
-      months[key] = (months[key] ?? 0) + Math.abs(tx.amount);
+      ensureContribution(key, sub).paidAmount += Math.abs(tx.amount);
     }
 
     const nextKey = format(new Date(sub.nextDate), "yyyy-MM");
-    if (nextKey === currentMonth) {
+    const isActive = sub.active !== false;
+    if (isActive && nextKey === currentMonth) {
       const paidThisMonth = sub.transactions.some(
         (tx) => format(new Date(tx.date), "yyyy-MM") === nextKey,
       );
-      if (!paidThisMonth) {
-        months[nextKey] = (months[nextKey] ?? 0) + sub.effectiveAmount;
+      const lastDate = new Date(sub.lastDate);
+      const cycleDays =
+        sub.frequency === "SEMI_ANNUAL" ? 182 : sub.frequency === "ANNUAL" ? 365 : 30;
+      const daysSinceLast =
+        isNaN(lastDate.getTime()) || !sub.lastDate
+          ? Number.POSITIVE_INFINITY
+          : (now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24);
+      const previousCyclePaid = daysSinceLast <= cycleDays + 3;
+      if (!paidThisMonth && previousCyclePaid) {
+        const contribution = ensureContribution(nextKey, sub);
+        contribution.projectedAmount = sub.effectiveAmount;
+        contribution.projectedDate = sub.nextDate;
       }
     }
   }
@@ -53,16 +92,34 @@ function buildMonthlySubscriptionSpending(subscriptions: Subscription[]): DataPo
   for (let i = 0; i < 24; i++) {
     const d = new Date(start.getFullYear(), start.getMonth() + i, 1);
     const key = format(d, "yyyy-MM");
+    const contributions = Object.values(months[key] ?? {}).sort((a, b) => {
+      const totalA = a.paidAmount + a.projectedAmount;
+      const totalB = b.paidAmount + b.projectedAmount;
+      return totalB - totalA || a.subscription.name.localeCompare(b.subscription.name);
+    });
+    const ausgaben = contributions.reduce(
+      (sum, c) => sum + c.paidAmount + c.projectedAmount,
+      0,
+    );
     result.push({
       month: format(d, "MMM", { locale: de }),
       fullLabel: format(d, "MMM yyyy", { locale: de }),
-      ausgaben: months[key] ?? 0,
+      ausgaben,
+      contributions,
     });
   }
   return result;
 }
 
-function ChartTooltip({ active, payload, label }: any) {
+function ChartTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload?: DataPoint }>;
+  label?: string;
+}) {
   if (!active || !payload?.length) return null;
   const data = payload[0]?.payload as DataPoint | undefined;
   return (
@@ -82,6 +139,7 @@ type Props = {
 
 export function SubscriptionMonthlyChart({ subscriptions }: Props) {
   const data = useMemo(() => buildMonthlySubscriptionSpending(subscriptions), [subscriptions]);
+  const [selected, setSelected] = useState<DataPoint | null>(null);
 
   return (
     <div className="min-w-0 flex-[0_0_320px] rounded-panel border border-border bg-card p-[22px_22px_14px] outline-none">
@@ -90,7 +148,11 @@ export function SubscriptionMonthlyChart({ subscriptions }: Props) {
         <div className="size-2 rounded-sm" style={{ background: RED }} />
         Ausgaben
       </div>
-      <div className="h-[200px] [&_svg]:outline-none" role="img" aria-label="Monatliche Abo-Ausgaben als Balkendiagramm">
+      <div
+        className="h-[200px] [&_.recharts-bar-rectangle]:cursor-pointer [&_svg]:outline-none"
+        role="img"
+        aria-label="Monatliche Abo-Ausgaben als Balkendiagramm"
+      >
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={data}
@@ -114,10 +176,25 @@ export function SubscriptionMonthlyChart({ subscriptions }: Props) {
               width={52}
             />
             <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
-            <Bar dataKey="ausgaben" fill={RED} radius={[2, 2, 0, 0]} fillOpacity={0.85} />
+            <Bar
+              dataKey="ausgaben"
+              fill={RED}
+              radius={[2, 2, 0, 0]}
+              fillOpacity={0.85}
+              onClick={(_, index) => setSelected(data[index] ?? null)}
+            />
           </BarChart>
         </ResponsiveContainer>
       </div>
+      <SubscriptionMonthBreakdownDialog
+        open={selected !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelected(null);
+        }}
+        fullLabel={selected?.fullLabel ?? ""}
+        contributions={selected?.contributions ?? []}
+        total={selected?.ausgaben ?? 0}
+      />
     </div>
   );
 }

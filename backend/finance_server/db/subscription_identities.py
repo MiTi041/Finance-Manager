@@ -18,16 +18,23 @@ def _serialize_row(row: Any) -> dict[str, Any]:
         "displayName": row["display_name"],
         "zahlungspartnerId": row["f_zahlungspartner_id"],
         "dismissed": bool(row["dismissed"]),
+        "ended": bool(row["ended"]),
         "createdAt": row["created_at"],
         "updatedAt": row["updated_at"],
     }
 
 
+_IDENTITY_COLUMNS = (
+    "id, counterparty_name, amount, display_name, f_zahlungspartner_id, "
+    "dismissed, ended, created_at, updated_at"
+)
+
+
 def list_subscription_identities() -> list[dict[str, Any]]:
     with get_connection() as connection:
         rows = connection.execute(
-            """
-            SELECT id, counterparty_name, amount, display_name, f_zahlungspartner_id, dismissed, created_at, updated_at
+            f"""
+            SELECT {_IDENTITY_COLUMNS}
             FROM subscription_identities
             ORDER BY counterparty_name COLLATE NOCASE ASC, amount ASC
             """
@@ -39,8 +46,8 @@ def list_subscription_identities() -> list[dict[str, Any]]:
 def get_subscription_identity(identity_id: int) -> dict[str, Any] | None:
     with get_connection() as connection:
         row = connection.execute(
-            """
-            SELECT id, counterparty_name, amount, display_name, f_zahlungspartner_id, dismissed, created_at, updated_at
+            f"""
+            SELECT {_IDENTITY_COLUMNS}
             FROM subscription_identities
             WHERE id = ?
             """,
@@ -58,8 +65,8 @@ def find_subscription_identity(
 ) -> dict[str, Any] | None:
     with get_connection() as connection:
         row = connection.execute(
-            """
-            SELECT id, counterparty_name, amount, display_name, f_zahlungspartner_id, dismissed, created_at, updated_at
+            f"""
+            SELECT {_IDENTITY_COLUMNS}
             FROM subscription_identities
             WHERE counterparty_name = ? AND amount = ?
             """,
@@ -84,19 +91,29 @@ def create_subscription_identity(payload: dict[str, Any]) -> dict[str, Any]:
     display_name = (payload.get("displayName") or "").strip() or counterparty_name
     zahlungspartner_id = payload.get("zahlungspartnerId")
     dismissed = bool(payload.get("dismissed", False))
+    ended = bool(payload.get("ended", False))
 
     with get_connection() as connection:
         connection.execute(
             """
-            INSERT INTO subscription_identities (counterparty_name, amount, display_name, f_zahlungspartner_id, dismissed)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO subscription_identities
+                (counterparty_name, amount, display_name, f_zahlungspartner_id, dismissed, ended)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(counterparty_name, amount) DO UPDATE SET
                 display_name = COALESCE(excluded.display_name, subscription_identities.display_name),
                 f_zahlungspartner_id = excluded.f_zahlungspartner_id,
                 dismissed = excluded.dismissed,
+                ended = excluded.ended,
                 updated_at = CURRENT_TIMESTAMP
             """,
-            (counterparty_name, amount, display_name, zahlungspartner_id, 1 if dismissed else 0),
+            (
+                counterparty_name,
+                amount,
+                display_name,
+                zahlungspartner_id,
+                1 if dismissed else 0,
+                1 if ended else 0,
+            ),
         )
 
     record = find_subscription_identity(counterparty_name, amount)
@@ -129,6 +146,10 @@ def update_subscription_identity(
     if "dismissed" in payload:
         fields.append("dismissed = ?")
         params.append(1 if payload["dismissed"] else 0)
+
+    if "ended" in payload:
+        fields.append("ended = ?")
+        params.append(1 if payload["ended"] else 0)
 
     if not fields:
         return current

@@ -13,8 +13,8 @@ from .client import get_product_id, set_product_id
 
 
 class FintsService:
-    def fetch_accounts(self, credentials) -> dict[str, Any]:
-        return fetch_accounts(credentials)
+    def fetch_accounts(self, credentials, tan: str | None = None) -> dict[str, Any]:
+        return fetch_accounts(credentials, tan)
 
     def fetch_transactions(
         self, credentials, days: int, tan: str | None, iban: str | None, scope: str | None = None

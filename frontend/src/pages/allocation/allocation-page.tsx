@@ -97,7 +97,19 @@ export default function AllocationPage() {
     setRecipientAccounts(recipientsData.recipient_accounts ?? []);
     setBankAccounts(extractBankAccounts(banks));
     setBafoegEnabled(settings.bafoeg_enabled);
-    setCanTransferMap(new Map(availableBanks.map((b) => [b.key, b.can_transfer])));
+    const bankLevel = new Map(availableBanks.map((b) => [b.key, b.can_transfer]));
+    const transferByIban = new Map<string, boolean>();
+    for (const bank of banks) {
+      const bankCanTransfer = bankLevel.get(bank.bank_key);
+      for (const acc of bank.accounts ?? []) {
+        if (!acc.iban) continue;
+        transferByIban.set(
+          acc.iban,
+          acc.can_transfer != null ? acc.can_transfer : bankCanTransfer === true,
+        );
+      }
+    }
+    setCanTransferMap(transferByIban);
   }, []);
 
   useEffect(() => {
@@ -114,7 +126,7 @@ export default function AllocationPage() {
   );
 
   const senderBankAccounts = useMemo(
-    () => bankAccounts.filter((a) => canTransferMap.get(a.bankKey) !== false),
+    () => bankAccounts.filter((a) => canTransferMap.get(a.iban) !== false),
     [bankAccounts, canTransferMap],
   );
 

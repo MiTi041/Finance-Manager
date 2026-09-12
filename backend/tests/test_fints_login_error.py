@@ -4,10 +4,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
+from fints.exceptions import FinTSConnectionError
 
 import finance_server.services  # noqa: F401  breaks fints circular import
 from finance_server.api.fints.accounts import get_accounts
-from finance_server.fints.client import bootstrap_client
+from finance_server.fints.client import bootstrap_client, with_state_retry
 from finance_server.fints.common import BankLoginRejected
 from finance_server.models.bank import BankCredentials
 from finance_server.models.fints import AccountsRequest
@@ -66,3 +67,63 @@ def test_accounts_endpoint_maps_login_rejection_to_401():
     assert exc.value.status_code == 401
     assert detail["code"] == "FINTS_LOGIN_FAILED"
     assert "Anmeldung bei der Bank fehlgeschlagen" in detail["message"]
+
+
+def test_accounts_endpoint_passes_tan_to_fetch_accounts():
+    creds = BankCredentials(bank_key="consorsbank", username="u", pin="p")
+    with (
+        patch("finance_server.api.fints.accounts.enforce_rate_limit"),
+        patch(
+            "finance_server.api.fints.accounts.fetch_accounts",
+            return_value={"count": 0, "accounts": []},
+        ) as fetch_mock,
+    ):
+        get_accounts(AccountsRequest(credentials=creds, tan="123456"))
+    assert fetch_mock.call_args.args[1] == "123456"
+
+
+def test_accounts_endpoint_skips_rate_limit_when_tan_provided():
+    creds = BankCredentials(bank_key="consorsbank", username="u", pin="p")
+    with (
+        patch("finance_server.api.fints.accounts.enforce_rate_limit") as rate_mock,
+        patch(
+            "finance_server.api.fints.accounts.fetch_accounts",
+            return_value={"count": 0, "accounts": []},
+        ),
+    ):
+        get_accounts(AccountsRequest(credentials=creds, tan="123456"))
+    rate_mock.assert_not_called()
+
+
+def test_accounts_endpoint_enforces_rate_limit_without_tan():
+    creds = BankCredentials(bank_key="consorsbank", username="u", pin="p")
+    with (
+        patch("finance_server.api.fints.accounts.enforce_rate_limit") as rate_mock,
+        patch(
+            "finance_server.api.fints.accounts.fetch_accounts",
+            return_value={"count": 0, "accounts": []},
+        ),
+    ):
+        get_accounts(AccountsRequest(credentials=creds))
+    rate_mock.assert_called_once_with("fetch_accounts")
+
+
+def test_with_state_retry_retries_once_on_connection_error():
+    creds = BankCredentials(bank_key="consorsbank", username="u", pin="p")
+    calls = []
+
+    def run_fn(state):
+        calls.append(state)
+        if len(calls) == 1:
+            raise FinTSConnectionError("Verbindung abgebrochen")
+        return {"ok": True}
+
+    with (
+        patch("finance_server.fints.client.load_state", return_value=b"state"),
+        patch("finance_server.fints.client.clear_state_files_for_creds") as clear_mock,
+    ):
+        result = with_state_retry(creds, run_fn)
+
+    assert result == {"ok": True}
+    assert calls == [b"state", None]
+    clear_mock.assert_called_once_with(creds)

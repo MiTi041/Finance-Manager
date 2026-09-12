@@ -134,7 +134,7 @@ VALID_SYNC_COLUMNS: dict[str, set[str]] = {
     "zahlungspartner": {"id", "name", "website", "logo_url", "local_logo_path", "is_company",
         "logo_white_background", "logo_padding", "is_own_account", "updated_at"},
     "empfaengerkonten": {"id", "account_name", "iban", "bic", "recipient_name", "is_donation_account", "local_logo_path", "created_at", "updated_at"},
-    "subscription_identities": {"id", "counterparty_name", "amount", "display_name", "f_zahlungspartner_id", "dismissed", "updated_at"},
+    "subscription_identities": {"id", "counterparty_name", "amount", "display_name", "f_zahlungspartner_id", "dismissed", "ended", "updated_at"},
     "ibans": {"iban", "f_zahlungspartner_id"},
     "allocation_buckets": {"id", "bucket_type", "percentage", "recipient_account_id", "sender_iban", "is_active", "sort_order", "target_amount", "target_months", "recipient_iban", "created_at", "updated_at"},
     "allocation_bafoeg_config": {"id", "total_debt", "interest_rate", "payout_date", "current_balance", "anlagezinsen", "zinsverlauf", "created_at", "updated_at"},

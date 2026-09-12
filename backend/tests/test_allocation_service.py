@@ -617,6 +617,45 @@ class TestEnrichSavingsPlan:
         assert result["recipient_logo_white_background"] is True
         assert result["recipient_logo_padding"] is False
 
+    def test_sender_iban_forwarded_to_breakdown(self):
+        plan = self._plan("2026-08-05T10:00:00+00:00")
+        plan["sender_iban"] = "DE_SPARKASSE"
+        service = AllocationService()
+        with ExitStack() as stack:
+            stack.enter_context(
+                patch(
+                    "finance_server.services.allocation_service.get_income_payout_days",
+                    return_value=[28],
+                )
+            )
+            mock_saved = stack.enter_context(patch(
+                "finance_server.services.allocation_service.get_savings_breakdown",
+                return_value={
+                    "einzahlungen": 0.0,
+                    "verschuldung": 0.0,
+                    "entnahmen": 0.0,
+                    "saldo": 0.0,
+                },
+            ))
+            mock_month = stack.enter_context(patch(
+                "finance_server.services.allocation_service.get_savings_month_breakdown",
+                return_value={
+                    "einzahlungen": 0.0,
+                    "verschuldung": 0.0,
+                    "entnahmen": 0.0,
+                    "saldo": 0.0,
+                },
+            ))
+            stack.enter_context(
+                patch(
+                    "finance_server.services.allocation_service.count_income_events_until",
+                    return_value=2,
+                )
+            )
+            service._enrich_savings_plan(plan, "2026-08")
+        mock_saved.assert_called_once_with("tag.test", sender_iban="DE_SPARKASSE")
+        mock_month.assert_called_once_with("tag.test", "2026-08", sender_iban="DE_SPARKASSE")
+
     def test_first_month_no_bonus(self):
         result = self._enrich("2026-08-05T10:00:00+00:00", "2026-08", count=2)
         assert result["income_events_left"] == 2
@@ -771,11 +810,18 @@ class TestCountIncomeEventsUntilLastWorkingDay:
 
 
 class TestSavingsBreakdown:
-    def _insert(self, conn, amount: float, purpose: str, date: str = "2026-07-15"):
+    def _insert(
+        self,
+        conn,
+        amount: float,
+        purpose: str,
+        date: str = "2026-07-15",
+        account_iban: str = "iban",
+    ):
         conn.execute(
             "INSERT INTO umsaetze (amount, purpose, date, entry_date, account_iban, transaction_hash) "
             "VALUES (?, ?, ?, ?, ?, ?)",
-            (amount, purpose, date, date, "iban", f"hash-{amount}-{purpose}"),
+            (amount, purpose, date, date, account_iban, f"hash-{amount}-{purpose}-{account_iban}"),
         )
         conn.commit()
 
@@ -821,6 +867,57 @@ class TestSavingsBreakdown:
         conn.commit()
         breakdown = _savings_breakdown("spliturlaub2026")
         assert breakdown["einzahlungen"] == 120.0
+
+    def test_sender_iban_excludes_recipient_incoming(self, test_db, monkeypatch):
+        monkeypatch.setattr("finance_server.db.savings.get_connection", lambda: test_db)
+        self._insert(
+            test_db, -500.0, "Sparplan Urlaub tag.urlaub2026", account_iban="DE_SPARKASSE"
+        )
+        self._insert(
+            test_db, 500.0, "Sparplan Urlaub tag.urlaub2026", account_iban="DE_NORISBANK"
+        )
+        breakdown = _savings_breakdown("urlaub2026", sender_iban="DE_SPARKASSE")
+        assert breakdown["einzahlungen"] == 500.0
+        assert breakdown["verschuldung"] == 0.0
+        assert breakdown["saldo"] == 500.0
+
+    def test_sender_iban_is_case_insensitive(self, test_db, monkeypatch):
+        monkeypatch.setattr("finance_server.db.savings.get_connection", lambda: test_db)
+        self._insert(
+            test_db, -250.0, "Sparplan Urlaub tag.urlaub2026", account_iban="de_sparkasse"
+        )
+        breakdown = _savings_breakdown("urlaub2026", sender_iban="DE_SPARKASSE")
+        assert breakdown["einzahlungen"] == 250.0
+
+    def test_sender_iban_scopes_entnahmen(self, test_db, monkeypatch):
+        monkeypatch.setattr("finance_server.db.savings.get_connection", lambda: test_db)
+        self._insert(
+            test_db,
+            300.0,
+            "tag.urlaub2026.entnahme Flug",
+            account_iban="DE_SPARKASSE",
+        )
+        self._insert(
+            test_db,
+            150.0,
+            "tag.urlaub2026.entnahme Hotel",
+            account_iban="DE_NORISBANK",
+        )
+        breakdown = _savings_breakdown("urlaub2026", sender_iban="DE_SPARKASSE")
+        assert breakdown["entnahmen"] == 300.0
+
+    def test_without_sender_iban_counts_all_accounts(self, test_db, monkeypatch):
+        monkeypatch.setattr("finance_server.db.savings.get_connection", lambda: test_db)
+        self._insert(
+            test_db, -500.0, "Sparplan Urlaub tag.urlaub2026", account_iban="DE_SPARKASSE"
+        )
+        self._insert(
+            test_db, 500.0, "Sparplan Urlaub tag.urlaub2026", account_iban="DE_NORISBANK"
+        )
+        breakdown = _savings_breakdown("urlaub2026")
+        assert breakdown["einzahlungen"] == 500.0
+        assert breakdown["verschuldung"] == 500.0
+        assert breakdown["saldo"] == 0.0
 
 
 

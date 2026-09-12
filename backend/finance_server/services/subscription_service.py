@@ -114,6 +114,7 @@ class SubscriptionService:
         from_date: str | None = None,
         to_date: str | None = None,
         include_dismissed: bool = False,
+        include_inactive: bool = False,
     ) -> list[dict[str, Any]]:
         transactions = fetch_transactions(
             days=days,
@@ -176,10 +177,14 @@ class SubscriptionService:
         dismissed_keys: set[tuple[str, float]] = set()
         dismissed_ids: dict[tuple[str, float], int] = {}
         dismissed_info: dict[tuple[str, float], dict[str, Any]] = {}
+        ended_keys: set[tuple[str, float]] = set()
+        ended_ids: dict[tuple[str, float], int] = {}
+        ended_info: dict[tuple[str, float], dict[str, Any]] = {}
         with get_connection() as connection:
             override_rows = connection.execute(
                 """
-                SELECT id, counterparty_name, amount, display_name, f_zahlungspartner_id, dismissed
+                SELECT id, counterparty_name, amount, display_name,
+                       f_zahlungspartner_id, dismissed, ended
                 FROM subscription_identities
                 """
             ).fetchall()
@@ -189,6 +194,10 @@ class SubscriptionService:
                 dismissed_keys.add(key)
                 dismissed_ids[key] = row["id"]
                 dismissed_info[key] = dict(row)
+            elif row["ended"]:
+                ended_keys.add(key)
+                ended_ids[key] = row["id"]
+                ended_info[key] = dict(row)
             else:
                 identity_overrides[key] = {
                     "display_name": row["display_name"],
@@ -506,7 +515,7 @@ class SubscriptionService:
             r["lastRefundAmount"] = last_refund
             r["effectiveAmount"] = round(net_sum / r["transactionCount"], 2) if r["transactionCount"] > 0 else r["amount"]
 
-        # ── Step 5: Filter out inactive subscriptions ──
+        # ── Step 5: Filter out inactive / hidden subscriptions ──
         today = date.today()
         FREQUENCY_MAX_AGE_DAYS = {
             FREQUENCY_MONTHLY: 45,
@@ -524,55 +533,81 @@ class SubscriptionService:
                 return True
             return (today - last).days <= max_age
 
+        hidden_keys: set[tuple[str, float]] = dismissed_keys | ended_keys
+        selected: list[dict[str, Any]] = []
+
         if include_dismissed:
             matched_keys: set[tuple[str, float]] = set()
-            dismissed_results: list[dict[str, Any]] = []
+            for r in results:
+                key = (r.get("_counterpartyName"), r.get("amount"))
+                if key in hidden_keys:
+                    selected.append(r)
+                    matched_keys.add(key)
+                elif include_inactive or _is_active(r):
+                    selected.append(r)
+            # Build stubs for hidden identities not detected by clustering
+            for key, info in {**dismissed_info, **ended_info}.items():
+                if key in matched_keys:
+                    continue
+                cpn, amt = key
+                selected.append({
+                    "name": info["display_name"] or cpn,
+                    "_counterpartyName": cpn,
+                    "recipientLogo": None,
+                    "recipientName": "",
+                    "recipientId": None,
+                    "datenbankName": "",
+                    "logoWhiteBackground": False,
+                    "logoPadding": True,
+                    "isCompany": True,
+                    "amount": amt,
+                    "frequency": "MONTHLY",
+                    "frequencyLabel": "Monatlich",
+                    "firstDate": date.today().isoformat(),
+                    "lastDate": date.today().isoformat(),
+                    "nextDate": date.today().isoformat(),
+                    "transactionCount": 0,
+                    "transactionIds": [],
+                    "sequenztyp": "",
+                    "transactions": [],
+                    "refundAmount": 0,
+                    "lastRefundAmount": 0,
+                    "effectiveAmount": amt,
+                    "dismissed": key in dismissed_keys,
+                    "ended": key in ended_keys and key not in dismissed_keys,
+                    "active": False,
+                    "subscriptionIdentityId": info["id"],
+                })
+        else:
             for r in results:
                 key = (r.get("_counterpartyName"), r.get("amount"))
                 if key in dismissed_keys:
-                    r["dismissed"] = True
-                    r["subscriptionIdentityId"] = dismissed_ids[key]
-                    dismissed_results.append(r)
-                    matched_keys.add(key)
-                elif _is_active(r):
-                    dismissed_results.append(r)
-            # Build stubs for dismissed identities not detected by clustering
-            for key, info in dismissed_info.items():
-                if key not in matched_keys:
-                    cpn, amt = key
-                    dismissed_results.append({
-                        "name": info["display_name"] or cpn,
-                        "_counterpartyName": cpn,
-                        "recipientLogo": None,
-                        "recipientName": "",
-                        "recipientId": None,
-                        "datenbankName": "",
-                        "logoWhiteBackground": False,
-                        "logoPadding": True,
-                        "isCompany": True,
-                        "amount": amt,
-                        "frequency": "MONTHLY",
-                        "frequencyLabel": "Monatlich",
-                        "firstDate": date.today().isoformat(),
-                        "lastDate": date.today().isoformat(),
-                        "nextDate": date.today().isoformat(),
-                        "transactionCount": 0,
-                        "transactionIds": [],
-                        "sequenztyp": "",
-                        "transactions": [],
-                        "refundAmount": 0,
-                        "lastRefundAmount": 0,
-                        "effectiveAmount": amt,
-                        "dismissed": True,
-                        "subscriptionIdentityId": info["id"],
-                    })
-            results = dismissed_results
-        else:
-            results = [
-                r for r in results
-                if _is_active(r)
-                and (r.get("_counterpartyName"), r.get("amount")) not in dismissed_keys
-            ]
+                    continue
+                if key in ended_keys and not include_inactive:
+                    continue
+                if include_inactive or _is_active(r):
+                    selected.append(r)
 
+        for r in selected:
+            key = (r.get("_counterpartyName"), r.get("amount"))
+            if key in dismissed_keys:
+                r["dismissed"] = True
+                r["ended"] = False
+                r["subscriptionIdentityId"] = dismissed_ids[key]
+            elif key in ended_keys:
+                r["dismissed"] = False
+                r["ended"] = True
+                r["subscriptionIdentityId"] = ended_ids[key]
+            else:
+                r["dismissed"] = False
+                r["ended"] = False
+                r.pop("subscriptionIdentityId", None)
+            r["active"] = bool(
+                key not in dismissed_keys
+                and key not in ended_keys
+                and _is_active(r)
+            )
+
+        results = selected
         results.sort(key=lambda r: r["nextDate"])
         return results

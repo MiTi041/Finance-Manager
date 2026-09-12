@@ -540,9 +540,16 @@ class KTI1(DataElementGroup):
 
     @classmethod
     def from_sepa_account(cls, acc):
+        bic = acc.bic or ""
         return cls(
             iban=acc.iban,
             bic=acc.bic,
+            account_number=acc.accountnumber,
+            subaccount_number=acc.subaccount,
+            bank_identifier=BankIdentifier(
+                country_identifier=BankIdentifier.COUNTRY_ALPHA_TO_NUMERIC.get(bic[4:6], "280"),
+                bank_code=acc.blz,
+            ),
         )
 
 

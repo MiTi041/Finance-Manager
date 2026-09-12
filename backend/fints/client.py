@@ -434,8 +434,12 @@ class FinTS3Client:
                 if upd.name_account_owner_2:
                     acc['owner_name'].append(upd.name_account_owner_2)
                 acc['product_name'] = upd.account_product_name
+                allowed_transactions = upd.allowed_transactions or []
+                acc['allowed_transactions'] = [
+                    allowed_transaction.transaction for allowed_transaction in allowed_transactions
+                ]
                 acc['supported_operations'] = {
-                    op: any(allowed_transaction.transaction in op.value for allowed_transaction in upd.allowed_transactions)
+                    op: any(allowed_transaction.transaction in op.value for allowed_transaction in allowed_transactions)
                     for op in FinTSOperations
                 }
                 retval['accounts'].append(acc)
@@ -1309,6 +1313,7 @@ class FinTS3PinTanClient(FinTS3Client):
         self.allowed_security_functions = []
         self.selected_security_function = None
         self.selected_tan_medium = tan_medium
+        self.force_twostep_tan = set()
         self._bootstrap_mode = True
         super().__init__(bank_identifier=bank_identifier, user_id=user_id, customer_id=customer_id, *args, **kwargs)
 
@@ -1443,14 +1448,18 @@ class FinTS3PinTanClient(FinTS3Client):
     def _need_twostep_tan_for_segment(self, seg):
         if not self.selected_security_function or self.selected_security_function == '999':
             return False
-        else:
-            hipins = self.bpd.find_segment_first(HIPINS1)
-            if not hipins:
-                return False
-            else:
-                for requirement in hipins.parameter.transaction_tans_required:
-                    if seg.header.type == requirement.transaction:
-                        return requirement.tan_required
+
+        # Some banks (e.g. Consorsbank) report HKKAZ:N in HIPINS yet reject the
+        # request without an HKTAN segment (9010). Allow overriding per segment.
+        if seg.header.type in getattr(self, 'force_twostep_tan', set()):
+            return True
+
+        hipins = self.bpd.find_segment_first(HIPINS1)
+        if not hipins:
+            return False
+        for requirement in hipins.parameter.transaction_tans_required:
+            if seg.header.type == requirement.transaction:
+                return requirement.tan_required
 
         return False
 
@@ -1463,15 +1472,34 @@ class FinTS3PinTanClient(FinTS3Client):
 
                 for resp in response.responses(tan_seg):
                     if resp.code in ('0030', '3955'):
+                        decoupled = any(r.code == '3955' for r in response.responses(tan_seg))
                         return NeedTANResponse(
                             command_seg,
                             response.find_segment_first('HITAN'),
                             resume_func,
                             self.is_challenge_structured(),
-                            resp.code == '3955',
+                            decoupled,
                         )
                     if resp.code.startswith('9'):
-                        raise Exception("Error response: {!r}".format(response))
+                        raise Exception("Error response: {} {!r}".format(resp.code, response))
+
+                # Some banks (e.g. Consorsbank) attach the 0030/3955 response to
+                # the command segment instead of the HKTAN segment.
+                for resp in response.responses(command_seg):
+                    if resp.code in ('0030', '3955'):
+                        decoupled = any(r.code == '3955' for r in response.responses(command_seg))
+                        return NeedTANResponse(
+                            command_seg,
+                            response.find_segment_first('HITAN'),
+                            resume_func,
+                            self.is_challenge_structured(),
+                            decoupled,
+                        )
+                    # Banken wie Consorsbank lehnen den Auftrag ggf. mit einem
+                    # 9xxx-Code am Command-Segment ab (z. B. 9010). Ohne diese
+                    # Prüfung würde das Ergebnis stillschweigend leer bleiben.
+                    if resp.code.startswith('9'):
+                        raise Exception("Error response: {} {!r}".format(resp.code, response))
             else:
                 response = dialog.send(command_seg)
 
@@ -1652,7 +1680,7 @@ class FinTS3PinTanClient(FinTS3Client):
                     # Fall back to onestep
                     self.set_tan_mechanism('999')
 
-        if response.code == '9010':
+        if response.code == '9010' and not dialog.open:
             raise FinTSClientError(
                 "Der Auftrag wurde von der Bank nicht ausgeführt "
                 f"({response.code}: {response.text}). Bitte pruefen, ob die Bank den Auftrag "

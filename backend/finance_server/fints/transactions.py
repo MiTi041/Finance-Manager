@@ -25,7 +25,7 @@ from finance_server.services.overdraw_notify import check_pending_overdraw
 from finance_server.services.payroll_parsing import enrich_paypal_merchant
 from fints.client import NeedTANResponse
 
-from .accounts import _extract_account_details, _store_holder_names
+from .accounts import _extract_account_details, _store_account_details
 from .client import (
     _capture_tan_medium_from_challenge,
     bootstrap_client,
@@ -57,7 +57,55 @@ def _iter_descending_date_chunks(
 
 
 def _is_out_of_range_error(err: Exception) -> bool:
-    return "Abrufzeitraum" in str(err)
+    message = str(err).lower()
+    if "abrufzeitraum" in message:
+        return True
+    return any(code in message for code in ("9210", "9010", "9050"))
+
+
+def _storage_days_from_segment(segment) -> int | None:
+    """Liest den Speicherzeitraum (Tage) aus einem HIKAZS/HICAZS-Segment."""
+    parameter = getattr(segment, "parameter", None)
+    duration = getattr(parameter, "storage_duration", None)
+    if isinstance(duration, int) and duration > 0:
+        return duration
+
+    # HIKAZS wird (noch) nicht typisiert geparst, die Felder landen in
+    # _additional_data, z. B. ['1', '1', '0', ['90', 'J', 'N']].
+    extra = getattr(segment, "_additional_data", None)
+    if isinstance(extra, (list, tuple)) and extra:
+        candidate = extra[-1]
+        if isinstance(candidate, (list, tuple)) and candidate:
+            try:
+                value = int(candidate[0])
+            except (TypeError, ValueError):
+                return None
+            return value if value > 0 else None
+    return None
+
+
+def _account_storage_days(client, account) -> int | None:
+    """Ermittelt den vom Institut erlaubten Abrufzeitraum in Tagen.
+
+    Consorsbank erlaubt z. B. nur 90 Tage (HIKAZS), DKB 360 (HIKAZS) bzw.
+    450 (HICAZS). Wird weiter zurück abgefragt, lehnt die Bank den Auftrag
+    teils mit 9010 ab, ohne einen auswertbaren Fehlertext zu liefern.
+
+    Der Client bevorzugt HKKAZ (MT940); daher ist der HIKAZS-Speicherzeitraum
+    maßgeblich. HICAZS dient nur als Rückfall, falls kein HIKAZS angeboten wird.
+    """
+    bpd = getattr(client, "bpd", None)
+    if bpd is None:
+        return None
+
+    for segment_name in ("HIKAZS", "HICAZS"):
+        segment = bpd.find_segment_highest_version(segment_name)
+        if segment is None:
+            continue
+        duration = _storage_days_from_segment(segment)
+        if duration:
+            return duration
+    return None
 
 
 def _fetch_account_transactions(
@@ -177,8 +225,8 @@ def fetch_transactions(
                 _capture_tan_medium_from_challenge(client)
                 client.init_tan_response = resolve_tan_until_done(client, client.init_tan_response, tan_value)
                 tan_value = None
-            holder_by_iban, _ = _extract_account_details(client)
-            _store_holder_names(creds, holder_by_iban)
+            holder_by_iban, _, can_transfer_by_iban = _extract_account_details(client)
+            _store_account_details(creds, holder_by_iban, can_transfer_by_iban)
             save_state(client, creds)
 
             min_start_date: datetime.date | None = None
@@ -217,6 +265,12 @@ def fetch_transactions(
                             start_date = datetime.date.today() - datetime.timedelta(days=INITIAL_SYNC_DAYS)
                     else:
                         start_date = datetime.date.today() - datetime.timedelta(days=INITIAL_SYNC_DAYS)
+
+                storage_days = _account_storage_days(client, account)
+                if storage_days is not None:
+                    earliest_allowed = end - datetime.timedelta(days=storage_days)
+                    if start_date is None or start_date < earliest_allowed:
+                        start_date = earliest_allowed
 
                 result, tan_value = _fetch_account_transactions(
                     client, account, start_date, end, tan_value

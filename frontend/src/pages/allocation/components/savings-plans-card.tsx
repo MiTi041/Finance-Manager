@@ -481,7 +481,7 @@ function PlanFormFields({
           onValueChange={(v) => set("senderIban", v)}
           options={bankAccounts
             .filter(
-              (a) => canTransferMap.get(a.bankKey) !== false && a.iban !== values.recipientIban,
+              (a) => canTransferMap.get(a.iban) !== false && a.iban !== values.recipientIban,
             )
             .map((a) => ({
               value: a.iban,
@@ -679,33 +679,35 @@ export function SavingsPlansCard({
               }
             }}
           >
-            <DialogContent>
-              <DialogHeader>
+            <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0">
+              <DialogHeader className="shrink-0 gap-2 border-b bg-muted/40 px-6 py-4">
                 <DialogTitle>Sparplan anlegen</DialogTitle>
                 <DialogDescription>
                   Lege ein eigenes Sparziel an, z. B. für einen Urlaub oder eine größere
                   Anschaffung.
                 </DialogDescription>
               </DialogHeader>
-              <PlanFormFields
-                values={createValues}
-                onChange={setCreateValues}
-                recipientAccounts={recipientAccounts}
-                bankAccounts={bankAccounts}
-                canTransferMap={canTransferMap}
-                existingTotal={savingsTotal}
-                availableForSavings={availableForSavings}
-                currentMonth={currentMonth}
-                payoutDays={payoutDays}
-                holidays={holidaySet}
-                isFirstMonth={true}
-              />
-              {createError && (
-                <p className="flex items-center gap-1.5 text-sm text-destructive">
-                  <TriangleAlert className="size-4 shrink-0" /> {createError}
-                </p>
-              )}
-              <div className="flex justify-end gap-2 pt-1">
+              <div className="flex-1 space-y-3 overflow-y-auto px-6 py-4">
+                <PlanFormFields
+                  values={createValues}
+                  onChange={setCreateValues}
+                  recipientAccounts={recipientAccounts}
+                  bankAccounts={bankAccounts}
+                  canTransferMap={canTransferMap}
+                  existingTotal={savingsTotal}
+                  availableForSavings={availableForSavings}
+                  currentMonth={currentMonth}
+                  payoutDays={payoutDays}
+                  holidays={holidaySet}
+                  isFirstMonth={true}
+                />
+                {createError && (
+                  <p className="flex items-center gap-1.5 text-sm text-destructive">
+                    <TriangleAlert className="size-4 shrink-0" /> {createError}
+                  </p>
+                )}
+              </div>
+              <div className="flex shrink-0 justify-end gap-2 border-t px-6 py-4">
                 <Button variant="ghost" onClick={() => setCreateOpen(false)} disabled={creating}>
                   Abbrechen
                 </Button>
@@ -1099,31 +1101,33 @@ export function SavingsPlansCard({
           if (!open) setEditingPlan(null);
         }}
       >
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="shrink-0 gap-2 border-b bg-muted/40 px-6 py-4">
             <DialogTitle>Sparplan bearbeiten</DialogTitle>
           </DialogHeader>
-          <PlanFormFields
-            values={editValues}
-            onChange={setEditValues}
-            recipientAccounts={recipientAccounts}
-            bankAccounts={bankAccounts}
-            canTransferMap={canTransferMap}
-            existingTotal={savingsTotal - (editingPlan?.monthly_rate ?? 0)}
-            availableForSavings={availableForSavings}
-            currentMonth={currentMonth}
-            payoutDays={payoutDays}
-            holidays={holidaySet}
-            isFirstMonth={editingPlan?.created_at?.slice(0, 7) === currentMonth}
-            savedAmount={editingPlan?.saved_amount ?? 0}
-            entnahmenTotal={editingPlan?.saved_entnahmen ?? 0}
-          />
-          {editError && (
-            <p className="flex items-center gap-1.5 text-sm text-destructive">
-              <TriangleAlert className="size-4 shrink-0" /> {editError}
-            </p>
-          )}
-          <div className="flex justify-end gap-2 pt-1">
+          <div className="flex-1 space-y-3 overflow-y-auto px-6 py-4">
+            <PlanFormFields
+              values={editValues}
+              onChange={setEditValues}
+              recipientAccounts={recipientAccounts}
+              bankAccounts={bankAccounts}
+              canTransferMap={canTransferMap}
+              existingTotal={savingsTotal - (editingPlan?.monthly_rate ?? 0)}
+              availableForSavings={availableForSavings}
+              currentMonth={currentMonth}
+              payoutDays={payoutDays}
+              holidays={holidaySet}
+              isFirstMonth={editingPlan?.created_at?.slice(0, 7) === currentMonth}
+              savedAmount={editingPlan?.saved_amount ?? 0}
+              entnahmenTotal={editingPlan?.saved_entnahmen ?? 0}
+            />
+            {editError && (
+              <p className="flex items-center gap-1.5 text-sm text-destructive">
+                <TriangleAlert className="size-4 shrink-0" /> {editError}
+              </p>
+            )}
+          </div>
+          <div className="flex shrink-0 justify-end gap-2 border-t px-6 py-4">
             <Button variant="ghost" onClick={() => setEditingPlan(null)} disabled={updating}>
               Abbrechen
             </Button>

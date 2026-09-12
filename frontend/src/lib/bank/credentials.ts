@@ -18,6 +18,7 @@ export type StoredBankCredentials = {
     account_name?: string;
     holder_name?: string | null;
     balance?: number | null;
+    can_transfer?: boolean | null;
   }>;
 };
 
@@ -33,6 +34,7 @@ export type BankCredentials = {
     iban?: string;
     account_name?: string;
     holder_name?: string | null;
+    can_transfer?: boolean | null;
   }>;
 };
 
@@ -75,6 +77,7 @@ export type BankAccountDiscoveryResponse = {
     account_name?: string;
     product_name?: string;
     holder_name?: string | null;
+    can_transfer?: boolean | null;
     iban_label?: string;
     bank_name?: string;
   }>;
@@ -88,6 +91,7 @@ export type BankDefinition = {
   bank_logo: string;
   can_transfer: boolean;
   needs_tan_medium_name?: boolean;
+  username_hint?: string | null;
 };
 
 export async function fetchBankCredentialsStatus(): Promise<BankCredentialsStatus> {
@@ -109,13 +113,14 @@ export async function fetchAvailableBanks(options?: {
 
 export async function fetchBankAccounts(
   credentials: BankCredentials,
+  tan?: string,
 ): Promise<BankAccountDiscoveryResponse> {
   const response = await fetch(`${getApiBaseUrl()}/accounts`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ credentials }),
+    body: JSON.stringify({ credentials, tan }),
   });
 
   const payload = await response.json().catch(() => ({}));

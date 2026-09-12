@@ -17,12 +17,13 @@ router = APIRouter()
 @router.post("/accounts")
 def get_accounts(request: AccountsRequest) -> dict[str, Any]:
     try:
-        enforce_rate_limit("fetch_accounts")
+        if request.tan is None:
+            enforce_rate_limit("fetch_accounts")
         if request.credentials is not None:
             credentials = resolve_bank_connection_details(request.credentials)
         else:
             credentials = resolve_bank_credentials(None)
-        return fetch_accounts(credentials)
+        return fetch_accounts(credentials, request.tan)
     except TanRequired as err:
         raise HTTPException(status_code=409, detail={
             "code": "TAN_REQUIRED",

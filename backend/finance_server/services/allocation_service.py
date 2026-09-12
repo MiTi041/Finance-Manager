@@ -627,8 +627,13 @@ class AllocationService:
         target_amount = plan.get("target_amount")
         target_date = plan.get("target_date")
         payout_days = get_income_payout_days(month) if month else [1]
-        saved_breakdown = get_savings_breakdown(tag) if tag else {}
-        month_breakdown = get_savings_month_breakdown(tag, month) if tag and month else {}
+        sender_iban = plan.get("sender_iban")
+        saved_breakdown = get_savings_breakdown(tag, sender_iban=sender_iban) if tag else {}
+        month_breakdown = (
+            get_savings_month_breakdown(tag, month, sender_iban=sender_iban)
+            if tag and month
+            else {}
+        )
         einzahlungen_total = saved_breakdown.get("einzahlungen", 0.0)
         verschuldung_total = saved_breakdown.get("verschuldung", 0.0)
         entnahmen_total = saved_breakdown.get("entnahmen", 0.0)

@@ -17,6 +17,7 @@ def get_subscriptions(
     to_date: str | None = Query(default=None),
     iban: str | None = None,
     include_dismissed: bool = Query(default=False),
+    include_inactive: bool = Query(default=False),
     service: SubscriptionService = Depends(get_subscription_service),
 ) -> dict[str, Any]:
     subscriptions = service.get_subscriptions(
@@ -25,6 +26,7 @@ def get_subscriptions(
         from_date=from_date,
         to_date=to_date,
         include_dismissed=include_dismissed,
+        include_inactive=include_inactive,
     )
     return {
         "count": len(subscriptions),

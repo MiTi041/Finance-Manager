@@ -135,9 +135,11 @@ export function TransferDialog({
               </span>
             </div>
             {purpose && (
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex items-start justify-between gap-2">
                 <span className="shrink-0 text-xs text-muted-foreground">Verwendungszweck</span>
-                <span className="min-w-0 truncate text-sm font-medium">{purpose}</span>
+                <span className="min-w-0 whitespace-normal break-words text-right text-sm font-medium">
+                  {purpose}
+                </span>
               </div>
             )}
           </div>

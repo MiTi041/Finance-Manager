@@ -36,6 +36,18 @@ class CredentialsService:
             except KeyError:
                 bank = None
 
+        accounts = credentials.get("accounts", []) or []
+        if bank:
+            accounts = [
+                {
+                    **account,
+                    "can_transfer": account.get("can_transfer")
+                    if account.get("can_transfer") is not None
+                    else bank.can_transfer,
+                }
+                for account in accounts
+            ]
+
         return {
             "configured": True,
             "account_name": credentials.get("account_name", ""),
@@ -49,7 +61,7 @@ class CredentialsService:
             "fints_url": bank.fints_url if bank else "",
             "scope": credentials.get("scope", ""),
             "account_iban": credentials.get("account_iban", ""),
-            "accounts": credentials.get("accounts", []),
+            "accounts": accounts,
         }
 
     def get_status(self, scope: str | None = None) -> dict[str, Any]:
@@ -163,6 +175,7 @@ class CredentialsService:
                     "bank_logo": bank.bank_logo,
                     "can_transfer": bank.can_transfer,
                     "needs_tan_medium_name": bank.needs_tan_medium_name,
+                    "username_hint": bank.username_hint,
                 }
                 for bank in list_bank_definitions()
             ]

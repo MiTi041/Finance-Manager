@@ -38,6 +38,33 @@ def build_credentials_scope(credentials: dict[str, Any]) -> str:
     return ":".join(scope_parts) or username or bank_key or "default"
 
 
+def _coerce_can_transfer(value: Any) -> bool | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in ("", "none", "null"):
+            return None
+        if normalized in ("1", "true", "yes"):
+            return True
+        if normalized in ("0", "false", "no"):
+            return False
+    return None
+
+
+def _to_stored_can_transfer(value: Any, previous: Any = None) -> int | None:
+    coerced = _coerce_can_transfer(value)
+    if coerced is None:
+        coerced = _coerce_can_transfer(previous)
+    if coerced is None:
+        return None
+    return 1 if coerced else 0
+
+
 def _normalize_accounts(accounts: Any) -> list[dict[str, Any]]:
     normalized_accounts: list[dict[str, Any]] = []
     if not isinstance(accounts, list):
@@ -56,6 +83,7 @@ def _normalize_accounts(accounts: Any) -> list[dict[str, Any]]:
                 "iban": iban,
                 "account_name": normalize_text(account.get("account_name")) or None,
                 "holder_name": normalize_text(account.get("holder_name")) or None,
+                "can_transfer": _coerce_can_transfer(account.get("can_transfer")),
             }
         )
 
@@ -68,11 +96,14 @@ def _sync_bank_accounts(
     accounts: list[dict[str, Any]],
 ) -> None:
     existing = connection.execute(
-        "SELECT iban, holder_name FROM bank_accounts WHERE scope = ?",
+        "SELECT iban, holder_name, can_transfer FROM bank_accounts WHERE scope = ?",
         (scope,),
     ).fetchall()
     previous_holder = {
         normalize_text(row["iban"]).upper(): row["holder_name"] for row in existing
+    }
+    previous_can_transfer = {
+        normalize_text(row["iban"]).upper(): row["can_transfer"] for row in existing
     }
 
     connection.execute("DELETE FROM bank_accounts WHERE scope = ?", (scope,))
@@ -83,8 +114,9 @@ def _sync_bank_accounts(
     now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     connection.executemany(
         """
-        INSERT INTO bank_accounts (scope, iban, account_name, holder_name, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO bank_accounts
+            (scope, iban, account_name, holder_name, can_transfer, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
         [
             (
@@ -93,6 +125,10 @@ def _sync_bank_accounts(
                 account.get("account_name"),
                 account.get("holder_name")
                 or previous_holder.get(normalize_text(account["iban"]).upper()),
+                _to_stored_can_transfer(
+                    account.get("can_transfer"),
+                    previous_can_transfer.get(normalize_text(account["iban"]).upper()),
+                ),
                 now,
                 now,
             )
@@ -104,7 +140,7 @@ def _sync_bank_accounts(
 def _load_bank_accounts(connection: sqlite3.Connection, scope: str) -> list[dict[str, Any]]:
     rows = connection.execute(
         """
-        SELECT iban, account_name, holder_name, balance
+        SELECT iban, account_name, holder_name, balance, can_transfer
         FROM bank_accounts
         WHERE scope = ?
         ORDER BY created_at ASC, id ASC
@@ -118,6 +154,7 @@ def _load_bank_accounts(connection: sqlite3.Connection, scope: str) -> list[dict
             "account_name": row["account_name"],
             "holder_name": row["holder_name"],
             "balance": row["balance"],
+            "can_transfer": None if row["can_transfer"] is None else bool(row["can_transfer"]),
         }
         for row in rows
     ]
@@ -246,7 +283,7 @@ def find_bank_account_by_iban(iban: str) -> dict[str, Any] | None:
     with get_connection() as connection:
         row = connection.execute(
             """
-            SELECT scope, iban, account_name, holder_name
+            SELECT scope, iban, account_name, holder_name, can_transfer
             FROM bank_accounts
             WHERE UPPER(iban) = UPPER(?)
             ORDER BY created_at ASC, id ASC
@@ -261,6 +298,7 @@ def find_bank_account_by_iban(iban: str) -> dict[str, Any] | None:
         "iban": row["iban"],
         "account_name": row["account_name"],
         "holder_name": row["holder_name"],
+        "can_transfer": None if row["can_transfer"] is None else bool(row["can_transfer"]),
     }
 
 
@@ -325,6 +363,7 @@ def update_bank_account(
     account_name: str | None = None,
     account_iban: str | None = None,
     holder_name: str | None = None,
+    can_transfer: bool | None = None,
 ) -> bool:
     normalized_iban = normalize_text(iban)
     if not normalized_iban:
@@ -332,7 +371,11 @@ def update_bank_account(
 
     with get_connection() as connection:
         row = connection.execute(
-            "SELECT iban, account_name, holder_name FROM bank_accounts WHERE scope = ? AND UPPER(iban) = UPPER(?)",
+            """
+            SELECT iban, account_name, holder_name, can_transfer
+            FROM bank_accounts
+            WHERE scope = ? AND UPPER(iban) = UPPER(?)
+            """,
             (scope, normalized_iban),
         ).fetchone()
 
@@ -344,14 +387,19 @@ def update_bank_account(
         new_holder = (
             normalize_text(holder_name) if holder_name is not None else row["holder_name"]
         )
+        new_can_transfer = (
+            _to_stored_can_transfer(can_transfer, row["can_transfer"])
+            if can_transfer is not None
+            else row["can_transfer"]
+        )
         now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
         connection.execute(
             """
             UPDATE bank_accounts
-            SET iban = ?, account_name = ?, holder_name = ?, updated_at = ?
+            SET iban = ?, account_name = ?, holder_name = ?, can_transfer = ?, updated_at = ?
             WHERE scope = ? AND UPPER(iban) = UPPER(?)
             """,
-            (new_iban, new_name, new_holder, now, scope, normalized_iban),
+            (new_iban, new_name, new_holder, new_can_transfer, now, scope, normalized_iban),
         )
         return True
 

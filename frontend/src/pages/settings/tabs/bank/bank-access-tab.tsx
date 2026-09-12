@@ -22,7 +22,6 @@ import {
   saveBankCredentials,
   TanRequiredError,
 } from "@/lib/bank/credentials";
-import { hasFreshCache } from "@/lib/fetch-cache";
 import { FINTS_SYNC_REQUEST_EVENT } from "@/lib/sync-events";
 import { RateLimitError } from "@/lib/upload-helper";
 
@@ -53,6 +52,7 @@ export function BankAccessTab() {
     decoupled: boolean;
     challenge: string | null;
   } | null>(null);
+  const [checkTanInput, setCheckTanInput] = useState("");
   const [checkIsWarning, setCheckIsWarning] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const cooldownRef = useRef(cooldown);
@@ -65,15 +65,6 @@ export function BankAccessTab() {
   }, [cooldown]);
 
   const loadData = async (options?: { forceRefresh?: boolean }) => {
-    const shouldShowLoading =
-      options?.forceRefresh ||
-      !(hasFreshCache("available-banks") && hasFreshCache("bank-credentials"));
-
-    if (shouldShowLoading) {
-      setAvailableBanks([]);
-      setLinkedAccounts([]);
-    }
-
     const [banks, credentials] = await Promise.all([
       fetchAvailableBanks({ forceRefresh: options?.forceRefresh }).catch(() => []),
       fetchBankCredentials({ forceRefresh: options?.forceRefresh }).catch(() => []),
@@ -112,26 +103,15 @@ export function BankAccessTab() {
     setCheckError(null);
     setCheckTanRequired(null);
     setCheckMessage("");
+    setCheckTanInput("");
   };
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    const hasDuplicateCredentials = linkedAccounts.some(
-      (credential) =>
-        credential.bank_key === form.bank_key && credential.username === form.username,
-    );
-
-    if (hasDuplicateCredentials) {
-      setCheckError("Diese Anmeldedaten sind bereits hinterlegt.");
-      setCheckDialogOpen(true);
-      return;
-    }
-
+  const runCheck = async (tan?: string) => {
     setIsChecking(true);
     setCheckDialogOpen(true);
     setCheckError(null);
     setCheckTanRequired(null);
+    setCheckTanInput("");
     setCheckIsWarning(false);
     setCheckMessage("Bankzugang wird gerade überprüft ...");
 
@@ -141,12 +121,15 @@ export function BankAccessTab() {
     }, 4000);
 
     try {
-      const discoveredAccounts = await fetchBankAccounts({
-        bank_key: form.bank_key,
-        username: form.username,
-        pin: form.pin,
-        tan_medium: form.tan_medium.trim() || undefined,
-      });
+      const discoveredAccounts = await fetchBankAccounts(
+        {
+          bank_key: form.bank_key,
+          username: form.username,
+          pin: form.pin,
+          tan_medium: form.tan_medium.trim() || undefined,
+        },
+        tan,
+      );
 
       setCheckMessage("Bankzugang ist gültig. Speichere jetzt ...");
 
@@ -159,6 +142,7 @@ export function BankAccessTab() {
           iban: account.iban,
           account_name: account.account_name ?? account.product_name ?? account.iban,
           holder_name: account.holder_name,
+          can_transfer: account.can_transfer ?? null,
         })),
       });
 
@@ -167,6 +151,7 @@ export function BankAccessTab() {
       setForm(INITIAL_FORM_STATE);
       setCheckDialogOpen(false);
       setCheckMessage("");
+      setCheckTanInput("");
 
       await loadData({ forceRefresh: true });
 
@@ -195,6 +180,38 @@ export function BankAccessTab() {
     } finally {
       setIsChecking(false);
     }
+  };
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const hasDuplicateCredentials = linkedAccounts.some(
+      (credential) =>
+        credential.bank_key === form.bank_key && credential.username === form.username,
+    );
+
+    if (hasDuplicateCredentials) {
+      setCheckError("Diese Anmeldedaten sind bereits hinterlegt.");
+      setCheckDialogOpen(true);
+      return;
+    }
+
+    await runCheck();
+  };
+
+  const handleTanSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const tan = checkTanInput.trim();
+    if (!tan) return;
+    await runCheck(tan);
+  };
+
+  const handleAutoSyncChange = (scope: string, checked: boolean) => {
+    setLinkedAccounts((current) =>
+      current.map((credential) =>
+        credential.scope === scope ? { ...credential, auto_sync: checked } : credential,
+      ),
+    );
   };
 
   const handleDeleteOne = async (scope: string) => {
@@ -270,6 +287,9 @@ export function BankAccessTab() {
                 placeholder="Online-Banking-Login"
                 autoComplete="off"
               />
+              {selectedBank?.username_hint ? (
+                <p className="text-xs text-muted-foreground">{selectedBank.username_hint}</p>
+              ) : null}
             </div>
 
             <div className="grid gap-2">
@@ -332,14 +352,31 @@ export function BankAccessTab() {
                   <p>
                     {checkTanRequired.decoupled
                       ? "Öffne deine Banking-App und bestätige die Verbindung. Der Vorgang wird automatisch fortgesetzt, sobald die Freigabe erteilt wurde."
-                      : `Gib den folgenden Challenge-Code in deinem TAN-Generator ein:\n${checkTanRequired.challenge ?? "-"}`}
+                      : checkTanRequired.challenge ||
+                        "Bitte generiere eine TAN und gib sie hier ein."}
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 rounded-lg border bg-muted/40 p-4 text-sm">
-                <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-                <span>Warte auf Freigabe ...</span>
-              </div>
+              {checkTanRequired.decoupled ? (
+                <div className="flex items-center gap-3 rounded-lg border bg-muted/40 p-4 text-sm">
+                  <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                  <span>Warte auf Freigabe ...</span>
+                </div>
+              ) : (
+                <form className="flex items-center gap-3" onSubmit={handleTanSubmit}>
+                  <Input
+                    value={checkTanInput}
+                    onChange={(event) => setCheckTanInput(event.target.value)}
+                    placeholder="TAN"
+                    autoComplete="one-time-code"
+                    autoFocus
+                  />
+                  <Button type="submit" disabled={isChecking || checkTanInput.trim() === ""}>
+                    {isChecking ? <Loader2 className="size-4 animate-spin" /> : null}
+                    <span>TAN senden</span>
+                  </Button>
+                </form>
+              )}
             </div>
           ) : !checkError ? (
             <div className="space-y-4">
@@ -369,6 +406,7 @@ export function BankAccessTab() {
         linkedBanks={linkedAccounts}
         deletingScope={deletingScope}
         onDeleteOne={handleDeleteOne}
+        onAutoSyncChange={handleAutoSyncChange}
         canTransferByBankKey={new Map(availableBanks.map((bank) => [bank.key, bank.can_transfer]))}
       />
     </div>

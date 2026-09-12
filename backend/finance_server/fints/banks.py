@@ -12,6 +12,7 @@ class BankDefinition:
     bank_logo: str
     can_transfer: bool
     needs_tan_medium_name: bool = False
+    username_hint: str | None = None
 
 BANKS: tuple[BankDefinition, ...] = (
     BankDefinition(
@@ -37,7 +38,7 @@ BANKS: tuple[BankDefinition, ...] = (
         fints_url="https://fints.dkb.de/fints",
         bank_logo="images/bank-logos/dkb.png",
         can_transfer=True,
-        needs_tan_medium_name=True,
+        needs_tan_medium_name=False,
     ),
     BankDefinition(
         key="norisbank",
@@ -63,6 +64,12 @@ BANKS: tuple[BankDefinition, ...] = (
         fints_url="https://brokerage-hbci.consorsbank.de/hbci",
         bank_logo="images/bank-logos/consorsbank.png",
         can_transfer=True,
+username_hint=(
+    "Der Anmeldename setzt sich aus Ihrer Kontonummer und der "
+    "dreistelligen Berechtigungsnummer zusammen.\n\n"
+    "Die Berechtigungsnummer wird direkt an die Kontonummer angehängt. "
+    "Bei alleiniger Kontoinhaberschaft lautet sie in der Regel 001."
+),
     ),
 )
 

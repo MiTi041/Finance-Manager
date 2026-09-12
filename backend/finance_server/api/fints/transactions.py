@@ -1,7 +1,7 @@
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from fints.exceptions import FinTSClientError
+from fints.exceptions import FinTSClientError, FinTSError
 
 from finance_server.models.fints import TransactionsRequest
 from finance_server.fints.client import resolve_bank_credentials
@@ -16,7 +16,8 @@ router = APIRouter()
 def get_transactions(request: TransactionsRequest) -> dict[str, Any]:
     try:
         scope = request.scope or (request.credentials.scope if request.credentials else None)
-        enforce_rate_limit("fetch_transactions", scope)
+        if request.tan is None:
+            enforce_rate_limit("fetch_transactions", scope)
         credentials = resolve_bank_credentials(request.credentials, request.scope)
         effective_days = (
             request.days
@@ -34,3 +35,5 @@ def get_transactions(request: TransactionsRequest) -> dict[str, Any]:
         raise HTTPException(status_code=401, detail=err.to_detail())
     except FinTSClientError as err:
         raise HTTPException(status_code=502, detail=f"FinTS-Initialisierung fehlgeschlagen. Originalfehler: {err}")
+    except FinTSError as err:
+        raise HTTPException(status_code=502, detail=f"FinTS-Verbindung fehlgeschlagen. Originalfehler: {err}")

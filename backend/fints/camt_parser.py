@@ -2907,7 +2907,9 @@ def _parse_element(element, parent_name='', translate=True):
                                             child_name,
                                             translate=translate))
         elif child_name in data_dict:
-            data_dict[child_name] += child.text
+            previous = data_dict[child_name] or ""
+            addition = child.text or ""
+            data_dict[child_name] = f"{previous} {addition}".strip()
         else:
             data_dict[child_name] = child.text
 

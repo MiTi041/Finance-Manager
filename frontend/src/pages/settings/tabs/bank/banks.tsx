@@ -28,6 +28,7 @@ type BanksProps = {
   linkedBanks: StoredBankCredentials[];
   deletingScope: string | null;
   onDeleteOne: (scope: string) => void | Promise<void>;
+  onAutoSyncChange: (scope: string, checked: boolean) => void;
   canTransferByBankKey?: Map<string, boolean>;
 };
 
@@ -52,13 +53,17 @@ function formatIban(value?: string) {
   return value.trim().replace(/(.{4})(?=.)/g, "$1 ");
 }
 
-function getAccounts(credential: StoredBankCredentials) {
+function getAccounts(
+  credential: StoredBankCredentials,
+  bankCanTransfer: boolean | undefined,
+) {
   const accounts = credential.accounts ?? [];
   if (accounts.length > 0) {
     return accounts.map((account, index) => ({
       iban: account.iban ?? credential.account_iban ?? "",
       account_name: account.account_name ?? credential.account_name ?? "",
       holder_name: account.holder_name ?? "",
+      can_transfer: account.can_transfer ?? bankCanTransfer ?? null,
       fallback: index === 0 && !account.iban && credential.account_iban,
     }));
   }
@@ -67,6 +72,7 @@ function getAccounts(credential: StoredBankCredentials) {
       iban: credential.account_iban ?? "",
       account_name: credential.account_name ?? "",
       holder_name: "",
+      can_transfer: bankCanTransfer ?? null,
       fallback: true,
     },
   ];
@@ -76,6 +82,7 @@ export function Banks({
   linkedBanks,
   deletingScope,
   onDeleteOne,
+  onAutoSyncChange,
   canTransferByBankKey,
 }: BanksProps) {
   const [editing, setEditing] = useState<EditingState>(null);
@@ -124,8 +131,11 @@ export function Banks({
 
   const handleToggleAutoSync = async (scope: string, checked: boolean) => {
     setAutoSyncSaving(scope);
+    onAutoSyncChange(scope, checked);
     try {
       await updateBankCredentials(scope, { auto_sync: checked });
+    } catch {
+      onAutoSyncChange(scope, !checked);
     } finally {
       setAutoSyncSaving(null);
     }
@@ -157,7 +167,7 @@ export function Banks({
       </span>
       {balanceError ? <p className="text-sm text-destructive">{balanceError}</p> : null}
       {linkedBanks.map((bank) => {
-        const accounts = getAccounts(bank);
+        const accounts = getAccounts(bank, canTransferByBankKey?.get(bank.bank_key));
 
         return (
           <Card key={bank.scope} className="overflow-hidden gap-4 pt-4">
@@ -268,6 +278,14 @@ export function Banks({
                           <p className="mt-0.5 text-xs text-muted-foreground font-mono tracking-wide">
                             {formatIban(account.iban)}
                           </p>
+                          {account.can_transfer === false ? (
+                            <Badge
+                              variant="secondary"
+                              className="mt-1.5 bg-muted text-muted-foreground text-[11px] px-1.5 py-0"
+                            >
+                              Überweisungen nicht möglich
+                            </Badge>
+                          ) : null}
                         </div>
 
                         {/* Actions */}

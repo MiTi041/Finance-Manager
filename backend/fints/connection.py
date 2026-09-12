@@ -37,12 +37,18 @@ class FinTSHTTPSConnection:
             logger.debug("Sending {}>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n{}\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n".format("(abbrv.)" if log_configuration.reduced else "", log_out.getvalue()))
             log_out.truncate(0)
 
-        r = self.session.post(
-            self.url, data=base64.b64encode(msg.render_bytes()),
-            headers={
-                'Content-Type': 'text/plain',
-            },
-        )
+        try:
+            r = self.session.post(
+                self.url, data=base64.b64encode(msg.render_bytes()),
+                headers={
+                    'Content-Type': 'text/plain',
+                },
+            )
+        except requests.exceptions.RequestException as err:
+            raise FinTSConnectionError(
+                'Verbindung zur Bank fehlgeschlagen: {}. '
+                'Die Bank hat die Verbindung ohne Antwort geschlossen.'.format(err)
+            ) from err
 
         if r.status_code < 200 or r.status_code > 299:
             raise FinTSConnectionError('Bad status code {}'.format(r.status_code))
