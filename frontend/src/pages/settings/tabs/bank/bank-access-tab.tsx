@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { CheckCircle2, Loader2, ShieldCheck, Smartphone, Timer, X } from "lucide-react";
+import { CheckCircle2, Eye, EyeOff, Loader2, ShieldCheck, Smartphone, Timer, X } from "lucide-react";
 import {
   deleteBankCredentials,
   fetchAvailableBanks,
@@ -55,6 +55,7 @@ export function BankAccessTab() {
   const [checkTanInput, setCheckTanInput] = useState("");
   const [checkIsWarning, setCheckIsWarning] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const [showPin, setShowPin] = useState(false);
   const cooldownRef = useRef(cooldown);
   cooldownRef.current = cooldown;
 
@@ -296,14 +297,26 @@ export function BankAccessTab() {
               <label className="text-sm font-medium" htmlFor="pin">
                 Anmelde-PIN
               </label>
-              <Input
-                id="pin"
-                type="password"
-                value={form.pin}
-                onChange={(event) => handleChange("pin", event.target.value)}
-                placeholder="PIN"
-                autoComplete="new-password"
-              />
+              <div className="relative">
+                <Input
+                  id="pin"
+                  type={showPin ? "text" : "password"}
+                  value={form.pin}
+                  onChange={(event) => handleChange("pin", event.target.value)}
+                  placeholder="PIN"
+                  autoComplete="new-password"
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPin((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
+                  aria-label={showPin ? "PIN verbergen" : "PIN anzeigen"}
+                  tabIndex={-1}
+                >
+                  {showPin ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+              </div>
             </div>
 
             <div className="flex flex-wrap gap-3 pt-2">

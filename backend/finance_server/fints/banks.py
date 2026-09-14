@@ -12,6 +12,7 @@ class BankDefinition:
     bank_logo: str
     can_transfer: bool
     needs_tan_medium_name: bool = False
+    decoupled_login: bool = False
     username_hint: str | None = None
 
 BANKS: tuple[BankDefinition, ...] = (
@@ -30,6 +31,7 @@ BANKS: tuple[BankDefinition, ...] = (
         fints_url="https://banking-wl5.s-fints-pt-wl.de/fints30",
         bank_logo="images/bank-logos/sparkasse-lemgo.png",
         can_transfer=True,
+        decoupled_login=True,
     ),
     BankDefinition(
         key="dkb",

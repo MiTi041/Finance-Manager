@@ -136,6 +136,26 @@ def test_norisbank_forces_bestsign_mechanism():
     assert not getattr(client, "_finance_skip_init_tan", False)
 
 
+def test_sparkasse_skips_tan_media_lookup_with_empty_medium():
+    client = SimpleNamespace()
+    _apply_bank_specific_client_config(
+        client, BankCredentials(bank_key="sparkasse-lemgo", username="u", pin="p")
+    )
+    assert client.selected_tan_medium == ""
+    assert not getattr(client, "_finance_force_tan_mechanism", None)
+
+
+def test_sparkasse_keeps_user_provided_tan_medium():
+    client = SimpleNamespace()
+    _apply_bank_specific_client_config(
+        client,
+        BankCredentials(
+            bank_key="sparkasse-lemgo", username="u", pin="p", tan_medium="Mein Gerät"
+        ),
+    )
+    assert getattr(client, "selected_tan_medium", None) is None
+
+
 def test_other_banks_have_no_forced_tan_config():
     client = SimpleNamespace()
     _apply_bank_specific_client_config(
