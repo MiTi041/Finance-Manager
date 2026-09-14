@@ -603,6 +603,10 @@ def initialize_database(connection: sqlite3.Connection) -> None:
     migrate_reference_tables(connection)
     create_categories_table(connection)
 
+    _ensure_table_columns(connection, "kategorien", {"updated_at": "TEXT"})
+    _ensure_table_columns(connection, "zahlungspartner", {"updated_at": "TEXT"})
+
+    connection.execute("PRAGMA foreign_keys = OFF")
     for table, sql in [
         ("kategorien", SEED_CATEGORIES_SQL),
         ("zahlungspartner", SEED_ZAHLUNGSPARTNER_SQL),
@@ -611,6 +615,7 @@ def initialize_database(connection: sqlite3.Connection) -> None:
         row_count = connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
         if row_count == 0:
             connection.executescript(sql)
+    connection.execute("PRAGMA foreign_keys = ON")
 
     _ensure_table_columns(
         connection,
