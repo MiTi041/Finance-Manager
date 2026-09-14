@@ -372,6 +372,15 @@ def _apply_bank_specific_client_config(
         # mit 9010 "Verarbeitung nicht moeglich" ab.
         client.force_twostep_tan = {"HKKAZ"}
 
+    bank = get_bank_definition(creds.bank_key)
+    if bank.decoupled_login and not (creds.tan_medium or "").strip():
+        # Sparkassen (pushTAN 923, decoupled) verlangen eine Login-SCA, die
+        # bereits beim Dialog-Init als 3955-Challenge zurueckkommt. Ein vorab
+        # gesetztes leeres TAN-Medium ueberspringt den zusaetzlichen
+        # get_tan_media()-Dialog. Sonst entstehen zwei Challenges und der
+        # eigentliche Dialog pollt eine veraltete Auftragsreferenz.
+        client.selected_tan_medium = ""
+
 
 def make_client(creds: BankCredentials, from_data: bytes | None) -> FinTS3PinTanClient:
     bank = get_bank_definition(creds.bank_key)

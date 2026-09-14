@@ -91,10 +91,12 @@ class FinTSDialog:
                 if tan_seg:
                     # Some banks (e.g. Consorsbank) attach the login-SCA
                     # 0030/3955 response to the HKIDN segment instead of the
-                    # HKTAN segment, so check both references.
+                    # HKTAN segment, so check both references. Always overwrite
+                    # init_tan_response with the challenge of *this* dialog:
+                    # a previous dialog (e.g. the one opened by get_tan_media)
+                    # may have left a stale challenge behind, and polling that
+                    # stale task reference makes the login hang (3956 forever).
                     for ref in (tan_seg, segments[0]):
-                        if self.client.init_tan_response is not None:
-                            break
                         ref_responses = list(retval.responses(ref))
                         if any(resp.code in ('0030', '3955') for resp in ref_responses):
                             self.client.init_tan_response = NeedTANResponse(
@@ -106,6 +108,7 @@ class FinTSDialog:
                             )
                             if any(resp.code == '3955' for resp in ref_responses):
                                 self.client.init_tan_response.decoupled = True
+                            break
 
                 self.need_init = False
                 return retval

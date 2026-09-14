@@ -67,3 +67,17 @@ def test_init_sca_response_on_hkidn_with_3955_is_decoupled():
 
     assert client.init_tan_response is not None
     assert client.init_tan_response.decoupled is True
+
+
+def test_init_overwrites_stale_response_from_previous_dialog():
+    # A previous dialog (e.g. the one opened by get_tan_media) can leave a
+    # stale challenge in init_tan_response. The new dialog must overwrite it,
+    # otherwise the login SCA is polled against the wrong task reference.
+    client = FakeClient()
+    stale = SimpleNamespace(decoupled=False, tan_request=None)
+    client.init_tan_response = stale
+
+    _init_with_hkidn_codes(client, ["0030", "3955"])
+
+    assert client.init_tan_response is not stale
+    assert client.init_tan_response.decoupled is True
