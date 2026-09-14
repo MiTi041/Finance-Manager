@@ -38,6 +38,7 @@ import { getTimeSpanForRange } from "@/types/time-range";
 import type { DateFilterValue } from "@/types/date-filter";
 
 import { StatCard } from "./components/stat-card";
+import { AccountCards } from "./components/account-cards";
 import { BalanceChart } from "./components/balance-chart";
 import { MonthlyChart } from "./components/monthly-chart";
 import { DashboardSkeleton } from "./components/dashboard-skeleton";
@@ -246,13 +247,7 @@ export default function DashboardPage() {
               accent={balance >= 0 ? "#00d4a1" : "#ff5c6c"}
               icon={Wallet}
               footer={dateFooter ?? undefined}
-              accountBalances={activeAccountIban === "all" ? accountBalances : undefined}
               pendingValue={selectedPending}
-              transferableIbans={activeAccountIban === "all" ? transferableIbanSet : undefined}
-              onAccountTransfer={(iban) => {
-                setPresetSenderIban(iban);
-                setSetupOpen(true);
-              }}
               action={
                 activeAccountIban !== "all" && senderAccounts.length > 0 ? (
                   <Button
@@ -301,6 +296,17 @@ export default function DashboardPage() {
               footer={dateFooter ?? undefined}
             />
           </div>
+
+          {activeAccountIban === "all" && accountBalances.length > 0 && (
+            <AccountCards
+              accountBalances={accountBalances}
+              transferableIbans={transferableIbanSet}
+              onAccountTransfer={(iban) => {
+                setPresetSenderIban(iban);
+                setSetupOpen(true);
+              }}
+            />
+          )}
 
           {transactions.length > 0 && (
             <>
