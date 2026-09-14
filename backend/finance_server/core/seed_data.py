@@ -12,7 +12,7 @@ def _load_sql(filename: str) -> str:
     return path.read_text(encoding="utf-8")
 
 
-SEED_CATEGORIES_SQL = _load_sql("categories.sql")
+SEED_CATEGORIES_SQL = _load_sql("kategorien.sql")
 SEED_ZAHLUNGSPARTNER_SQL = _load_sql("zahlungspartner.sql")
 SEED_IBANS_SQL = _load_sql("ibans.sql")
 SEED_EMPFAENGERKONTEN_SQL = _load_sql("empfaengerkonten.sql")

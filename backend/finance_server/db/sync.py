@@ -283,7 +283,10 @@ def _is_default_allocation_bucket(row: Any) -> bool:
     return row["target_amount"] is None and row["target_months"] is None and row["recipient_iban"] is None
 
 
-def apply_sync_op(op: dict[str, Any]) -> bool:
+REFERENCE_TABLES = {"kategorien", "zahlungspartner", "ibans"}
+
+
+def apply_sync_op(op: dict[str, Any], *, is_first_sync: bool = False) -> bool:
     table = op["table_name"]
     row_id = op["row_id"]
     op_type = op["op_type"]
@@ -294,6 +297,10 @@ def apply_sync_op(op: dict[str, Any]) -> bool:
     with get_connection() as connection:
         connection.execute("PRAGMA foreign_keys = OFF")
         pk, pk_value, use_id = _resolve_lookup(table, row_id, data)
+
+        if op_type == "DELETE" and table in REFERENCE_TABLES:
+            if is_first_sync:
+                return False
 
         if op_type == "DELETE":
             if table == "refund_links":

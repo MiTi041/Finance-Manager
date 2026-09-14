@@ -262,6 +262,7 @@ class SyncService:
 
         self._pull_total = 0
         self._pull_progress = 0
+        is_first_sync = not self._remote_seqs
 
         for remote_id in remote_devices:
             if remote_id == device_id:
@@ -289,7 +290,7 @@ class SyncService:
                 ops = decrypt_batch(data, self._sync_key)
                 for op in ops:
                     try:
-                        result = apply_sync_op(op)
+                        result = apply_sync_op(op, is_first_sync=is_first_sync)
                         if not result:
                             logger.warning("Sync op skipped: %s/%s id=%s",
                                            op.get("table_name"), op.get("op_type"), op.get("row_id"))
