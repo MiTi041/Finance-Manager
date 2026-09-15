@@ -19,9 +19,9 @@ def to_row_payload(tx: dict[str, Any]) -> dict[str, Any]:
     data = tx.get("data", {}) if isinstance(tx.get("data"), dict) else {}
     account = tx.get("account", {}) if isinstance(tx.get("account"), dict) else {}
 
-    from finance_server.services.payroll_parsing import enrich_paypal_merchant
+    from finance_server.services.payroll_parsing import enrich_transaction
 
-    enrich_paypal_merchant(data)
+    enrich_transaction(data)
 
     payload = {
         "account_iban": normalize_text(account.get("iban")),

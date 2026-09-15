@@ -5,7 +5,7 @@ from typing import Any
 
 from datetime import datetime, timezone
 
-from finance_server.core.seed_data import SEED_CATEGORIES_SQL, SEED_ZAHLUNGSPARTNER_SQL, SEED_IBANS_SQL
+from finance_server.core.seed_data import SEED_SCRIPTS
 
 
 def create_umsaetze_table(connection: sqlite3.Connection) -> None:
@@ -607,11 +607,9 @@ def initialize_database(connection: sqlite3.Connection) -> None:
     _ensure_table_columns(connection, "zahlungspartner", {"updated_at": "TEXT"})
 
     connection.execute("PRAGMA foreign_keys = OFF")
-    for table, sql in [
-        ("kategorien", SEED_CATEGORIES_SQL),
-        ("zahlungspartner", SEED_ZAHLUNGSPARTNER_SQL),
-        ("ibans", SEED_IBANS_SQL),
-    ]:
+    for table, sql in SEED_SCRIPTS:
+        if not sql.strip():
+            continue
         row_count = connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
         if row_count == 0:
             connection.executescript(sql)

@@ -4,6 +4,8 @@ import re
 
 PAYPAL_PAYEE_REGEX = re.compile(r"(?i)^\s*PAYPAL\b")
 
+ADYEN_PAYEE_REGEX = re.compile(r"(?i)^\s*ADYEN(?:\s*N\.?\s*V\.?)?\s*$")
+
 PAYPAL_MEMO_REGEX = re.compile(
     r"(?:,\s*Ihr\s*Einkauf\s*bei\s*|PAYPAL[.\-]?ZAHLUNG\s*UBER\s*LASTSCHRIFT\s*an\s*)(.+?)(?:\s*/\s*ABBUCHUNG|\s+ABBUCHUNG|/\s*|$)",
     re.IGNORECASE | re.DOTALL,
@@ -23,9 +25,23 @@ def extract_paypal_merchant(purpose: str) -> str | None:
     return merchant if merchant else None
 
 
-def build_paypal_pseud_iban(merchant: str) -> str:
+def extract_adyen_merchant(deviate_applicant: str) -> str | None:
+    # Bank liefert "Händler/Straße/Ort/DE" – erstes Segment ist der echte Empfänger.
+    merchant = (deviate_applicant or "").split("/", 1)[0].strip()
+    return merchant if merchant else None
+
+
+def _build_pseud_iban(prefix: str, merchant: str) -> str:
     normalized = re.sub(r"\s+", " ", merchant).strip().upper()
-    return f"PAYPAL:{normalized}"
+    return f"{prefix}:{normalized}"
+
+
+def build_paypal_pseud_iban(merchant: str) -> str:
+    return _build_pseud_iban("PAYPAL", merchant)
+
+
+def build_adyen_pseud_iban(merchant: str) -> str:
+    return _build_pseud_iban("ADYEN", merchant)
 
 
 def enrich_paypal_merchant(transaction_data: dict) -> dict:
@@ -51,4 +67,35 @@ def enrich_paypal_merchant(transaction_data: dict) -> dict:
     transaction_data["applicant_bic"] = ""
     transaction_data["applicant_name"] = f"PAYPAL {merchant}"
 
+    return transaction_data
+
+
+def enrich_adyen_merchant(transaction_data: dict) -> dict:
+    applicant_name = transaction_data.get("applicant_name", "")
+    if not applicant_name or not ADYEN_PAYEE_REGEX.match(applicant_name):
+        return transaction_data
+
+    merchant = extract_adyen_merchant(transaction_data.get("deviate_applicant", ""))
+    if not merchant:
+        return transaction_data
+
+    pseud_iban = build_adyen_pseud_iban(merchant)
+    real_adyen_iban = transaction_data.get("applicant_iban", "")
+    real_adyen_bic = transaction_data.get("applicant_bic", "")
+
+    if not transaction_data.get("gvc_applicant_iban"):
+        transaction_data["gvc_applicant_iban"] = real_adyen_iban
+    if not transaction_data.get("gvc_applicant_bic"):
+        transaction_data["gvc_applicant_bic"] = real_adyen_bic
+
+    transaction_data["applicant_iban"] = pseud_iban
+    transaction_data["applicant_bic"] = ""
+    transaction_data["applicant_name"] = f"ADYEN {merchant}"
+
+    return transaction_data
+
+
+def enrich_transaction(transaction_data: dict) -> dict:
+    enrich_paypal_merchant(transaction_data)
+    enrich_adyen_merchant(transaction_data)
     return transaction_data

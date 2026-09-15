@@ -6,7 +6,10 @@ from unittest.mock import patch
 
 from finance_server.db.sync import apply_sync_op
 from finance_server.db.transactions import to_row_payload
-from finance_server.services.payroll_parsing import enrich_paypal_merchant
+from finance_server.services.payroll_parsing import (
+    enrich_adyen_merchant,
+    enrich_paypal_merchant,
+)
 
 
 DEICHMANN = {
@@ -43,6 +46,72 @@ class TestEnrichPaypalMerchant:
         enrich_paypal_merchant(data)
         assert data["applicant_iban"] == "DE86300500000001052141"
         assert "gvc_applicant_iban" not in data
+
+
+class TestEnrichAdyenMerchant:
+    def test_zalando_gets_enriched(self):
+        data = {
+            "applicant_name": "Adyen N.V.",
+            "applicant_iban": "DE29300600100005021573",
+            "applicant_bic": "GENODEDDXXX",
+            "deviate_applicant": "Zalando Payments GmbH/Hedwig-Wachenheim-Str./Berlin/DE",
+        }
+        enrich_adyen_merchant(data)
+        assert data["applicant_name"] == "ADYEN Zalando Payments GmbH"
+        assert data["applicant_iban"] == "ADYEN:ZALANDO PAYMENTS GMBH"
+        assert data["applicant_bic"] == ""
+        assert data["gvc_applicant_iban"] == "DE29300600100005021573"
+        assert data["gvc_applicant_bic"] == "GENODEDDXXX"
+
+    def test_variant_without_spaces(self):
+        data = {
+            "applicant_name": "AdyenN.V.",
+            "applicant_iban": "DE29300600100005021573",
+            "applicant_bic": "GENODEDDXXX",
+            "deviate_applicant": "Autogrill Deutschland/Flughafen/Cologne/DE",
+        }
+        enrich_adyen_merchant(data)
+        assert data["applicant_name"] == "ADYEN Autogrill Deutschland"
+        assert data["applicant_iban"] == "ADYEN:AUTOGRILL DEUTSCHLAND"
+
+    def test_missing_deviate_applicant_untouched(self):
+        data = {
+            "applicant_name": "Adyen N.V.",
+            "applicant_iban": "DE29300600100005021573",
+            "applicant_bic": "GENODEDDXXX",
+            "deviate_applicant": "",
+        }
+        enrich_adyen_merchant(data)
+        assert data["applicant_name"] == "Adyen N.V."
+        assert data["applicant_iban"] == "DE29300600100005021573"
+        assert "gvc_applicant_iban" not in data
+
+    def test_non_adyen_untouched(self):
+        data = {"applicant_name": "DEICHMANN SCHUHE", "applicant_iban": "DE86300500000001052141"}
+        enrich_adyen_merchant(data)
+        assert data["applicant_iban"] == "DE86300500000001052141"
+
+    def test_adyen_enriched_through_insert_funnel(self):
+        payload = to_row_payload(
+            {
+                "account": {"iban": "AT111"},
+                "data": {
+                    "account_iban": "AT111",
+                    "applicant_name": "Adyen N.V.",
+                    "applicant_iban": "DE29300600100005021573",
+                    "applicant_bic": "GENODEDDXXX",
+                    "deviate_applicant": "Zalando Payments GmbH/Hedwig-Wachenheim-Str./Berlin/DE",
+                    "purpose": "2026-09-14T12.14Debitk.22 2026-12",
+                    "amount": -62.65,
+                    "currency": "EUR",
+                    "date": "2026-09-15",
+                },
+            }
+        )
+        assert payload["applicant_name"] == "ADYEN Zalando Payments GmbH"
+        assert payload["applicant_iban"] == "ADYEN:ZALANDO PAYMENTS GMBH"
+        assert payload["gvc_applicant_iban"] == "DE29300600100005021573"
+        assert payload["gvc_applicant_bic"] == "GENODEDDXXX"
 
 
 class TestToRowPayload:

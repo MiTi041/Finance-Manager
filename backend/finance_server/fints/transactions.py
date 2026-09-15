@@ -22,7 +22,7 @@ from finance_server.db import (
 )
 from finance_server.models.bank import BankCredentials
 from finance_server.services.overdraw_notify import check_pending_overdraw
-from finance_server.services.payroll_parsing import enrich_paypal_merchant
+from finance_server.services.payroll_parsing import enrich_transaction
 from fints.client import NeedTANResponse
 
 from .accounts import _extract_account_details, _store_account_details
@@ -345,7 +345,7 @@ def fetch_transactions(
                         "currency":                       currency_val,
                     }
 
-                    enrich_paypal_merchant(transaction_data)
+                    enrich_transaction(transaction_data)
 
                     entry = {
                         "account": {

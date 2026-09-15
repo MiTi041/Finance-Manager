@@ -12,6 +12,17 @@ def test_initialize_database_creates_budgets_table():
     conn.close()
 
 
+def test_initialize_database_seeds_reference_data():
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    initialize_database(conn)
+
+    assert conn.execute("SELECT COUNT(*) FROM kategorien").fetchone()[0] > 0
+    assert conn.execute("SELECT COUNT(*) FROM zahlungspartner").fetchone()[0] > 0
+    assert conn.execute("SELECT COUNT(*) FROM ibans").fetchone()[0] > 0
+    conn.close()
+
+
 def test_initialize_database_migrates_legacy_budgets():
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row

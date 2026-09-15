@@ -227,3 +227,4 @@ insert into `ibans` (`f_zahlungspartner_id`, `iban`) values (184, 'DE39760260000
 insert into `ibans` (`f_zahlungspartner_id`, `iban`) values (185, 'DE33760300800290317792');
 insert into `ibans` (`f_zahlungspartner_id`, `iban`) values (186, 'DE46120300001211954068');
 insert into `ibans` (`f_zahlungspartner_id`, `iban`) values (187, 'DE26664926000009200207');
+insert into `ibans` (`f_zahlungspartner_id`, `iban`) values (142, 'ADYEN:ZALANDO PAYMENTS GMBH');

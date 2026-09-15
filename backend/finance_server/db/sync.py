@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from finance_server.core.database import get_connection
-from finance_server.services.payroll_parsing import enrich_paypal_merchant
+from finance_server.services.payroll_parsing import enrich_transaction
 
 
 def get_or_create_device_id(connection: sqlite3.Connection | None = None) -> str:
@@ -355,7 +355,7 @@ def apply_sync_op(op: dict[str, Any], *, is_first_sync: bool = False) -> bool:
             return False
 
         if table == "umsaetze":
-            enrich_paypal_merchant(filtered_data)
+            enrich_transaction(filtered_data)
 
         if table == "allocation_buckets" and data.get("recipient_account_iban"):
             resolved = connection.execute(
