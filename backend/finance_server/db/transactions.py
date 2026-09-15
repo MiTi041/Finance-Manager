@@ -67,6 +67,8 @@ def to_row_payload(tx: dict[str, Any]) -> dict[str, Any]:
         "amount": normalize_local_amount(data.get("amount")),
         "currency": normalize_text(data.get("currency")),
         "dummy_entry": 1 if data.get("dummy_entry") else 0,
+        "kategorie": data.get("kategorie"),
+        "note": normalize_text(data.get("note")),
         "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         "created_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
     }
@@ -163,6 +165,7 @@ def insert_transactions(rows: Iterable[dict[str, Any]]) -> dict[str, int]:
                 FRST_ONE_OFF_RECC, old_SEPA_CI, old_SEPA_additional_position_reference,
                 settlement_tag, debitor_identifier, original_amount, amount, currency,
                 dummy_entry,
+                kategorie, note,
                 transaction_hash, created_at
             )
             VALUES (
@@ -177,6 +180,7 @@ def insert_transactions(rows: Iterable[dict[str, Any]]) -> dict[str, int]:
                 :FRST_ONE_OFF_RECC, :old_SEPA_CI, :old_SEPA_additional_position_reference,
                 :settlement_tag, :debitor_identifier, :original_amount, :amount, :currency,
                 :dummy_entry,
+                :kategorie, :note,
                 :transaction_hash, :created_at
             )
             """,

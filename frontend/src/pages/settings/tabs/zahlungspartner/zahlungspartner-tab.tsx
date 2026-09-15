@@ -98,6 +98,7 @@ export function ZahlungspartnerTab() {
   const [deletingLogoId, setDeletingLogoId] = useState<number | null>(null);
   const [showOnlyWithoutWebsite, setShowOnlyWithoutWebsite] = useState(false);
   const [showOnlyWithoutLogo, setShowOnlyWithoutLogo] = useState(false);
+  const [showOnlyWithoutUploadedLogo, setShowOnlyWithoutUploadedLogo] = useState(false);
   const [showIndividualOwners, setShowIndividualOwners] = useState(true);
 
   const hook = useSettingsTab<ZahlungspartnerRecord, OwnerFormState>({
@@ -359,6 +360,7 @@ export function ZahlungspartnerTab() {
   const matchesOwnerFilters = (owner: ZahlungspartnerRecord) => {
     const hasWebsite = Boolean(owner.website?.trim());
     const hasLogo = Boolean(owner.logo_url?.trim() || owner.local_logo_path);
+    const hasUploadedLogo = Boolean(owner.local_logo_path?.trim());
 
     if (!showIndividualOwners && !owner.is_company) {
       return false;
@@ -369,6 +371,10 @@ export function ZahlungspartnerTab() {
     }
 
     if (showOnlyWithoutLogo && hasLogo) {
+      return false;
+    }
+
+    if (showOnlyWithoutUploadedLogo && hasUploadedLogo) {
       return false;
     }
 
@@ -460,6 +466,26 @@ export function ZahlungspartnerTab() {
                 }
               />
               Zahlungspartner ohne Logo anzeigen
+            </Button>,
+            <Button
+              key="filter-without-uploaded-logo"
+              type="button"
+              variant="ghost"
+              className={
+                showOnlyWithoutUploadedLogo
+                  ? "!bg-foreground !text-background hover:!bg-foreground/90 hover:!text-background"
+                  : "!bg-muted !text-muted-foreground hover:!bg-muted/80 hover:!text-foreground"
+              }
+              onClick={() => setShowOnlyWithoutUploadedLogo((current) => !current)}
+            >
+              <span
+                className={
+                  showOnlyWithoutUploadedLogo
+                    ? "size-2 rounded-full bg-background"
+                    : "size-2 rounded-full bg-current opacity-60"
+                }
+              />
+              Zahlungspartner ohne hochgeladenes Logo anzeigen
             </Button>,
           ]}
           toolbarActions={[

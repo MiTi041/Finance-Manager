@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 from finance_server.db import (
@@ -10,12 +11,15 @@ from finance_server.db import (
     fetch_latest_transaction,
     fetch_pending_transactions,
     fetch_transactions,
+    insert_transactions,
+    load_bank_credentials_by_iban,
     update_transaction_category,
     update_transaction_note,
     update_transaction_purpose,
     update_transaction_splits,
     update_transactions_category_batch,
 )
+from finance_server.db.utils import normalize_text
 
 
 class TransactionService:
@@ -42,6 +46,43 @@ class TransactionService:
         blz: str | None = None,
     ) -> dict[str, Any] | None:
         return fetch_latest_transaction(iban=iban, account_blz=blz)
+
+    def create_manual_transaction(
+        self,
+        account_iban: str,
+        date: str,
+        amount: float,
+        recipient_name: str | None = None,
+        recipient_iban: str | None = None,
+        purpose: str | None = None,
+        category: int | None = None,
+        note: str | None = None,
+    ) -> dict[str, int]:
+        credentials = load_bank_credentials_by_iban(account_iban)
+        if not credentials or normalize_text(credentials.get("bank_key")).lower() != "manual":
+            raise ValueError("MANUAL_ACCOUNT_REQUIRED")
+        if abs(amount) <= 0.0001:
+            raise ValueError("INVALID_AMOUNT")
+
+        return insert_transactions(
+            [
+                {
+                    "account": {"iban": account_iban},
+                    "data": {
+                        "id": f"manual-{uuid.uuid4().hex}",
+                        "date": date,
+                        "entry_date": date,
+                        "amount": amount,
+                        "recipient_name": recipient_name,
+                        "applicant_iban": recipient_iban,
+                        "purpose": purpose,
+                        "kategorie": category,
+                        "note": note,
+                        "dummy_entry": True,
+                    },
+                }
+            ]
+        )
 
     def delete_transaction(self, transaction_id: int) -> bool:
         return delete_transaction(transaction_id)

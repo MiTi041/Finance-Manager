@@ -73,6 +73,14 @@ username_hint=(
     "Bei alleiniger Kontoinhaberschaft lautet sie in der Regel 001."
 ),
     ),
+    BankDefinition(
+        key="manual",
+        name="Manuell",
+        blz="",
+        fints_url="",
+        bank_logo="",
+        can_transfer=False,
+    ),
 )
 
 

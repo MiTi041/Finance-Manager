@@ -74,7 +74,7 @@ def _normalize_accounts(accounts: Any) -> list[dict[str, Any]]:
         if not isinstance(account, dict):
             continue
 
-        iban = normalize_text(account.get("iban"))
+        iban = "".join(normalize_text(account.get("iban")).split())
         if not iban:
             continue
 
@@ -265,12 +265,12 @@ def list_bank_credentials() -> list[dict[str, Any]]:
 
 def load_bank_credentials_by_iban(iban: str) -> dict[str, Any] | None:
     """Find stored credentials whose accounts include the given IBAN."""
-    normalized = iban.strip().upper()
+    normalized = "".join(iban.split()).upper()
     all_creds = list_bank_credentials()
     for cred in all_creds:
         accounts = cred.get("accounts") or []
         for acc in accounts:
-            if acc.get("iban", "").strip().upper() == normalized:
+            if "".join(str(acc.get("iban", "")).split()).upper() == normalized:
                 return cred
     return None
 

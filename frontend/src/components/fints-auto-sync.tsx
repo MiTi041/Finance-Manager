@@ -61,9 +61,10 @@ export default function FintsAutoSync() {
           rememberSyncRun(daysToSync);
         } else {
           const eligibleBanks =
-            source === "auto"
+            (source === "auto"
               ? banksToSync.filter((bank) => bank.auto_sync !== false)
-              : banksToSync;
+              : banksToSync
+            ).filter((bank) => bank.manual !== true && bank.bank_key !== "manual");
           for (const bank of eligibleBanks) {
             try {
               const accountIbans =

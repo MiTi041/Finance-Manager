@@ -53,6 +53,7 @@ class CredentialsService:
             "account_name": credentials.get("account_name", ""),
             "bank_key": bank.key if bank else bank_key,
             "bank_name": bank.name if bank else bank_key,
+            "manual": bank_key.strip().lower() == "manual",
             "blz": bank.blz if bank else "",
             "bank_logo": bank.bank_logo if bank else "",
             "username": credentials.get("username", ""),
@@ -68,19 +69,111 @@ class CredentialsService:
         return self._public_status(load_bank_credentials(scope))
 
     def create(self, credentials: dict[str, Any]) -> dict[str, Any]:
+        if normalize_text(credentials.get("bank_key", "")).lower() == "manual":
+            scope = self._upsert_manual_accounts(
+                credentials.get("accounts") or [],
+                normalize_text(credentials.get("account_name")),
+            )
+            if scope is None:
+                return {"configured": False}
+            return self._public_status(load_bank_credentials(scope))
+
         normalized_bank_key = normalize_text(credentials["bank_key"]).lower()
         normalized_username = normalize_text(credentials["username"]).lower()
+        normalized_account_name = normalize_text(credentials.get("account_name")).lower()
 
         for existing in list_bank_credentials():
             existing_bank_key = normalize_text(existing.get("bank_key", "")).lower()
             existing_username = normalize_text(existing.get("username", "")).lower()
-            if existing_bank_key == normalized_bank_key and existing_username == normalized_username:
+            existing_account_name = normalize_text(existing.get("account_name", "")).lower()
+            if (
+                existing_bank_key == normalized_bank_key
+                and existing_username == normalized_username
+                and existing_account_name == normalized_account_name
+            ):
                 raise ValueError("BANK_CREDENTIALS_ALREADY_STORED")
 
         scope = save_bank_credentials(credentials)
         return self._public_status(load_bank_credentials(scope))
 
+    def _manual_credentials(self) -> list[dict[str, Any]]:
+        return [
+            cred
+            for cred in list_bank_credentials()
+            if normalize_text(cred.get("bank_key", "")).lower() == "manual"
+        ]
+
+    def _upsert_manual_accounts(
+        self, new_accounts: list[dict[str, Any]], fallback_name: str = ""
+    ) -> str | None:
+        existing = self._manual_credentials()
+
+        # Nichts hinzuzufügen und kein manueller Zugang vorhanden -> nichts tun.
+        if not new_accounts and not existing:
+            return None
+        # Bereits in den einen "manual"-Scope konsolidiert und nichts Neues -> nichts tun.
+        if not new_accounts and len(existing) == 1 and existing[0].get("scope") == "manual":
+            if existing[0].get("accounts"):
+                return "manual"
+            delete_bank_credentials("manual")
+            return None
+
+        merged: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for cred in existing:
+            for account in cred.get("accounts") or []:
+                iban = "".join(str(account.get("iban", "")).split())
+                if not iban or iban.upper() in seen:
+                    continue
+                seen.add(iban.upper())
+                merged.append(
+                    {
+                        "iban": account.get("iban"),
+                        "account_name": account.get("account_name"),
+                        "holder_name": account.get("holder_name"),
+                        "can_transfer": False,
+                    }
+                )
+        for account in new_accounts:
+            iban = "".join(str(account.get("iban", "")).split())
+            if not iban or iban.upper() in seen:
+                continue
+            seen.add(iban.upper())
+            merged.append(
+                {
+                    "iban": iban,
+                    "account_name": normalize_text(account.get("account_name"))
+                    or fallback_name
+                    or None,
+                    "holder_name": normalize_text(account.get("holder_name")) or None,
+                    "can_transfer": False,
+                }
+            )
+
+        # Keine Konten (mehr) vorhanden -> leeren manuellen Zugang entfernen.
+        if not merged:
+            for cred in existing:
+                delete_bank_credentials(cred.get("scope"))
+            return None
+
+        scope = save_bank_credentials(
+            {
+                "bank_key": "manual",
+                "account_name": "Manuell",
+                "username": "",
+                "pin": "",
+                "auto_sync": False,
+                "accounts": merged,
+            },
+            scope="manual",
+        )
+        for cred in existing:
+            if cred.get("scope") != scope:
+                delete_bank_credentials(cred.get("scope"))
+        return scope
+
     def list_all(self) -> dict[str, Any]:
+        self._upsert_manual_accounts([])
         credentials = list_bank_credentials()
         return {
             "count": len(credentials),
@@ -133,6 +226,11 @@ class CredentialsService:
             return {"error": "credentials_not_found"}
 
         deleted = delete_bank_account_row(scope, iban)
+        if (
+            normalize_text(credentials.get("bank_key", "")).lower() == "manual"
+            and not list_bank_accounts(scope)
+        ):
+            delete_bank_credentials(scope)
         return {"deleted": deleted}
 
     def adjust_balance(

@@ -20,6 +20,29 @@ export async function fetchLatestDbTransaction(
   return payload?.transaction ?? null;
 }
 
+export type ManualTransactionInput = {
+  account_iban: string;
+  date: string;
+  amount: number;
+  recipient_name?: string | null;
+  recipient_iban?: string | null;
+  purpose?: string | null;
+  category?: number | null;
+  note?: string | null;
+};
+
+export async function createManualTransaction(
+  input: ManualTransactionInput,
+): Promise<{ inserted: number }> {
+  const response = await fetch(`${getApiBaseUrl()}/db/transactions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+
+  return parseJsonResponse(response);
+}
+
 export async function deleteTransaction(transactionId: number): Promise<void> {
   const response = await fetch(
     `${getApiBaseUrl()}/db/transactions/${transactionId}`,

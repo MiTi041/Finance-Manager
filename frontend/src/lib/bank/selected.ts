@@ -7,6 +7,7 @@ export type SelectedBankOption = {
   bankLogo?: string;
   username?: string;
   scope: string;
+  manual?: boolean;
   balanceCorrection?: number | null;
 };
 

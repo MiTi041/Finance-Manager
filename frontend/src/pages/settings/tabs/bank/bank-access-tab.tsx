@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { CheckCircle2, Eye, EyeOff, Loader2, ShieldCheck, Smartphone, Timer, X } from "lucide-react";
+import { CheckCircle2, Eye, EyeOff, Loader2, Plus, ShieldCheck, Smartphone, Timer, X } from "lucide-react";
 import {
   deleteBankCredentials,
   fetchAvailableBanks,
@@ -23,6 +23,7 @@ import {
   TanRequiredError,
 } from "@/lib/bank/credentials";
 import { FINTS_SYNC_REQUEST_EVENT } from "@/lib/sync-events";
+import { normalizeIban } from "@/lib/iban";
 import { RateLimitError } from "@/lib/upload-helper";
 
 type SettingsFormState = {
@@ -30,6 +31,8 @@ type SettingsFormState = {
   username: string;
   pin: string;
   tan_medium: string;
+  manual_account_name: string;
+  manual_iban: string;
 };
 
 const INITIAL_FORM_STATE: SettingsFormState = {
@@ -37,6 +40,8 @@ const INITIAL_FORM_STATE: SettingsFormState = {
   username: "",
   pin: "",
   tan_medium: "",
+  manual_account_name: "",
+  manual_iban: "",
 };
 
 export function BankAccessTab() {
@@ -183,8 +188,41 @@ export function BankAccessTab() {
     }
   };
 
+  const handleManualSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const accountName = form.manual_account_name.trim();
+    const iban = normalizeIban(form.manual_iban);
+    if (!accountName || !iban) return;
+
+    setIsChecking(true);
+    try {
+      await saveBankCredentials({
+        bank_key: "manual",
+        account_name: accountName,
+        username: "",
+        pin: "",
+        accounts: [{ iban, account_name: accountName, can_transfer: false }],
+      });
+      setForm(INITIAL_FORM_STATE);
+      await loadData({ forceRefresh: true });
+    } catch (error) {
+      setCheckError(
+        error instanceof Error ? error.message : "Manueller Bankzugang konnte nicht gespeichert werden.",
+      );
+      setCheckDialogOpen(true);
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (form.bank_key === "manual") {
+      await handleManualSubmit(event);
+      return;
+    }
 
     const hasDuplicateCredentials = linkedAccounts.some(
       (credential) =>
@@ -226,12 +264,17 @@ export function BankAccessTab() {
   };
 
   const selectedBank = availableBanks.find((bank) => bank.key === form.bank_key);
+  const isManual = form.bank_key === "manual";
 
   const canCheck =
     form.bank_key.trim() !== "" &&
     form.username.trim() !== "" &&
     form.pin.trim() !== "" &&
     (!selectedBank?.needs_tan_medium_name || form.tan_medium.trim() !== "");
+
+  const canSubmit = isManual
+    ? form.manual_account_name.trim() !== "" && normalizeIban(form.manual_iban) !== ""
+    : canCheck;
 
   return (
     <div className="grid gap-6">
@@ -258,77 +301,125 @@ export function BankAccessTab() {
               />
             </div>
 
-            {selectedBank?.needs_tan_medium_name ? (
-              <div className="grid gap-2">
-                <label className="text-sm font-medium" htmlFor="tan_medium">
-                  TAN-Medium-Name (BestSign-Push)
-                </label>
-                <Input
-                  id="tan_medium"
-                  value={form.tan_medium}
-                  onChange={(event) => handleChange("tan_medium", event.target.value)}
-                  placeholder="z. B. Michis IPhone"
-                  autoComplete="off"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Die Norisbank verlangt den Namen deines registrierten BestSign-Push-Geräts. Du
-                  findest ihn in der Norisbank-App bzw. im Online-Banking unter TAN-Verwaltung.
-                </p>
-              </div>
-            ) : null}
+            {isManual ? (
+              <>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium" htmlFor="manual_account_name">
+                    Kontoname
+                  </label>
+                  <Input
+                    id="manual_account_name"
+                    value={form.manual_account_name}
+                    onChange={(event) => handleChange("manual_account_name", event.target.value)}
+                    placeholder="z. B. Bargeld"
+                    autoComplete="off"
+                  />
+                </div>
 
-            <div className="grid gap-2">
-              <label className="text-sm font-medium" htmlFor="username">
-                Anmeldename
-              </label>
-              <Input
-                id="username"
-                value={form.username}
-                onChange={(event) => handleChange("username", event.target.value)}
-                placeholder="Online-Banking-Login"
-                autoComplete="off"
-              />
-              {selectedBank?.username_hint ? (
-                <p className="text-xs text-muted-foreground">{selectedBank.username_hint}</p>
-              ) : null}
-            </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium" htmlFor="manual_iban">
+                    IBAN
+                  </label>
+                  <Input
+                    id="manual_iban"
+                    value={form.manual_iban}
+                    onChange={(event) => handleChange("manual_iban", event.target.value)}
+                    placeholder="DE00 0000 0000 0000 0000 00"
+                    autoComplete="off"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Alle manuellen Konten erscheinen unter dem Bankzugang „Manuell“. Transaktionen
+                    fügst du dort selbst auf der Transaktionsseite hinzu.
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                {selectedBank?.needs_tan_medium_name ? (
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium" htmlFor="tan_medium">
+                      TAN-Medium-Name (BestSign-Push)
+                    </label>
+                    <Input
+                      id="tan_medium"
+                      value={form.tan_medium}
+                      onChange={(event) => handleChange("tan_medium", event.target.value)}
+                      placeholder="z. B. Michis IPhone"
+                      autoComplete="off"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Die Norisbank verlangt den Namen deines registrierten BestSign-Push-Geräts. Du
+                      findest ihn in der Norisbank-App bzw. im Online-Banking unter TAN-Verwaltung.
+                    </p>
+                  </div>
+                ) : null}
 
-            <div className="grid gap-2">
-              <label className="text-sm font-medium" htmlFor="pin">
-                Anmelde-PIN
-              </label>
-              <div className="relative">
-                <Input
-                  id="pin"
-                  type={showPin ? "text" : "password"}
-                  value={form.pin}
-                  onChange={(event) => handleChange("pin", event.target.value)}
-                  placeholder="PIN"
-                  autoComplete="new-password"
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPin((v) => !v)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
-                  aria-label={showPin ? "PIN verbergen" : "PIN anzeigen"}
-                  tabIndex={-1}
-                >
-                  {showPin ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                </button>
-              </div>
-            </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium" htmlFor="username">
+                    Anmeldename
+                  </label>
+                  <Input
+                    id="username"
+                    value={form.username}
+                    onChange={(event) => handleChange("username", event.target.value)}
+                    placeholder="Online-Banking-Login"
+                    autoComplete="off"
+                  />
+                  {selectedBank?.username_hint ? (
+                    <p className="text-xs text-muted-foreground">{selectedBank.username_hint}</p>
+                  ) : null}
+                </div>
+
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium" htmlFor="pin">
+                    Anmelde-PIN
+                  </label>
+                  <div className="relative">
+                    <Input
+                      id="pin"
+                      type={showPin ? "text" : "password"}
+                      value={form.pin}
+                      onChange={(event) => handleChange("pin", event.target.value)}
+                      placeholder="PIN"
+                      autoComplete="new-password"
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPin((v) => !v)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
+                      aria-label={showPin ? "PIN verbergen" : "PIN anzeigen"}
+                      tabIndex={-1}
+                    >
+                      {showPin ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
 
             <div className="flex flex-wrap gap-3 pt-2">
-              <Button type="submit" disabled={isChecking || !canCheck || cooldown > 0}>
+              <Button type="submit" disabled={isChecking || !canSubmit || cooldown > 0}>
                 {isChecking ? (
                   <Loader2 className="size-4 animate-spin" />
                 ) : cooldown > 0 ? (
                   <Timer className="size-4" />
+                ) : isManual ? (
+                  <Plus className="size-4" />
                 ) : (
                   <ShieldCheck className="size-4" />
                 )}
-                <span>{isChecking ? "Prüfe ..." : cooldown > 0 ? `${cooldown}s` : "Prüfen"}</span>
+                <span>
+                  {isChecking
+                    ? isManual
+                      ? "Speichere ..."
+                      : "Prüfe ..."
+                    : cooldown > 0
+                      ? `${cooldown}s`
+                      : isManual
+                        ? "Hinzufügen"
+                        : "Prüfen"}
+                </span>
               </Button>
             </div>
           </form>

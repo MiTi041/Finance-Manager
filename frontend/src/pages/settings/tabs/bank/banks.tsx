@@ -236,29 +236,31 @@ export function Banks({
 
             {/* ── Accounts list ── */}
             <CardContent className="px-0 pb-0">
-              <div className="border-b border-t px-5 py-3">
-                <ToggleRow
-                  title="Automatische Synchronisation"
-                  description={
-                    bank.auto_sync !== false
-                      ? "Wird automatisch im Hintergrund synchronisiert."
-                      : "Wird nur noch manuell synchronisiert."
-                  }
-                  icon={<RefreshCw className="size-4" />}
-                  size="sm"
-                  checked={bank.auto_sync !== false}
-                  disabled={autoSyncSaving === bank.scope}
-                  pill={autoSyncSaving === bank.scope ? "…" : undefined}
-                  onCheckedChange={(checked) => void handleToggleAutoSync(bank.scope, checked)}
-                />
-                <p className="mt-2 flex items-center gap-1.5 text-[11px] leading-snug text-muted-foreground">
-                  <Info className="size-3.5 shrink-0" />
-                  <span>
-                    Auto-Sync-Deaktivierung ist empfohlen bei Banken, die für jede Aktion eine
-                    TAN-Bestätigung benötigen.
-                  </span>
-                </p>
-              </div>
+              {bank.manual ? null : (
+                <div className="border-b border-t px-5 py-3">
+                  <ToggleRow
+                    title="Automatische Synchronisation"
+                    description={
+                      bank.auto_sync !== false
+                        ? "Wird automatisch im Hintergrund synchronisiert."
+                        : "Wird nur noch manuell synchronisiert."
+                    }
+                    icon={<RefreshCw className="size-4" />}
+                    size="sm"
+                    checked={bank.auto_sync !== false}
+                    disabled={autoSyncSaving === bank.scope}
+                    pill={autoSyncSaving === bank.scope ? "…" : undefined}
+                    onCheckedChange={(checked) => void handleToggleAutoSync(bank.scope, checked)}
+                  />
+                  <p className="mt-2 flex items-center gap-1.5 text-[11px] leading-snug text-muted-foreground">
+                    <Info className="size-3.5 shrink-0" />
+                    <span>
+                      Auto-Sync-Deaktivierung ist empfohlen bei Banken, die für jede Aktion eine
+                      TAN-Bestätigung benötigen.
+                    </span>
+                  </p>
+                </div>
+              )}
               <div className="divide-y">
                 {accounts.map((account) => {
                   const accountKey = `${bank.scope}:${account.iban || account.account_name}`;

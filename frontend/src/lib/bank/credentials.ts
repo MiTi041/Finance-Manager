@@ -8,6 +8,7 @@ export type StoredBankCredentials = {
   bank_name?: string;
   bank_logo?: string;
   blz?: string;
+  manual?: boolean;
   account_name?: string;
   account_iban?: string;
   username?: string;
@@ -26,8 +27,8 @@ export type BankCredentials = {
   bank_key: string;
   account_name?: string;
   account_iban?: string;
-  username: string;
-  pin: string;
+  username?: string;
+  pin?: string;
   tan_medium?: string;
   auto_sync?: boolean;
   accounts?: Array<{
@@ -45,6 +46,7 @@ export type BankCredentialsStatus = {
   bank_name?: string;
   bank_logo?: string;
   blz?: string;
+  manual?: boolean;
   account_name?: string;
   account_iban?: string;
   username?: string;

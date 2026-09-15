@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from finance_server.models.transaction import BatchIdsRequest, RefundLinkCreateRequest, TransactionNoteUpdateRequest, TransactionPurposeUpdateRequest, TransactionSplitUpdateRequest
+from finance_server.models.transaction import BatchIdsRequest, ManualTransactionCreateRequest, RefundLinkCreateRequest, TransactionNoteUpdateRequest, TransactionPurposeUpdateRequest, TransactionSplitUpdateRequest
 from finance_server.services.transaction_service import TransactionService
 from finance_server.api._crud import crud_delete
 from finance_server.api.deps import get_transaction_service
@@ -43,6 +43,33 @@ def get_latest_transaction(
 ) -> dict[str, Any]:
     transaction = service.get_latest_transaction(iban=iban, blz=blz)
     return {"transaction": transaction}
+
+
+@router.post("/db/transactions")
+def create_manual_transaction(
+    request: ManualTransactionCreateRequest,
+    service: TransactionService = Depends(get_transaction_service),
+) -> dict[str, Any]:
+    try:
+        return service.create_manual_transaction(
+            account_iban=request.account_iban,
+            date=request.date,
+            amount=request.amount,
+            recipient_name=request.recipient_name,
+            recipient_iban=request.recipient_iban,
+            purpose=request.purpose,
+            category=request.category,
+            note=request.note,
+        )
+    except ValueError as err:
+        if str(err) == "MANUAL_ACCOUNT_REQUIRED":
+            raise HTTPException(
+                status_code=400,
+                detail="Transaktionen können nur für manuelle Konten angelegt werden.",
+            ) from err
+        if str(err) == "INVALID_AMOUNT":
+            raise HTTPException(status_code=400, detail="Der Betrag darf nicht 0 sein.") from err
+        raise HTTPException(status_code=400, detail=str(err)) from err
 
 
 @router.post("/db/transactions/batch-delete")

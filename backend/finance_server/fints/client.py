@@ -40,6 +40,19 @@ def set_product_id(value: str | None) -> None:
         _delete(_SETTINGS_KEY)
 
 
+def _reject_manual(creds: BankCredentials) -> BankCredentials:
+    if creds.bank_key.strip().lower() == "manual":
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "MANUAL_BANK_NO_SYNC",
+                "message": "Manuelle Konten werden nicht synchronisiert.",
+            },
+        )
+    return creds
+
+
 def resolve_bank_credentials(
     provided: BankCredentials | None = None,
     scope: str | None = None,
@@ -47,12 +60,12 @@ def resolve_bank_credentials(
 ) -> BankCredentials:
     if provided is not None:
         save_bank_credentials(provided.model_dump())
-        return provided
+        return _reject_manual(provided)
 
     if sender_iban:
         stored = load_bank_credentials_by_iban(sender_iban)
         if stored:
-            return BankCredentials.model_validate(stored)
+            return _reject_manual(BankCredentials.model_validate(stored))
 
     stored = load_bank_credentials(scope)
     if stored is None:
@@ -65,7 +78,7 @@ def resolve_bank_credentials(
             },
         )
 
-    return BankCredentials.model_validate(stored)
+    return _reject_manual(BankCredentials.model_validate(stored))
 
 
 def resolve_bank_connection_details(credentials: BankCredentials) -> BankCredentials:

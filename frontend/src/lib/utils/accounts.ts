@@ -11,6 +11,7 @@ export type BankAccountOption = {
   bankLogo?: string;
   username?: string;
   scope: string;
+  manual?: boolean;
   balanceCorrection?: number | null;
 };
 
@@ -38,6 +39,7 @@ export function buildAccountOptions(
             bankLogo: bank.bank_logo || undefined,
             username: bank.username,
             scope: bank.scope,
+            manual: bank.manual === true,
           });
         }
       });
@@ -53,6 +55,7 @@ export function buildAccountOptions(
         bankLogo: bank.bank_logo || undefined,
         username: bank.username,
         scope: bank.scope,
+        manual: bank.manual === true,
       });
     }
   });
@@ -110,6 +113,7 @@ export function buildLinkedAccountLookup(linkedAccounts: LinkedBankEntry[]) {
             bankLogo: entry.bank_logo,
             username: entry.username,
             scope: entry.scope,
+            manual: entry.manual === true,
           };
 
     candidates.forEach((candidate) => {

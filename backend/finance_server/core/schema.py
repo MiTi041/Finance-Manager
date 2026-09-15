@@ -625,6 +625,13 @@ def initialize_database(connection: sqlite3.Connection) -> None:
         },
     )
 
+    for row in connection.execute("SELECT rowid, iban FROM bank_accounts").fetchall():
+        cleaned = "".join(str(row[1]).split())
+        if cleaned != row[1]:
+            connection.execute(
+                "UPDATE bank_accounts SET iban = ? WHERE rowid = ?", (cleaned, row[0])
+            )
+
     _ensure_table_columns(
         connection,
         "umsaetze",

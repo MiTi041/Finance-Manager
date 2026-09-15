@@ -1,5 +1,5 @@
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CircleX, TriangleAlert } from "lucide-react";
+import { CircleX, Plus, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 
 import DateFilter from "@/components/date-filter";
@@ -45,6 +45,7 @@ import { TransactionRow } from "./components/transaction-row";
 import { PendingRow } from "./components/pending-row";
 import { TransactionsFilterBar } from "./components/transactions-filter-bar";
 import { BatchActionsBar } from "./components/batch-actions-bar";
+import { ManualTransactionSheet } from "./components/manual-transaction-sheet";
 import { useSelection } from "./hooks/use-selection";
 import { useBatchActions } from "./hooks/use-batch-actions";
 import { buildCategoryOptions, type TransactionCategoryOption } from "@/lib/utils/categories";
@@ -87,6 +88,7 @@ export default function TransactionsPage() {
   const [pendingCategoryFocusId, setPendingCategoryFocusId] = useState<number | null>(null);
   const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
   const [deletingTransaction, setDeletingTransaction] = useState(false);
+  const [manualSheetOpen, setManualSheetOpen] = useState(false);
   const [subscriptionTransactionIds, setSubscriptionTransactionIds] = useState<Set<number>>(
     new Set(),
   );
@@ -672,6 +674,21 @@ export default function TransactionsPage() {
             Alle auswählen
           </Button>
         }
+        toolbarActions={
+          selectedBank?.manual
+            ? [
+                <Button
+                  key="add-manual-transaction"
+                  type="button"
+                  variant="outline"
+                  onClick={() => setManualSheetOpen(true)}
+                >
+                  <Plus className="size-4" />
+                  <span>Transaktion hinzufügen</span>
+                </Button>,
+              ]
+            : undefined
+        }
         footerActions={
           selectedCount > 0
             ? [
@@ -836,6 +853,17 @@ export default function TransactionsPage() {
           pendingRefundScrollRef.current = null;
         }}
       />
+
+      {selectedBank?.manual ? (
+        <ManualTransactionSheet
+          open={manualSheetOpen}
+          onOpenChange={setManualSheetOpen}
+          accountIban={selectedBank.accountIban}
+          accountName={selectedBank.accountName}
+          categoryOptions={categoryOptions}
+          onCreated={reload}
+        />
+      ) : null}
     </div>
   );
 }

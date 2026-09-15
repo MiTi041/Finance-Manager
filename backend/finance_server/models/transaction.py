@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class TransactionNoteUpdateRequest(BaseModel):
@@ -24,3 +24,14 @@ class BatchIdsRequest(BaseModel):
 class RefundLinkCreateRequest(BaseModel):
     expense_transaction_id: int
     amount: float
+
+
+class ManualTransactionCreateRequest(BaseModel):
+    account_iban: str = Field(min_length=1)
+    date: str = Field(min_length=1)
+    amount: float
+    recipient_name: str | None = None
+    recipient_iban: str | None = None
+    purpose: str | None = None
+    category: int | None = None
+    note: str | None = None

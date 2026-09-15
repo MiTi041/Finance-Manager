@@ -53,7 +53,11 @@ def set_sync_started() -> None:
 
 
 def sync_all_worker(days: int | None = None) -> None:
-    creds_list = list_bank_credentials()
+    creds_list = [
+        stored
+        for stored in list_bank_credentials()
+        if str(stored.get("bank_key", "")).strip().lower() != "manual"
+    ]
     with _sync_status_lock:
         _sync_state["progress"] = []
         _sync_state["current"] = None
