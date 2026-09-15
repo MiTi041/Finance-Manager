@@ -156,7 +156,7 @@ export function useFinanceData(
     });
   }, [activeAccountIban, selectedAccountIban, rawTransactions]);
 
-  const pendingTransactions = useMemo(() => {
+  const accountFilteredPendingTransactions = useMemo(() => {
     if (activeAccountIban === "all" || !selectedAccountIban) return rawPendingTransactions;
     return rawPendingTransactions.filter((transaction) => {
       const kontoIban = normalizeIban(transaction.konto?.iban);
@@ -164,10 +164,20 @@ export function useFinanceData(
     });
   }, [activeAccountIban, selectedAccountIban, rawPendingTransactions]);
 
-  const resolvedTransactions = useMemo(() => {
-    const lookup = buildIbanReferenceLookup(ibanReferences);
-    return resolveTransactionsCounterparty(accountFilteredTransactions, lookup);
-  }, [accountFilteredTransactions, ibanReferences]);
+  const ibanReferenceLookup = useMemo(
+    () => buildIbanReferenceLookup(ibanReferences),
+    [ibanReferences],
+  );
+
+  const resolvedTransactions = useMemo(
+    () => resolveTransactionsCounterparty(accountFilteredTransactions, ibanReferenceLookup),
+    [accountFilteredTransactions, ibanReferenceLookup],
+  );
+
+  const pendingTransactions = useMemo(
+    () => resolveTransactionsCounterparty(accountFilteredPendingTransactions, ibanReferenceLookup),
+    [accountFilteredPendingTransactions, ibanReferenceLookup],
+  );
 
   const cleanedTransactions = useMemo(
     () =>
