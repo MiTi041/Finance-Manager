@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -15,6 +15,11 @@ import {
 } from "@/components/ui/sheet";
 import { CategoryCombobox } from "@/components/category-combobox";
 import { DatePicker } from "@/components/date-picker";
+import { RecipientCombobox } from "./recipient-combobox";
+import { buildRecipientOptions } from "@/lib/recipient-options";
+import { type BankAccountOption } from "@/lib/utils/accounts";
+import { type RecipientAccountRecord } from "@/lib/recipient-accounts";
+import { type ZahlungspartnerRecord } from "@/lib/zahlungspartner";
 import { createManualTransaction } from "@/lib/transactions";
 import { UNASSIGNED_CATEGORY_VALUE, type TransactionCategoryOption } from "@/lib/utils/categories";
 
@@ -24,6 +29,9 @@ type ManualTransactionSheetProps = {
   accountIban: string;
   accountName: string;
   categoryOptions: TransactionCategoryOption[];
+  ownAccounts: BankAccountOption[];
+  recipientAccounts: RecipientAccountRecord[];
+  zahlungspartner: ZahlungspartnerRecord[];
   onCreated: () => void | Promise<void>;
 };
 
@@ -40,6 +48,9 @@ export function ManualTransactionSheet({
   accountIban,
   accountName,
   categoryOptions,
+  ownAccounts,
+  recipientAccounts,
+  zahlungspartner,
   onCreated,
 }: ManualTransactionSheetProps) {
   const [date, setDate] = useState<Date | null>(new Date());
@@ -50,6 +61,11 @@ export function ManualTransactionSheet({
   const [category, setCategory] = useState(UNASSIGNED_CATEGORY_VALUE);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const recipientGroups = useMemo(
+    () => buildRecipientOptions({ ownAccounts, recipientAccounts, zahlungspartner }),
+    [ownAccounts, recipientAccounts, zahlungspartner],
+  );
 
   const reset = () => {
     setDate(new Date());
@@ -121,11 +137,15 @@ export function ManualTransactionSheet({
 
           <div className="grid gap-2">
             <Label htmlFor="manual-recipient">Empfänger / Auftraggeber</Label>
-            <Input
+            <RecipientCombobox
               id="manual-recipient"
               value={recipient}
-              onChange={(event) => setRecipient(event.target.value)}
-              autoComplete="off"
+              onValueChange={setRecipient}
+              groups={recipientGroups}
+              onSelect={(option) => {
+                setRecipient(option.name);
+                if (option.iban) setRecipientIban(option.iban);
+              }}
             />
           </div>
 

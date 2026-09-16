@@ -18,8 +18,13 @@ import { type FinanceCategory } from "@/lib/categories/types";
 import {
   createZahlungspartner,
   fetchZahlungspartnerReferenceData,
+  type LogoBackground,
   type ZahlungspartnerRecord,
 } from "@/lib/zahlungspartner";
+import {
+  fetchRecipientAccountsReferenceData,
+  type RecipientAccountRecord,
+} from "@/lib/recipient-accounts";
 import {
   deleteTransaction,
   updateTransactionNote,
@@ -36,7 +41,7 @@ type SubscriptionOverride = {
   name: string;
   logoUrl?: string;
   datenbankName?: string;
-  logoWhiteBackground?: boolean;
+  logoBackground?: LogoBackground;
   logoPadding?: boolean;
   isCompany?: boolean;
 };
@@ -71,6 +76,7 @@ export default function TransactionsPage() {
     new Map(),
   );
   const [zahlungspartner, setZahlungspartner] = useState<ZahlungspartnerRecord[]>([]);
+  const [recipientAccounts, setRecipientAccounts] = useState<RecipientAccountRecord[]>([]);
   const [categories, setCategories] = useState<FinanceCategory[]>([]);
   const [predictionsMap, setPredictionsMap] = useState<
     Map<number, { categoryId: number; similarity: number }>
@@ -134,6 +140,22 @@ export default function TransactionsPage() {
   useEffect(() => {
     let active = true;
 
+    void fetchRecipientAccountsReferenceData()
+      .then((data) => {
+        if (active) setRecipientAccounts(data.recipient_accounts);
+      })
+      .catch(() => {
+        if (active) setRecipientAccounts([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
     void fetchCategories()
       .then((next) => {
         if (active) setCategories(next);
@@ -186,7 +208,7 @@ export default function TransactionsPage() {
                 name: sub.datenbankName || sub.name,
                 logoUrl: sub.recipientLogo,
                 datenbankName: sub.datenbankName,
-                logoWhiteBackground: sub.logoWhiteBackground,
+                logoBackground: sub.logoBackground,
                 logoPadding: sub.logoPadding,
                 isCompany: sub.isCompany,
               });
@@ -371,7 +393,7 @@ export default function TransactionsPage() {
         name: name.trim(),
         website: null,
         logo_url: null,
-        logo_white_background: false,
+        logo_background: "dark",
         logo_padding: false,
         is_company: true,
       });
@@ -861,6 +883,9 @@ export default function TransactionsPage() {
           accountIban={selectedBank.accountIban}
           accountName={selectedBank.accountName}
           categoryOptions={categoryOptions}
+          ownAccounts={linkedAccounts}
+          recipientAccounts={recipientAccounts}
+          zahlungspartner={zahlungspartner}
           onCreated={reload}
         />
       ) : null}
