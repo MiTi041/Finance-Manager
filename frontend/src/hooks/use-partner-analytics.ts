@@ -1,12 +1,13 @@
 import { useMemo } from "react";
 import type { Transaction } from "@/types/transaction";
+import type { LogoBackground } from "@/lib/zahlungspartner";
 
 export interface PartnerAnalytics {
   name: string;
   totalAmount: number;
   transactionCount: number;
   logoUrl: string | null;
-  logoWhiteBackground: boolean;
+  logoBackground: LogoBackground;
   logoPadding: boolean;
   isCompany: boolean;
 }
@@ -43,7 +44,7 @@ export function usePartnerAnalytics({
           totalAmount: effective,
           transactionCount: 1,
           logoUrl: t.zahlungspartner.logoUrl,
-          logoWhiteBackground: t.zahlungspartner.logoWhiteBackground,
+          logoBackground: t.zahlungspartner.logoBackground,
           logoPadding: t.zahlungspartner.logoPadding,
           isCompany: t.zahlungspartner.isCompany,
         });

@@ -10,6 +10,8 @@ import {
 } from "@/lib/sync-events";
 import { fetchLatestDbTransaction } from "@/lib/transactions";
 import { fetchBankCredentials } from "@/lib/bank/credentials";
+import { readActiveAccountIban } from "@/lib/bank/active-storage";
+import { normalizeIban } from "@/lib/iban";
 import { importFromFintsServer, RateLimitError } from "@/lib/upload-helper";
 import { getErrorMessage } from "@/lib/utils/error";
 import { dispatchRefresh } from "@/lib/refresh-store";
@@ -65,6 +67,22 @@ export default function FintsAutoSync() {
               ? banksToSync.filter((bank) => bank.auto_sync !== false)
               : banksToSync
             ).filter((bank) => bank.manual !== true && bank.bank_key !== "manual");
+          // ponytail: gewähltes Konto zuerst syncen; bei "all" ist die Reihenfolge egal
+          const activeIban = normalizeIban(readActiveAccountIban());
+          if (activeIban) {
+            const selectedIndex = eligibleBanks.findIndex(
+              (bank) =>
+                normalizeIban(bank.account_iban) === activeIban ||
+                (bank.accounts ?? []).some(
+                  (account) => normalizeIban(account.iban) === activeIban,
+                ),
+            );
+            if (selectedIndex > 0) {
+              eligibleBanks.unshift(
+                ...eligibleBanks.splice(selectedIndex, 1),
+              );
+            }
+          }
           for (const bank of eligibleBanks) {
             try {
               const accountIbans =

@@ -17,7 +17,7 @@ export function useIbanReferences(refreshVersion: number) {
           zahlungspartnerName: ref.zahlungspartner_name,
           zahlungspartnerWebsite: ref.zahlungspartner_website ?? null,
           zahlungspartnerLogoUrl: ref.zahlungspartner_logo_url ?? null,
-          zahlungspartnerLogoWhiteBackground: ref.zahlungspartner_logo_white_background ?? false,
+          zahlungspartnerLogoBackground: ref.zahlungspartner_logo_background ?? "dark",
           zahlungspartnerLogoPadding: ref.zahlungspartner_logo_padding ?? false,
           zahlungspartnerIsCompany: Boolean(ref.zahlungspartner_is_company ?? true),
           resolvedLogoUrl: ref.resolved_logo_url ?? null,

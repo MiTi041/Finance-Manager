@@ -35,6 +35,7 @@ import { PayoutSlider } from "./payout-slider";
 import { SavingsPlanDatePickerInput } from "./savings-plan-date-picker-input";
 import { SearchableSelect } from "@/components/searchable-select";
 import { BankLogo } from "@/components/bank-logo";
+import { logoBackgroundClass } from "@/lib/bank/zahlungspartner-logo";
 import {
   createSavingsPlan,
   deleteSavingsPlan,
@@ -1001,9 +1002,10 @@ export function SavingsPlansCard({
                       src={plan.recipient_logo_url ?? undefined}
                       alt={plan.target_recipient_name ?? ""}
                       sizeClassName="size-9 shrink-0"
-                      backgroundClassName={
-                        plan.recipient_logo_white_background ? "bg-white" : "bg-muted"
-                      }
+                      backgroundClassName={logoBackgroundClass(
+                        plan.recipient_logo_background,
+                        "bg-muted",
+                      )}
                       imgNoPadding={!plan.recipient_logo_padding}
                     />
                     <div className="min-w-0 space-y-0.5">

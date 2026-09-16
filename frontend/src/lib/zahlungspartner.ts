@@ -1,13 +1,15 @@
 import { fetchCachedResource, getApiBaseUrl, parseJsonResponse } from "./api";
 import { emitReferenceChange } from "./events";
 
+export type LogoBackground = "white" | "dark" | "none";
+
 export type ZahlungspartnerRecord = {
   id: number;
   name: string;
   website?: string | null;
   logo_url?: string | null;
   local_logo_path?: string | null;
-  logo_white_background?: boolean;
+  logo_background?: LogoBackground | null;
   logo_padding?: boolean;
   is_company: boolean;
   is_own_account: boolean;
@@ -21,7 +23,7 @@ export type ZahlungspartnerMapping = {
   zahlungspartner_website?: string | null;
   zahlungspartner_logo_url?: string | null;
   zahlungspartner_local_logo_path?: string | null;
-  zahlungspartner_logo_white_background?: boolean | null;
+  zahlungspartner_logo_background?: LogoBackground | null;
   zahlungspartner_logo_padding?: boolean | null;
   zahlungspartner_is_company?: boolean | null;
 };
@@ -50,7 +52,7 @@ export async function createZahlungspartner(
     name: string;
     website?: string | null;
     logo_url?: string | null;
-    logo_white_background?: boolean;
+    logo_background?: LogoBackground;
     logo_padding?: boolean;
     is_company: boolean;
     is_own_account?: boolean;
@@ -94,7 +96,7 @@ export async function updateZahlungspartner(
     website: string | null;
     logo_url: string | null;
     local_logo_path: string | null;
-    logo_white_background: boolean;
+    logo_background: LogoBackground;
     logo_padding: boolean;
     is_company: boolean;
     is_own_account?: boolean;

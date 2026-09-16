@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Loader2, Plus, Search, Trash2 } from "lucide-react";
 
 import { BrandIcon } from "@/components/bank-logo";
+import { logoBackgroundClass } from "@/lib/bank/zahlungspartner-logo";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -137,9 +138,9 @@ export function RefundSectionIncoming({
                       expense?.zahlungspartner.datenbankName || expense?.zahlungspartner.name || "?"
                     }
                     sizeClassName="size-8 shrink-0"
-                    backgroundClassName={
-                      expense?.zahlungspartner.logoWhiteBackground ? "bg-white" : "bg-zinc-900"
-                    }
+                    backgroundClassName={logoBackgroundClass(
+                      expense?.zahlungspartner.logoBackground,
+                    )}
                     kind={expense?.zahlungspartner.isCompany ? "company" : "person"}
                     imgNoPadding={!expense?.zahlungspartner.logoPadding}
                   />
@@ -228,9 +229,9 @@ export function RefundSectionIncoming({
                       src={t.zahlungspartner.logoUrl || undefined}
                       alt={t.zahlungspartner.datenbankName || t.zahlungspartner.name || "?"}
                       sizeClassName="size-9 shrink-0"
-                      backgroundClassName={
-                        t.zahlungspartner.logoWhiteBackground ? "bg-white" : "bg-zinc-900"
-                      }
+                      backgroundClassName={logoBackgroundClass(
+                        t.zahlungspartner.logoBackground,
+                      )}
                       kind={t.zahlungspartner.isCompany ? "company" : "person"}
                       imgNoPadding={!t.zahlungspartner.logoPadding}
                     />
@@ -375,9 +376,9 @@ export function RefundSectionOutgoing({
                   "?"
                 }
                 sizeClassName="size-8 shrink-0"
-                backgroundClassName={
-                  link.income.zahlungspartner.logoWhiteBackground ? "bg-white" : "bg-zinc-900"
-                }
+                backgroundClassName={logoBackgroundClass(
+                  link.income.zahlungspartner.logoBackground,
+                )}
                 kind={link.income.zahlungspartner.isCompany ? "company" : "person"}
                 imgNoPadding={!link.income.zahlungspartner.logoPadding}
               />

@@ -53,3 +53,36 @@ def test_person_cannot_be_own_account(conn):
     )
     assert record["is_company"] is False
     assert record["is_own_account"] is False
+
+
+def test_logo_background_roundtrips_tri_state(conn):
+    record = references.create_zahlungspartner_record(_payload(logo_background="none"))
+    assert record["logo_background"] == "none"
+
+    fetched = references.get_zahlungspartner_record(record["id"])
+    assert fetched["logo_background"] == "none"
+
+    updated = references.update_zahlungspartner_record(
+        record["id"], {"logo_background": "white"}
+    )
+    assert updated["logo_background"] == "white"
+
+
+def test_logo_background_defaults_to_dark(conn):
+    record = references.create_zahlungspartner_record(_payload())
+    assert record["logo_background"] == "dark"
+
+
+def test_person_logo_background_is_dark(conn):
+    record = references.create_zahlungspartner_record(
+        _payload(is_company=False, logo_background="white")
+    )
+    assert record["logo_background"] == "dark"
+
+
+def test_seed_backfills_legacy_boolean(conn):
+    # Seed row 1 (ALDI) has legacy logo_white_background = 1 → 'white'.
+    row = conn.execute(
+        "SELECT logo_background FROM zahlungspartner WHERE id = 1"
+    ).fetchone()
+    assert row["logo_background"] == "white"

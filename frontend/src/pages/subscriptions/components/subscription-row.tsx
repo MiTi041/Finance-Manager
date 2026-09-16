@@ -8,7 +8,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/searchable-select";
 import { type Subscription } from "@/pages/subscriptions/hooks/use-subscriptions";
-import { getServerBaseUrl } from "@/lib/bank/zahlungspartner-logo";
+import { getServerBaseUrl, logoBackgroundClass } from "@/lib/bank/zahlungspartner-logo";
 import { type ZahlungspartnerRecord } from "@/lib/zahlungspartner";
 import { formatAmount, formatDate } from "@/lib/utils/format";
 import { cn } from "@/lib/utils";
@@ -209,7 +209,7 @@ export function SubscriptionRow({
             src={logoUrl}
             alt={subscription.name}
             sizeClassName="size-12 shrink-0"
-            backgroundClassName={subscription.logoWhiteBackground ? "bg-white" : "bg-zinc-900"}
+            backgroundClassName={logoBackgroundClass(subscription.logoBackground)}
             kind={subscription.isCompany === false ? "person" : "company"}
             imgNoPadding={!subscription.logoPadding}
           />
@@ -395,7 +395,7 @@ export function SubscriptionRow({
                             alt={subscription.datenbankName || subscription.name || "Bank"}
                             sizeClassName="size-12 shrink-0"
                             backgroundClassName={
-                              subscription.logoWhiteBackground ? "bg-white" : "bg-zinc-900"
+                              logoBackgroundClass(subscription.logoBackground)
                             }
                             kind={subscription.isCompany ? "company" : "person"}
                             className="rounded-[5px]"

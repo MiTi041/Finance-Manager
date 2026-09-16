@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getApiBaseUrl, parseJsonResponse } from "@/lib/api";
+import type { LogoBackground } from "@/lib/zahlungspartner";
 
 export type SubscriptionFrequency = "MONTHLY" | "SEMI_ANNUAL" | "ANNUAL";
 
@@ -20,7 +21,7 @@ export interface Subscription {
   recipientName: string;
   recipientId: number;
   datenbankName?: string;
-  logoWhiteBackground?: boolean;
+  logoBackground?: LogoBackground;
   logoPadding?: boolean;
   isCompany?: boolean;
   amount: number;

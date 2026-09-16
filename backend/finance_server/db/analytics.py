@@ -276,7 +276,7 @@ def fetch_partner_analytics(
             "transactionCount": row["transaction_count"],
             "isCompany": True,
             "logoUrl": None,
-            "logoWhiteBackground": False,
+            "logoBackground": "dark",
             "logoPadding": False,
         }
         if total < 0:

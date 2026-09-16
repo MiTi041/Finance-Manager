@@ -610,7 +610,7 @@ class AllocationService:
                 "total": round(entry["total"], 2),
                 "count": entry["count"],
                 "logo_url": partner["logo_url"] if partner else None,
-                "logo_white_background": bool(partner["logo_white_background"]) if partner else False,
+                "logo_background": partner["logo_background"] if partner else "dark",
                 "logo_padding": bool(partner["logo_padding"]) if partner else False,
             })
         breakdown.sort(key=lambda x: x["total"], reverse=True)
@@ -676,7 +676,7 @@ class AllocationService:
             "income_events_left": income_events_left,
             "future_income_events": future,
             "recipient_logo_url": partner["logo_url"] if partner else None,
-            "recipient_logo_white_background": bool(partner["logo_white_background"]) if partner else False,
+            "recipient_logo_background": partner["logo_background"] if partner else "dark",
             "recipient_logo_padding": bool(partner["logo_padding"]) if partner else False,
             "effective_target": effective_target,
             "saved_einzahlungen": einzahlungen_total,

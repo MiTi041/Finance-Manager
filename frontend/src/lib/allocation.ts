@@ -1,5 +1,6 @@
 import { getApiBaseUrl, parseJsonResponse } from "./api";
 import { emitReferenceChange } from "./events";
+import type { LogoBackground } from "./zahlungspartner";
 
 export type AllocationBucket = {
   id: number;
@@ -61,7 +62,7 @@ export type SavingsPlan = {
   income_events_left: number | null;
   future_income_events?: number | null;
   recipient_logo_url?: string | null;
-  recipient_logo_white_background?: boolean;
+  recipient_logo_background?: LogoBackground;
   recipient_logo_padding?: boolean;
   effective_target: number;
   saved_einzahlungen: number;
@@ -235,7 +236,7 @@ export type DonationAnalyticsAccount = {
   total: number;
   count: number;
   logo_url: string | null;
-  logo_white_background: boolean;
+  logo_background: LogoBackground;
   logo_padding: boolean;
 };
 

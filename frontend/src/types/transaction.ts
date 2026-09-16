@@ -2,6 +2,8 @@
  * Rohdaten direkt aus Bank/API/CSV.
  * Entspricht 1:1 dem externen Datenformat.
  */
+import type { LogoBackground } from "@/lib/zahlungspartner";
+
 export interface TransactionSplit {
   betrag: number;
   kategorieId: number | null;
@@ -175,7 +177,7 @@ export interface Transaction {
     datenbankName: string;
     website: string | null;
     logoUrl: string | null;
-    logoWhiteBackground: boolean;
+    logoBackground: LogoBackground;
     logoPadding: boolean;
     isCompany: boolean;
 

@@ -1,4 +1,13 @@
 import { getApiBaseUrl } from "@/lib/api";
+import type { LogoBackground } from "@/lib/zahlungspartner";
+
+export function logoBackgroundClass(
+  value: LogoBackground | null | undefined,
+  darkClass = "bg-zinc-900",
+): string {
+  if (value === "none") return "";
+  return value === "white" ? "bg-white" : darkClass;
+}
 
 function isRemoteLogoUrl(value: string) {
   return /^(https?:|data:)/i.test(value);

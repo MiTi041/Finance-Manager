@@ -597,7 +597,7 @@ class TestEnrichSavingsPlan:
         service = AllocationService()
         partner = {
             "logo_url": "/assets/images/payment-partner-logos/sparkasse.png",
-            "logo_white_background": True,
+            "logo_background": "white",
             "logo_padding": False,
         }
         with ExitStack() as stack:
@@ -614,7 +614,7 @@ class TestEnrichSavingsPlan:
             stack.enter_context(patch("finance_server.services.allocation_service.get_zahlungspartner_by_iban", return_value=partner))
             result = service._enrich_savings_plan(plan, "2026-08")
         assert result["recipient_logo_url"] == partner["logo_url"]
-        assert result["recipient_logo_white_background"] is True
+        assert result["recipient_logo_background"] == "white"
         assert result["recipient_logo_padding"] is False
 
     def test_sender_iban_forwarded_to_breakdown(self):

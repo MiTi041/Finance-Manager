@@ -22,11 +22,13 @@ function IconFrame({
   kind = "company",
   CompanyFallback,
 }: IconFrameProps & { CompanyFallback: typeof Store }) {
+  const bare = backgroundClassName === "";
   return (
     <div
       className={cn(
-        "flex shrink-0 items-center justify-center overflow-hidden rounded-lg border",
-        !src ? "!bg-muted/70" : null,
+        "flex shrink-0 items-center justify-center overflow-hidden rounded-lg",
+        !bare && "border",
+        !bare && !src ? "!bg-muted/70" : null,
         backgroundClassName,
         sizeClassName,
         className,
@@ -36,10 +38,7 @@ function IconFrame({
         <img
           src={src}
           alt={alt}
-          className={cn(
-            "h-full w-full object-contain",
-            imgNoPadding ? "p-0" : "p-1",
-          )}
+          className={cn("h-full w-full object-contain", imgNoPadding ? "p-0" : "p-1")}
         />
       ) : kind === "person" ? (
         <span className="text-[12px] font-bold uppercase text-primary">

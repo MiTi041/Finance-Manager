@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ExternalLink, Repeat, TriangleAlert, Undo2 } from "lucide-react";
 
 import { BankLogo, BrandIcon } from "@/components/bank-logo";
+import { logoBackgroundClass } from "@/lib/bank/zahlungspartner-logo";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { type SelectedBankOption } from "@/lib/bank/selected";
@@ -146,12 +147,10 @@ export function CollapsedRow({
                   "Bank"
                 }
                 sizeClassName="size-12 shrink-0"
-                backgroundClassName={
-                  (subscriptionOverride?.logoWhiteBackground ??
-                  transaction.zahlungspartner.logoWhiteBackground)
-                    ? "bg-white"
-                    : "bg-zinc-900"
-                }
+                backgroundClassName={logoBackgroundClass(
+                  subscriptionOverride?.logoBackground ??
+                    transaction.zahlungspartner.logoBackground,
+                )}
                 kind={
                   (subscriptionOverride?.isCompany ?? transaction.zahlungspartner.isCompany)
                     ? "company"

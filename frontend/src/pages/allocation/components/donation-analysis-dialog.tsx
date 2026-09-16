@@ -7,6 +7,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { BankLogo } from "@/components/bank-logo";
+import { logoBackgroundClass } from "@/lib/bank/zahlungspartner-logo";
 import { formatAmount } from "@/lib/utils/format";
 import {
   fetchDonationAnalytics,
@@ -66,11 +67,10 @@ export function DonationAnalysisDialog({ open, onOpenChange }: Props) {
                             src={acc.logo_url ?? undefined}
                             alt={acc.account_name}
                             sizeClassName="size-8 shrink-0"
-                            backgroundClassName={
-                              acc.logo_white_background
-                                ? "bg-white"
-                                : "bg-muted"
-                            }
+                            backgroundClassName={logoBackgroundClass(
+                              acc.logo_background,
+                              "bg-muted",
+                            )}
                             imgNoPadding={!acc.logo_padding}
                           />
                           <div className="min-w-0 flex-1">

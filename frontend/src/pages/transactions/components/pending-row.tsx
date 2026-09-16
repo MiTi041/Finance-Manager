@@ -1,6 +1,7 @@
 import { Clock } from "lucide-react";
 
 import { BankLogo, BrandIcon } from "@/components/bank-logo";
+import { logoBackgroundClass } from "@/lib/bank/zahlungspartner-logo";
 import { type SelectedBankOption } from "@/lib/bank/selected";
 import { formatAmount, formatDate } from "@/lib/utils/format";
 import { type Transaction } from "@/types/transaction";
@@ -35,9 +36,9 @@ export function PendingRow({ transaction, accountBank }: PendingRowProps) {
             src={transaction.zahlungspartner.logoUrl || undefined}
             alt={transaction.zahlungspartner.name || "Bank"}
             sizeClassName="size-12 shrink-0"
-            backgroundClassName={
-              transaction.zahlungspartner.logoWhiteBackground ? "bg-white" : "bg-zinc-900"
-            }
+            backgroundClassName={logoBackgroundClass(
+              transaction.zahlungspartner.logoBackground,
+            )}
             kind={transaction.zahlungspartner.isCompany ? "company" : "person"}
             imgNoPadding={!transaction.zahlungspartner.logoPadding}
           />

@@ -53,10 +53,7 @@ function formatIban(value?: string) {
   return value.trim().replace(/(.{4})(?=.)/g, "$1 ");
 }
 
-function getAccounts(
-  credential: StoredBankCredentials,
-  bankCanTransfer: boolean | undefined,
-) {
+function getAccounts(credential: StoredBankCredentials, bankCanTransfer: boolean | undefined) {
   const accounts = credential.accounts ?? [];
   if (accounts.length > 0) {
     return accounts.map((account, index) => ({
@@ -110,8 +107,8 @@ export function Banks({
   const isDirty = (accountName: string, holderName: string) =>
     Boolean(
       editing &&
-        (editing.accountName.trim() !== accountName.trim() ||
-          editing.holderName.trim() !== holderName.trim()),
+      (editing.accountName.trim() !== accountName.trim() ||
+        editing.holderName.trim() !== holderName.trim()),
     );
 
   const handleSaveAndDiscard = async () => {
@@ -305,7 +302,7 @@ export function Banks({
                             }
                           >
                             <Pencil className="!h-4 !w-4" />
-                            <span>Umbenennen</span>
+                            <span>Bearbeiten</span>
                           </Button>
 
                           <Button
@@ -350,7 +347,9 @@ export function Banks({
                         <DialogContent>
                           <DialogHeader>
                             <DialogTitle>Konto bearbeiten</DialogTitle>
-                            <DialogDescription>Name und Kontoinhaber für dieses Konto ändern.</DialogDescription>
+                            <DialogDescription>
+                              Name und Kontoinhaber für dieses Konto ändern.
+                            </DialogDescription>
                           </DialogHeader>
                           <div className="grid gap-2">
                             <label className="text-sm font-medium" htmlFor="account-name">

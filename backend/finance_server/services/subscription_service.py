@@ -131,7 +131,7 @@ class SubscriptionService:
             rows = connection.execute(
                 """
                 SELECT i.iban, k.id, k.name, k.website, k.logo_url, k.local_logo_path,
-                       k.logo_white_background, k.logo_padding, k.is_company
+                       k.logo_background, k.logo_padding, k.is_company
                 FROM ibans i
                 INNER JOIN zahlungspartner k ON k.id = i.f_zahlungspartner_id
                 """
@@ -143,7 +143,7 @@ class SubscriptionService:
                     "website": row["website"],
                     "logo_url": row["logo_url"],
                     "local_logo_path": row["local_logo_path"],
-                    "logo_white_background": bool(row["logo_white_background"]),
+                    "logo_background": row["logo_background"] or "dark",
                     "logo_padding": bool(row["logo_padding"]),
                     "is_company": bool(row["is_company"]),
                 }
@@ -153,7 +153,7 @@ class SubscriptionService:
             all_zahlungspartner_rows = connection.execute(
                 """
                 SELECT id, name, website, logo_url, local_logo_path,
-                       logo_white_background, logo_padding, is_company
+                       logo_background, logo_padding, is_company
                 FROM zahlungspartner
                 ORDER BY LENGTH(name) DESC
                 """
@@ -165,7 +165,7 @@ class SubscriptionService:
                 "website": row["website"],
                 "logo_url": row["logo_url"],
                 "local_logo_path": row["local_logo_path"],
-                "logo_white_background": bool(row["logo_white_background"]),
+                "logo_background": row["logo_background"] or "dark",
                 "logo_padding": bool(row["logo_padding"]),
                 "is_company": bool(row["is_company"]),
             }
@@ -361,7 +361,7 @@ class SubscriptionService:
 
                 resolved_logo = None
                 datenbank_name = ""
-                logo_white_background = False
+                logo_background = "dark"
                 logo_padding = True
                 is_company = True
                 if zahlungspartner:
@@ -373,7 +373,7 @@ class SubscriptionService:
                     )
                     if zahlungspartner["name"]:
                         datenbank_name = zahlungspartner["name"]
-                    logo_white_background = zahlungspartner["logo_white_background"]
+                    logo_background = zahlungspartner["logo_background"]
                     logo_padding = zahlungspartner["logo_padding"]
                     is_company = zahlungspartner["is_company"]
 
@@ -394,7 +394,7 @@ class SubscriptionService:
                             k_row = connection.execute(
                                 """
                                 SELECT id, name, website, logo_url, local_logo_path,
-                                       logo_white_background, logo_padding, is_company
+                                       logo_background, logo_padding, is_company
                                 FROM zahlungspartner
                                 WHERE id = ?
                                 """,
@@ -407,7 +407,7 @@ class SubscriptionService:
                                 "website": k_row["website"],
                                 "logo_url": k_row["logo_url"],
                                 "local_logo_path": k_row["local_logo_path"],
-                                "logo_white_background": bool(k_row["logo_white_background"]),
+                                "logo_background": k_row["logo_background"] or "dark",
                                 "logo_padding": bool(k_row["logo_padding"]),
                                 "is_company": bool(k_row["is_company"]),
                             }
@@ -424,21 +424,21 @@ class SubscriptionService:
                     sub_name = override_zahlungspartner["name"]
                     sub_logo = override_resolved_logo
                     sub_datenbank = override_zahlungspartner["name"]
-                    sub_logo_white = override_zahlungspartner["logo_white_background"]
+                    sub_logo_background = override_zahlungspartner["logo_background"]
                     sub_logo_padding = override_zahlungspartner["logo_padding"]
                     sub_is_company = override_zahlungspartner["is_company"]
                 elif sub_identity_name:
                     sub_name = sub_identity_name
                     sub_logo = None
                     sub_datenbank = ""
-                    sub_logo_white = False
+                    sub_logo_background = "dark"
                     sub_logo_padding = True
                     sub_is_company = True
                 else:
                     sub_name = enriched_name
                     sub_logo = resolved_logo
                     sub_datenbank = datenbank_name
-                    sub_logo_white = logo_white_background
+                    sub_logo_background = logo_background
                     sub_logo_padding = logo_padding
                     sub_is_company = is_company
 
@@ -456,7 +456,7 @@ class SubscriptionService:
                         "recipientName": txs_in_cluster[0].get("recipient_name") or "",
                         "recipientId": sub_recipient_id,
                         "datenbankName": sub_datenbank,
-                        "logoWhiteBackground": sub_logo_white,
+                        "logoBackground": sub_logo_background,
                         "logoPadding": sub_logo_padding,
                         "isCompany": sub_is_company,
                         "amount": sub_amount,
@@ -557,7 +557,7 @@ class SubscriptionService:
                     "recipientName": "",
                     "recipientId": None,
                     "datenbankName": "",
-                    "logoWhiteBackground": False,
+                    "logoBackground": "dark",
                     "logoPadding": True,
                     "isCompany": True,
                     "amount": amt,

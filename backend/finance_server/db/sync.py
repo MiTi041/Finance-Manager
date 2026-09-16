@@ -132,7 +132,7 @@ VALID_SYNC_COLUMNS: dict[str, set[str]] = {
         "created_at", "updated_at",
     },
     "zahlungspartner": {"id", "name", "website", "logo_url", "local_logo_path", "is_company",
-        "logo_white_background", "logo_padding", "is_own_account", "updated_at"},
+        "logo_background", "logo_padding", "is_own_account", "updated_at"},
     "empfaengerkonten": {"id", "account_name", "iban", "bic", "recipient_name", "is_donation_account", "local_logo_path", "created_at", "updated_at"},
     "subscription_identities": {"id", "counterparty_name", "amount", "display_name", "f_zahlungspartner_id", "dismissed", "ended", "updated_at"},
     "ibans": {"iban", "f_zahlungspartner_id"},

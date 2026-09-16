@@ -82,7 +82,7 @@ export function mapTransaction(dto: TransactionDto): Transaction {
       datenbankName: "",
       website: null,
       logoUrl: null,
-      logoWhiteBackground: false,
+      logoBackground: "dark",
       logoPadding: true,
       isCompany: true,
 

@@ -101,7 +101,9 @@ export function ManualTransactionSheet({
       onOpenChange(false);
       await onCreated();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Transaktion konnte nicht angelegt werden");
+      toast.error(
+        error instanceof Error ? error.message : "Transaktion konnte nicht angelegt werden",
+      );
     } finally {
       setSaving(false);
     }
@@ -130,7 +132,7 @@ export function ManualTransactionSheet({
               inputMode="decimal"
               value={amount}
               onChange={(event) => setAmount(event.target.value)}
-              placeholder="-12,50 für Ausgabe, 12,50 für Einnahme"
+              placeholder="Ein- oder Ausgabe"
               autoComplete="off"
             />
           </div>

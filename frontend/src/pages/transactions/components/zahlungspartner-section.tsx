@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Check, CircleAlert, Loader2, Pencil } from "lucide-react";
 
 import { BankLogo, BrandIcon } from "@/components/bank-logo";
+import { logoBackgroundClass } from "@/lib/bank/zahlungspartner-logo";
 import { Button } from "@/components/ui/button";
 import { HelpButton } from "@/components/ui/help-button";
 import { Input } from "@/components/ui/input";
@@ -76,9 +77,7 @@ export function ZahlungspartnerSection({
               src={overrideLogoSrc}
               alt={subscriptionOverride.name}
               sizeClassName="size-8 shrink-0"
-              backgroundClassName={
-                subscriptionOverride.logoWhiteBackground ? "bg-white" : "bg-zinc-900"
-              }
+              backgroundClassName={logoBackgroundClass(subscriptionOverride.logoBackground)}
               kind={subscriptionOverride.isCompany ? "company" : "person"}
               imgNoPadding={!subscriptionOverride.logoPadding}
             />
@@ -150,7 +149,7 @@ export function ZahlungspartnerSection({
                   e.stopPropagation();
                 }}
               >
-                <div className="flex items-center gap-2 p-2 rounded-md bg-muted/70 rounded-lg hover:bg-muted/40 transition-colors justify-between">
+                <div className="flex items-center gap-2 p-2 bg-muted/70 rounded-[12pt] hover:bg-muted/40 transition-colors justify-between border">
                   <div className="flex items-center gap-4">
                     <BrandIcon
                       src={partnerLogoSrc}
@@ -160,11 +159,11 @@ export function ZahlungspartnerSection({
                         "Bank"
                       }
                       sizeClassName="size-12 shrink-0"
-                      backgroundClassName={
-                        transaction.zahlungspartner.logoWhiteBackground ? "bg-white" : "bg-zinc-900"
-                      }
+                      backgroundClassName={logoBackgroundClass(
+                        transaction.zahlungspartner.logoBackground,
+                      )}
                       kind={transaction.zahlungspartner.isCompany ? "company" : "person"}
-                      className="rounded-[5px]"
+                      className="rounded-lg"
                       imgNoPadding={!transaction.zahlungspartner.logoPadding}
                     />
 

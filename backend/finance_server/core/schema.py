@@ -233,6 +233,7 @@ def create_reference_tables(connection: sqlite3.Connection) -> None:
             logo_url TEXT,
             local_logo_path TEXT,
             logo_white_background INTEGER NOT NULL DEFAULT 0,
+            logo_background TEXT,
             logo_padding INTEGER NOT NULL DEFAULT 0,
             is_company INTEGER NOT NULL DEFAULT 1,
             is_own_account INTEGER NOT NULL DEFAULT 0
@@ -315,6 +316,7 @@ def migrate_reference_tables(connection: sqlite3.Connection) -> None:
             "logo_url": "TEXT",
             "local_logo_path": "TEXT",
             "logo_white_background": "INTEGER NOT NULL DEFAULT 0",
+            "logo_background": "TEXT",
             "logo_padding": "INTEGER NOT NULL DEFAULT 0",
             "is_company": "INTEGER NOT NULL DEFAULT 1",
             "is_own_account": "INTEGER NOT NULL DEFAULT 0",
@@ -614,6 +616,16 @@ def initialize_database(connection: sqlite3.Connection) -> None:
         if row_count == 0:
             connection.executescript(sql)
     connection.execute("PRAGMA foreign_keys = ON")
+
+    # ponytail: legacy boolean logo_white_background (0/1) → tri-state logo_background.
+    # NULL marks rows not yet migrated, so a user-chosen 'none' is never overwritten.
+    connection.execute(
+        """
+        UPDATE zahlungspartner
+        SET logo_background = CASE WHEN logo_white_background = 1 THEN 'white' ELSE 'dark' END
+        WHERE logo_background IS NULL
+        """
+    )
 
     _ensure_table_columns(
         connection,

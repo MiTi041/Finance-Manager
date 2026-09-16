@@ -2,12 +2,13 @@ import { useMemo } from "react";
 
 import { getServerBaseUrl } from "@/lib/bank/zahlungspartner-logo";
 import { type Transaction } from "@/types/transaction";
+import type { LogoBackground } from "@/lib/zahlungspartner";
 
 export type SubscriptionOverride = {
   name: string;
   logoUrl?: string;
   datenbankName?: string;
-  logoWhiteBackground?: boolean;
+  logoBackground?: LogoBackground;
   logoPadding?: boolean;
   isCompany?: boolean;
 };

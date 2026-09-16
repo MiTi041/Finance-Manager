@@ -15,12 +15,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { LogoBackground } from "@/lib/zahlungspartner";
 
 type OwnerFormState = {
   name: string;
   website: string;
   logo_url: string;
-  logo_white_background: boolean;
+  logo_background: LogoBackground;
   logo_padding: boolean;
   is_own_account: boolean;
   is_company: boolean;
@@ -54,7 +55,7 @@ export function ZahlungspartnerCreateDialog({
       is_own_account: isOwnAccount,
       website: isCompany ? current.website : "",
       logo_url: isCompany ? current.logo_url : "",
-      logo_white_background: isCompany ? current.logo_white_background : false,
+      logo_background: isCompany ? current.logo_background : "dark",
       logo_padding: isCompany ? current.logo_padding : true,
     }));
   };
@@ -133,11 +134,11 @@ export function ZahlungspartnerCreateDialog({
                   Logo-Hintergrund
                 </label>
                 <Select
-                  value={form.logo_white_background ? "white" : "dark"}
+                  value={form.logo_background}
                   onValueChange={(value) =>
                     setForm((current) => ({
                       ...current,
-                      logo_white_background: value === "white",
+                      logo_background: value as LogoBackground,
                     }))
                   }
                 >
@@ -146,7 +147,8 @@ export function ZahlungspartnerCreateDialog({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="dark">Dunkel</SelectItem>
-                    <SelectItem value="white">Weiß</SelectItem>
+                    <SelectItem value="white">Hell</SelectItem>
+                    <SelectItem value="none">Kein Hintergrund</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

@@ -10,13 +10,14 @@ import {
 } from "@/components/ui/select";
 import { Plus, Trash2 } from "lucide-react";
 import { HelpButton } from "@/components/ui/help-button";
-import { type ZahlungspartnerRecord } from "@/lib/zahlungspartner";
+import { type LogoBackground, type ZahlungspartnerRecord } from "@/lib/zahlungspartner";
+import { logoBackgroundClass } from "@/lib/bank/zahlungspartner-logo";
 
 type OwnerFormState = {
   name: string;
   website: string;
   logo_url: string;
-  logo_white_background: boolean;
+  logo_background: LogoBackground;
   logo_padding: boolean;
   is_own_account: boolean;
   is_company: boolean;
@@ -72,13 +73,12 @@ export function ZahlungspartnerForm({
       is_own_account: isOwnAccount,
       website: isCompany ? current.website : "",
       logo_url: isCompany ? current.logo_url : "",
-      logo_white_background: isCompany ? current.logo_white_background : false,
+      logo_background: isCompany ? current.logo_background : "dark",
       logo_padding: isCompany ? current.logo_padding : true,
     }));
   };
 
-  const avatarKind = (isCompany: boolean) =>
-    isCompany ? "company" : "person";
+  const avatarKind = (isCompany: boolean) => (isCompany ? "company" : "person");
 
   return (
     <div className="border-y border-muted/60 bg-muted/20">
@@ -86,10 +86,7 @@ export function ZahlungspartnerForm({
         <div className="flex flex-col gap-4 px-4 py-4">
           <div className="flex flex-wrap gap-4">
             <div className="flex flex-col gap-2">
-              <label
-                className="text-sm font-medium"
-                htmlFor={`owner-name-${owner.id}`}
-              >
+              <label className="text-sm font-medium" htmlFor={`owner-name-${owner.id}`}>
                 Name
               </label>
               <Input
@@ -109,10 +106,7 @@ export function ZahlungspartnerForm({
             {form.is_company && (
               <>
                 <div className="flex flex-col gap-2">
-                  <label
-                    className="text-sm font-medium"
-                    htmlFor={`owner-website-${owner.id}`}
-                  >
+                  <label className="text-sm font-medium" htmlFor={`owner-website-${owner.id}`}>
                     Webseite
                   </label>
                   <Input
@@ -132,10 +126,7 @@ export function ZahlungspartnerForm({
 
                 {!hasLocalImage && (
                   <div className="flex flex-col gap-2">
-                    <label
-                      className="text-sm font-medium"
-                      htmlFor={`owner-logo-${owner.id}`}
-                    >
+                    <label className="text-sm font-medium" htmlFor={`owner-logo-${owner.id}`}>
                       Logo-URL
                     </label>
                     <Input
@@ -161,15 +152,19 @@ export function ZahlungspartnerForm({
                   >
                     Logo-Hintergrund
                     <HelpButton className="!size-3 !text-[8px]">
-                      <p>Legt fest, ob ein heller oder dunkler Hintergrund hinter transparenten Logos angezeigt wird. Wähle „Hell" für Logos mit dunklen Farben und „Dunkel" für helle Logos.</p>
+                      <p>
+                        Legt fest, ob ein heller oder dunkler Hintergrund hinter transparenten Logos
+                        angezeigt wird. Wähle „Hell" für Logos mit dunklen Farben und „Dunkel" für
+                        helle Logos.
+                      </p>
                     </HelpButton>
                   </label>
                   <Select
-                    value={form.logo_white_background ? "white" : "dark"}
+                    value={form.logo_background}
                     onValueChange={(value) =>
                       setForm((current) => ({
                         ...current,
-                        logo_white_background: value === "white",
+                        logo_background: value as LogoBackground,
                       }))
                     }
                   >
@@ -182,6 +177,7 @@ export function ZahlungspartnerForm({
                     <SelectContent>
                       <SelectItem value="dark">Dunkel</SelectItem>
                       <SelectItem value="white">Hell</SelectItem>
+                      <SelectItem value="none">Kein Hintergrund</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -193,7 +189,10 @@ export function ZahlungspartnerForm({
                   >
                     Logo-Padding
                     <HelpButton className="!size-3 !text-[8px]">
-                      <p>Fügt einen Innenabstand um das Logo hinzu. Aktivieren, wenn das Logo zu groß ist oder bis zum Rand des Logofelds reicht.</p>
+                      <p>
+                        Fügt einen Innenabstand um das Logo hinzu. Aktivieren, wenn das Logo zu groß
+                        ist oder bis zum Rand des Logofelds reicht.
+                      </p>
                     </HelpButton>
                   </label>
                   <Select
@@ -221,20 +220,11 @@ export function ZahlungspartnerForm({
             )}
 
             <div className="flex flex-col gap-2">
-              <label
-                className="text-sm font-medium"
-                htmlFor={`owner-kind-${owner.id}`}
-              >
+              <label className="text-sm font-medium" htmlFor={`owner-kind-${owner.id}`}>
                 Typ
               </label>
               <Select
-                value={
-                  form.is_own_account
-                    ? "own"
-                    : form.is_company
-                      ? "company"
-                      : "person"
-                }
+                value={form.is_own_account ? "own" : form.is_company ? "company" : "person"}
                 onValueChange={(value) => updateOwnerKind(value)}
               >
                 <SelectTrigger
@@ -282,11 +272,7 @@ export function ZahlungspartnerForm({
                       src={logoSrc}
                       alt={owner.name}
                       sizeClassName="size-12 shrink-0"
-                      backgroundClassName={
-                        owner.logo_white_background
-                          ? "bg-white"
-                          : "bg-zinc-900"
-                      }
+                      backgroundClassName={logoBackgroundClass(form.logo_background)}
                       kind={avatarKind(owner.is_company)}
                       imgNoPadding={!form.logo_padding}
                     />
@@ -407,9 +393,7 @@ export function ZahlungspartnerForm({
                       </div>
                       <div>
                         <p className="text-xs font-medium text-foreground">
-                          {uploadingLogoId === owner.id
-                            ? "Wird hochgeladen…"
-                            : "Logo hochladen"}
+                          {uploadingLogoId === owner.id ? "Wird hochgeladen…" : "Logo hochladen"}
                         </p>
                       </div>
                     </div>

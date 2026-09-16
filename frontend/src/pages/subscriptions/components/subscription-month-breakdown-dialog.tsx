@@ -5,7 +5,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { getServerBaseUrl } from "@/lib/bank/zahlungspartner-logo";
+import { getServerBaseUrl, logoBackgroundClass } from "@/lib/bank/zahlungspartner-logo";
 import { formatAmount, formatDate } from "@/lib/utils/format";
 
 import type { MonthSubscriptionContribution } from "./subscription-monthly-chart";
@@ -62,7 +62,7 @@ export function SubscriptionMonthBreakdownDialog({
                         src={logoUrl}
                         alt={sub.name}
                         sizeClassName="size-8 shrink-0"
-                        backgroundClassName={sub.logoWhiteBackground ? "bg-white" : "bg-zinc-900"}
+                        backgroundClassName={logoBackgroundClass(sub.logoBackground)}
                         kind={sub.isCompany === false ? "person" : "company"}
                         imgNoPadding={!sub.logoPadding}
                       />

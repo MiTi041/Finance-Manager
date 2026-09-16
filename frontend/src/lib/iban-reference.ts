@@ -26,7 +26,7 @@ export function resolveTransactionCounterparty(
       website: resolved?.zahlungspartnerWebsite ?? null,
       logoUrl:
         resolved?.resolvedLogoUrl ?? resolved?.zahlungspartnerLogoUrl ?? null,
-      logoWhiteBackground: resolved?.zahlungspartnerLogoWhiteBackground ?? false,
+      logoBackground: resolved?.zahlungspartnerLogoBackground ?? "dark",
       logoPadding: resolved?.zahlungspartnerLogoPadding ?? false,
       isCompany: resolved?.zahlungspartnerIsCompany ?? true,
     },

@@ -1,8 +1,10 @@
 import base64
 import datetime
+import logging
 from typing import Any, cast
 
-from finance_server.db import find_bank_account_by_iban
+from finance_server.db import find_bank_account_by_iban, load_bank_credentials_by_iban
+from finance_server.db.utils import normalize_text
 from finance_server.models.fints import TransferRequest
 from fints.client import NeedRetryResponse, NeedTANResponse, NeedVOPResponse
 from fints.exceptions import FinTSClientError
@@ -58,6 +60,26 @@ def _vop_warning_payload(challenge, req: TransferRequest, token: str) -> VopConf
         close_match_name=str(close_match_name) if close_match_name else None,
         other_identification=str(other_identification) if other_identification else None,
         notice=str(notice) if notice else None,
+    )
+
+
+def _record_manual_recipient_income(
+    req: TransferRequest, sender_iban: str, sender_holder: str | None
+) -> None:
+    """Spiegelt eine erfolgreiche Überweisung als Einnahme auf dem manuellen Empfängerkonto."""
+    creds = load_bank_credentials_by_iban(req.recipient_iban)
+    if not creds or normalize_text(creds.get("bank_key")).lower() != "manual":
+        return
+
+    from finance_server.services.transaction_service import TransactionService
+
+    TransactionService().create_manual_transaction(
+        account_iban=req.recipient_iban,
+        date=datetime.date.today().isoformat(),
+        amount=float(req.amount),
+        recipient_name=sender_holder or req.sender_name,
+        recipient_iban=sender_iban,
+        purpose=req.reason,
     )
 
 
@@ -175,6 +197,17 @@ def send_transfer(req: TransferRequest) -> dict[str, Any]:
         if req.vop_token:
             delete_pending_vop(req.vop_token)
         save_state(client, creds)
+
+        try:
+            _record_manual_recipient_income(
+                req, sender_account.iban, _resolve_holder_name(sender_account.iban)
+            )
+        except Exception:
+            # Überweisung ist bereits raus — Fehler hier darf sie nicht als fehlgeschlagen melden.
+            logging.exception(
+                "Einnahme für manuelles Konto %s konnte nicht angelegt werden",
+                req.recipient_iban,
+            )
 
         return {
             "status": "ok",

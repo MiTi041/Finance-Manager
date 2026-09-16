@@ -11,6 +11,7 @@ import {
 } from "@/lib/zahlungspartner";
 import {
   getServerBaseUrl,
+  logoBackgroundClass,
   resolveZahlungspartnerLogoSrc,
 } from "@/lib/bank/zahlungspartner-logo";
 import {
@@ -298,11 +299,9 @@ export function RecipientAccountsTab() {
                       recipientAccount.recipient_name
                     }
                     sizeClassName="size-12 shrink-0"
-                    backgroundClassName={
-                      mapping?.zahlungspartner_logo_white_background
-                        ? "bg-white"
-                        : "bg-zinc-900"
-                    }
+                    backgroundClassName={logoBackgroundClass(
+                      mapping?.zahlungspartner_logo_background,
+                    )}
                     kind={
                       mapping?.zahlungspartner_is_company ? "company" : "person"
                     }

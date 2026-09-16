@@ -16,6 +16,8 @@ import DateFilter from "@/components/date-filter";
 import { EmptyState } from "@/components/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BankLogo } from "@/components/bank-logo";
+import { logoBackgroundClass } from "@/lib/bank/zahlungspartner-logo";
+import type { LogoBackground } from "@/lib/zahlungspartner";
 import { useGlobalDateFilter } from "@/hooks/use-global-date-filter";
 import { useFinanceData } from "@/hooks/use-finance-data";
 import { useCategories } from "@/hooks/use-categories";
@@ -70,7 +72,7 @@ function groupSmallSlices(
     value: number;
     icon?: string | null;
     logoUrl?: string | null;
-    logoWhiteBackground?: boolean;
+    logoBackground?: LogoBackground;
     logoPadding?: boolean;
     isCompany?: boolean;
   }[],
@@ -175,7 +177,7 @@ function LegendRow({
   color,
   icon,
   logoUrl,
-  logoWhiteBackground,
+  logoBackground,
   logoPadding,
   isCompany,
 }: {
@@ -185,7 +187,7 @@ function LegendRow({
   color: string;
   icon?: string | null;
   logoUrl?: string | null;
-  logoWhiteBackground?: boolean;
+  logoBackground?: LogoBackground;
   logoPadding?: boolean;
   isCompany?: boolean;
 }) {
@@ -201,7 +203,7 @@ function LegendRow({
             src={logoUrl}
             alt={name}
             sizeClassName="size-8 shrink-0"
-            backgroundClassName={logoWhiteBackground ? "bg-white" : "bg-muted"}
+            backgroundClassName={logoBackgroundClass(logoBackground, "bg-muted")}
             imgNoPadding={!logoPadding}
           />
         ) : (
@@ -258,7 +260,7 @@ function ChartCard({
     value: number;
     icon?: string | null;
     logoUrl?: string | null;
-    logoWhiteBackground?: boolean;
+    logoBackground?: LogoBackground;
     logoPadding?: boolean;
     isCompany?: boolean;
   }[];
@@ -323,7 +325,7 @@ function ChartCard({
                 color={colors[i % colors.length]}
                 icon={entry.icon}
                 logoUrl={entry.logoUrl}
-                logoWhiteBackground={entry.logoWhiteBackground}
+                logoBackground={entry.logoBackground}
                 logoPadding={entry.logoPadding}
                 isCompany={entry.isCompany}
               />
@@ -416,7 +418,7 @@ export default function AnalyticsPage() {
           name: p.name,
           value: p.totalAmount,
           logoUrl: p.logoUrl,
-          logoWhiteBackground: p.logoWhiteBackground,
+          logoBackground: p.logoBackground,
           logoPadding: p.logoPadding,
           isCompany: p.isCompany,
         })),
@@ -425,7 +427,7 @@ export default function AnalyticsPage() {
         name: string;
         value: number;
         logoUrl: string | null;
-        logoWhiteBackground: boolean;
+        logoBackground: LogoBackground;
         logoPadding: boolean;
         isCompany: boolean;
       }[],
@@ -439,7 +441,7 @@ export default function AnalyticsPage() {
           name: p.name,
           value: p.totalAmount,
           logoUrl: p.logoUrl,
-          logoWhiteBackground: p.logoWhiteBackground,
+          logoBackground: p.logoBackground,
           logoPadding: p.logoPadding,
           isCompany: p.isCompany,
         })),
@@ -448,7 +450,7 @@ export default function AnalyticsPage() {
         name: string;
         value: number;
         logoUrl: string | null;
-        logoWhiteBackground: boolean;
+        logoBackground: LogoBackground;
         logoPadding: boolean;
         isCompany: boolean;
       }[],

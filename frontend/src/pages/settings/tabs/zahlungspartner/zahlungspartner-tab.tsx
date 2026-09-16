@@ -14,10 +14,14 @@ import {
   deleteZahlungspartner,
   fetchZahlungspartner,
   fetchZahlungspartnerReferenceData,
+  type LogoBackground,
   type ZahlungspartnerRecord,
   updateZahlungspartner,
 } from "@/lib/zahlungspartner";
-import { resolveZahlungspartnerLogoSrc } from "@/lib/bank/zahlungspartner-logo";
+import {
+  logoBackgroundClass,
+  resolveZahlungspartnerLogoSrc,
+} from "@/lib/bank/zahlungspartner-logo";
 import { VirtualizedList, type VirtualizedListRef } from "@/components/virtualized-list";
 import { DiscardChangesDialog, useSettingsTab } from "@/pages/settings/hooks/use-settings-tab";
 import { SettingsTabHeader } from "@/components/settings-tab-header";
@@ -28,7 +32,7 @@ const EMPTY_FORM = {
   name: "",
   website: "",
   logo_url: "",
-  logo_white_background: false,
+  logo_background: "dark" as LogoBackground,
   logo_padding: false,
   is_company: true,
   is_own_account: false,
@@ -52,7 +56,7 @@ function normalizeOwnerDraft(form: OwnerFormState) {
     name: form.name.trim(),
     website: isCompany ? form.website.trim() || null : null,
     logo_url: isCompany ? form.logo_url.trim() || null : null,
-    logo_white_background: isCompany ? form.logo_white_background : false,
+    logo_background: isCompany ? form.logo_background : "dark",
     logo_padding: isCompany ? form.logo_padding : false,
     is_own_account: isCompany ? form.is_own_account : false,
     is_company: isCompany,
@@ -67,7 +71,7 @@ function isOwnerDirty(editingOwner: ZahlungspartnerRecord | null, form: OwnerFor
       draft.name !== "" ||
       draft.website !== null ||
       draft.logo_url !== null ||
-      draft.logo_white_background !== false ||
+      draft.logo_background !== "dark" ||
       draft.logo_padding !== false ||
       draft.is_own_account !== false ||
       draft.is_company !== true
@@ -78,7 +82,7 @@ function isOwnerDirty(editingOwner: ZahlungspartnerRecord | null, form: OwnerFor
     draft.name !== editingOwner.name ||
     draft.website !== (editingOwner.website ?? null) ||
     draft.logo_url !== (editingOwner.logo_url ?? null) ||
-    draft.logo_white_background !== (editingOwner.logo_white_background ?? false) ||
+    draft.logo_background !== (editingOwner.logo_background ?? "dark") ||
     draft.logo_padding !== (editingOwner.logo_padding ?? false) ||
     draft.is_own_account !== (editingOwner.is_own_account ?? false) ||
     draft.is_company !== editingOwner.is_company
@@ -123,7 +127,7 @@ export function ZahlungspartnerTab() {
       name: owner.name,
       website: owner.website ?? "",
       logo_url: owner.logo_url ?? "",
-      logo_white_background: owner.logo_white_background ?? false,
+      logo_background: owner.logo_background ?? "dark",
       logo_padding: owner.logo_padding ?? false,
       is_own_account: owner.is_own_account ?? false,
       is_company: owner.is_company,
@@ -267,7 +271,7 @@ export function ZahlungspartnerTab() {
       name: owner.name,
       website: owner.website ?? "",
       logo_url: owner.logo_url ?? "",
-      logo_white_background: owner.logo_white_background ?? false,
+      logo_background: owner.logo_background ?? "dark",
       logo_padding: owner.logo_padding ?? false,
       is_own_account: owner.is_own_account ?? false,
       is_company: owner.is_company,
@@ -311,7 +315,7 @@ export function ZahlungspartnerTab() {
           name: updatedOwner.name,
           website: updatedOwner.website ?? "",
           logo_url: updatedOwner.logo_url ?? "",
-          logo_white_background: updatedOwner.logo_white_background ?? false,
+          logo_background: updatedOwner.logo_background ?? "dark",
           logo_padding: updatedOwner.logo_padding ?? false,
           is_own_account: updatedOwner.is_own_account ?? false,
           is_company: updatedOwner.is_company,
@@ -532,7 +536,7 @@ export function ZahlungspartnerTab() {
                     src={logoSrc}
                     alt={owner.name}
                     sizeClassName="size-12 shrink-0"
-                    backgroundClassName={owner.logo_white_background ? "bg-white" : "bg-zinc-900"}
+                    backgroundClassName={logoBackgroundClass(owner.logo_background)}
                     kind={avatarKind(owner.is_company)}
                     imgNoPadding={!owner.logo_padding}
                   />

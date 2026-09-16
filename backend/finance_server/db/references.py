@@ -40,6 +40,22 @@ def _coerce_bool(value: Any, default: bool = True) -> int:
     return 1 if default else 0
 
 
+LOGO_BACKGROUNDS = ("white", "dark", "none")
+
+
+def _coerce_logo_background(value: Any, default: str = "dark") -> str:
+    if value is None:
+        return default
+    if value is True:
+        return "white"
+    if value is False:
+        return "dark"
+    text = normalize_text(value).lower()
+    if text in LOGO_BACKGROUNDS:
+        return text
+    return default
+
+
 def _normalize_optional_text(value: Any) -> str | None:
     text = normalize_text(value)
     return text or None
@@ -150,7 +166,7 @@ def _serialize_zahlungspartner_row(row: sqlite3.Row) -> dict[str, Any]:
         "website": row["website"],
         "logo_url": row["logo_url"],
         "local_logo_path": row["local_logo_path"],
-        "logo_white_background": bool(row["logo_white_background"]),
+        "logo_background": _coerce_logo_background(row["logo_background"]),
         "logo_padding": bool(row["logo_padding"]),
         "is_company": bool(row["is_company"]),
         "is_own_account": bool(row["is_own_account"]),
@@ -166,7 +182,7 @@ def list_zahlungspartner_records() -> list[dict[str, Any]]:
     with get_connection() as connection:
         rows = connection.execute(
             """
-            SELECT id, name, website, logo_url, local_logo_path, logo_white_background, logo_padding, is_company, is_own_account
+            SELECT id, name, website, logo_url, local_logo_path, logo_background, logo_padding, is_company, is_own_account
             FROM zahlungspartner
             ORDER BY name COLLATE NOCASE ASC, id ASC
             """
@@ -200,10 +216,7 @@ def create_zahlungspartner_record(payload: dict[str, Any]) -> dict[str, Any]:
 
     website = _normalize_optional_text(payload.get("website"))
     logo_url = _normalize_optional_text(payload.get("logo_url"))
-    logo_white_background = _coerce_bool(
-        payload.get("logo_white_background"),
-        default=False,
-    )
+    logo_background = _coerce_logo_background(payload.get("logo_background"))
     logo_padding = _coerce_bool(
         payload.get("logo_padding"),
         default=False,
@@ -217,7 +230,7 @@ def create_zahlungspartner_record(payload: dict[str, Any]) -> dict[str, Any]:
     if not is_company:
         website = None
         logo_url = None
-        logo_white_background = 0
+        logo_background = "dark"
         logo_padding = 0
         is_own_account = 0
 
@@ -228,14 +241,14 @@ def create_zahlungspartner_record(payload: dict[str, Any]) -> dict[str, Any]:
                 name,
                 website,
                 logo_url,
-                logo_white_background,
+                logo_background,
                 logo_padding,
                 is_company,
                 is_own_account
             )
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (name, website, logo_url, logo_white_background, logo_padding, is_company, is_own_account),
+            (name, website, logo_url, logo_background, logo_padding, is_company, is_own_account),
         )
         zahlungspartner_id = cast(int, cursor.lastrowid)
 
@@ -249,7 +262,7 @@ def create_zahlungspartner_record(payload: dict[str, Any]) -> dict[str, Any]:
             "name": name,
             "website": website,
             "logo_url": logo_url,
-            "logo_white_background": bool(logo_white_background),
+            "logo_background": logo_background,
             "logo_padding": bool(logo_padding),
             "is_company": bool(is_company),
             "is_own_account": bool(is_own_account),
@@ -292,11 +305,9 @@ def update_zahlungspartner_record(zahlungspartner_id: int, payload: dict[str, An
             fields.append("local_logo_path = ?")
             params.append(_normalize_optional_text(payload.get("local_logo_path")))
 
-        if "logo_white_background" in payload:
-            fields.append("logo_white_background = ?")
-            params.append(
-                _coerce_bool(payload.get("logo_white_background"), default=False)
-            )
+        if "logo_background" in payload:
+            fields.append("logo_background = ?")
+            params.append(_coerce_logo_background(payload.get("logo_background")))
 
         if "logo_padding" in payload:
             fields.append("logo_padding = ?")
@@ -310,9 +321,9 @@ def update_zahlungspartner_record(zahlungspartner_id: int, payload: dict[str, An
         if "logo_url" in payload:
             fields.append("logo_url = ?")
             params.append(None)
-        if "logo_white_background" in payload:
-            fields.append("logo_white_background = ?")
-            params.append(0)
+        if "logo_background" in payload:
+            fields.append("logo_background = ?")
+            params.append("dark")
         if "logo_padding" in payload:
             fields.append("logo_padding = ?")
             params.append(0)
@@ -391,7 +402,7 @@ def get_zahlungspartner_record(zahlungspartner_id: int) -> dict[str, Any] | None
     with get_connection() as connection:
         row = connection.execute(
             """
-            SELECT id, name, website, logo_url, local_logo_path, logo_white_background, logo_padding, is_company, is_own_account
+            SELECT id, name, website, logo_url, local_logo_path, logo_background, logo_padding, is_company, is_own_account
             FROM zahlungspartner
             WHERE id = ?
             """,
@@ -427,7 +438,7 @@ def list_zahlungspartner_iban_mappings() -> list[dict[str, Any]]:
                 k.website AS zahlungspartner_website,
                 k.logo_url AS zahlungspartner_logo_url,
                 k.local_logo_path AS zahlungspartner_local_logo_path,
-                k.logo_white_background AS zahlungspartner_logo_white_background,
+                k.logo_background AS zahlungspartner_logo_background,
                 k.logo_padding AS zahlungspartner_logo_padding,
                 k.is_company AS zahlungspartner_is_company
             FROM ibans i
@@ -444,8 +455,8 @@ def list_zahlungspartner_iban_mappings() -> list[dict[str, Any]]:
             "zahlungspartner_website": row["zahlungspartner_website"],
             "zahlungspartner_logo_url": row["zahlungspartner_logo_url"],
             "zahlungspartner_local_logo_path": row["zahlungspartner_local_logo_path"],
-            "zahlungspartner_logo_white_background": bool(
-                row["zahlungspartner_logo_white_background"]
+            "zahlungspartner_logo_background": _coerce_logo_background(
+                row["zahlungspartner_logo_background"]
             ),
             "zahlungspartner_logo_padding": bool(
                 row["zahlungspartner_logo_padding"]
@@ -728,7 +739,7 @@ def get_zahlungspartner_by_iban(iban: str) -> dict[str, Any] | None:
         row = connection.execute(
             """
             SELECT k.id, k.name, k.website, k.logo_url, k.local_logo_path,
-                   k.logo_white_background, k.logo_padding, k.is_company, k.is_own_account
+                   k.logo_background, k.logo_padding, k.is_company, k.is_own_account
             FROM ibans i
             INNER JOIN zahlungspartner k ON k.id = i.f_zahlungspartner_id
             WHERE i.iban = ?
@@ -752,7 +763,7 @@ def list_iban_zahlungspartner_references() -> list[dict[str, Any]]:
                 k.website AS zahlungspartner_website,
                 k.logo_url AS zahlungspartner_logo_url
                 , k.local_logo_path AS zahlungspartner_local_logo_path
-                , k.logo_white_background AS zahlungspartner_logo_white_background
+                , k.logo_background AS zahlungspartner_logo_background
                 , k.logo_padding AS zahlungspartner_logo_padding
                 , k.is_company AS zahlungspartner_is_company
             FROM ibans i
@@ -770,8 +781,8 @@ def list_iban_zahlungspartner_references() -> list[dict[str, Any]]:
             "zahlungspartner_website": row["zahlungspartner_website"],
             "zahlungspartner_logo_url": row["zahlungspartner_logo_url"],
             "zahlungspartner_local_logo_path": row["zahlungspartner_local_logo_path"],
-            "zahlungspartner_logo_white_background": bool(
-                row["zahlungspartner_logo_white_background"]
+            "zahlungspartner_logo_background": _coerce_logo_background(
+                row["zahlungspartner_logo_background"]
             ),
             "zahlungspartner_logo_padding": bool(
                 row["zahlungspartner_logo_padding"]

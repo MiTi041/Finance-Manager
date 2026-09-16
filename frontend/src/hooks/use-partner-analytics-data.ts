@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getApiBaseUrl, AbortError } from "@/lib/api";
 import { getErrorMessage } from "@/lib/utils/error";
+import type { LogoBackground } from "@/lib/zahlungspartner";
 
 export interface PartnerData {
   name: string;
@@ -8,7 +9,7 @@ export interface PartnerData {
   transactionCount: number;
   isCompany: boolean;
   logoUrl: string | null;
-  logoWhiteBackground: boolean;
+  logoBackground: LogoBackground;
   logoPadding: boolean;
 }
 

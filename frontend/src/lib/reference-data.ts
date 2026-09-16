@@ -1,5 +1,6 @@
 import { getApiBaseUrl, parseJsonResponse } from "./api";
 import { emitReferenceChange } from "./events";
+import type { LogoBackground } from "./zahlungspartner";
 
 export async function fetchIbanZahlungspartnerReferences(): Promise<
   Array<{
@@ -9,7 +10,7 @@ export async function fetchIbanZahlungspartnerReferences(): Promise<
     zahlungspartner_website?: string | null;
     zahlungspartner_logo_padding?: boolean | null;
     zahlungspartner_logo_url?: string | null;
-    zahlungspartner_logo_white_background?: boolean | null;
+    zahlungspartner_logo_background?: LogoBackground | null;
     zahlungspartner_is_company?: boolean | null;
     resolved_logo_url?: string | null;
   }>
