@@ -41,10 +41,11 @@ Freitext-Eingabe bleibt weiterhin möglich.
    - Empfängerkonten (`RecipientAccountRecord`): `name = recipient_name || account_name`, `iban = iban`
    - Zahlungspartner (`ZahlungspartnerRecord`): `name = name`, `iban = ibans[0] ?? ""`
 
-   Dedupe: nach normalisierter IBAN über alle Gruppen hinweg, Priorität in
-   obiger Reihenfolge (erstes Vorkommen gewinnt). Verhindert sichtbare Doppel,
-   z.B. wenn ein eigenes Konto gleichzeitig als Zahlungspartner
-   (`is_own_account`) existiert. Einträge ohne IBAN werden nicht dedupliziert.
+   Dedupe: nach normalisierter IBAN (Whitespace entfernt, Uppercase) über alle
+   Gruppen hinweg, Priorität in obiger Reihenfolge (erstes Vorkommen gewinnt).
+   Verhindert sichtbare Doppel, z.B. wenn ein eigenes Konto gleichzeitig als
+   Zahlungspartner (`is_own_account`) existiert. Einträge ohne IBAN werden
+   nicht dedupliziert.
 
 2. `frontend/src/pages/transactions/components/recipient-combobox.tsx` —
    `RecipientCombobox`:
@@ -67,7 +68,9 @@ Freitext-Eingabe bleibt weiterhin möglich.
    - Neuer State `recipientAccounts` + Effekt mit
      `fetchRecipientAccountsReferenceData()` (gecachter Client, kein neuer
      Endpoint). Bei Fehler leerer Array.
-   - `ownAccounts` via `buildAccountOptions(linkedAccounts)` (useMemo).
+   - `ownAccounts`: `linkedAccounts` aus `useFinanceData` ist bereits
+     `BankAccountOption[]` (via `buildAccountOptions` in `use-finance-data.ts`)
+     und wird direkt durchgereicht.
    - Props an `ManualTransactionSheet`: `ownAccounts`, `recipientAccounts`,
      `zahlungspartner` (State existiert bereits).
 
