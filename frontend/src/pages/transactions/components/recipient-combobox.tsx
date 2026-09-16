@@ -61,8 +61,14 @@ export function RecipientCombobox({
         className="w-[var(--radix-popover-trigger-width)] p-0"
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
-        <Command shouldFilter={false}>
-          <CommandList className="max-h-72">
+        <Command shouldFilter={false} className="overflow-visible">
+          <CommandList
+            className="max-h-72"
+            onWheel={(event) => {
+              const el = event.currentTarget;
+              el.scrollTop += event.deltaY;
+            }}
+          >
             <CommandEmpty>{emptyText}</CommandEmpty>
             {filtered.map((group) => (
               <CommandGroup key={group.kind} heading={group.label}>
