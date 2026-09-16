@@ -7,9 +7,11 @@ export type RecipientOptionKind = "own" | "recipient" | "partner";
 
 export type RecipientOption = {
   id: string;
-  name: string;
-  iban: string;
   kind: RecipientOptionKind;
+  name: string;
+  label: string;
+  subtitle: string;
+  iban: string;
 };
 
 export type RecipientOptionGroup = {
@@ -29,30 +31,44 @@ export function buildRecipientOptions(input: {
       label: "Eigene Konten",
       options: input.ownAccounts.map((account) => ({
         id: `own:${account.accountIban}`,
-        name: account.accountName,
-        iban: account.accountIban,
         kind: "own" as const,
+        name: account.holderName || account.accountName,
+        label: account.accountName,
+        subtitle: account.holderName
+          ? `${account.holderName} · ${account.accountIban}`
+          : account.accountIban,
+        iban: account.accountIban,
       })),
     },
     {
       kind: "recipient",
       label: "Empfängerkonten",
-      options: input.recipientAccounts.map((account) => ({
-        id: `recipient:${account.id}`,
-        name: account.recipient_name || account.account_name,
-        iban: account.iban,
-        kind: "recipient" as const,
-      })),
+      options: input.recipientAccounts.map((account) => {
+        const name = account.recipient_name || account.account_name;
+        return {
+          id: `recipient:${account.id}`,
+          kind: "recipient" as const,
+          name,
+          label: name,
+          subtitle: account.iban,
+          iban: account.iban,
+        };
+      }),
     },
     {
       kind: "partner",
       label: "Zahlungspartner",
-      options: input.zahlungspartner.map((partner) => ({
-        id: `partner:${partner.id}`,
-        name: partner.name,
-        iban: partner.ibans[0] ?? "",
-        kind: "partner" as const,
-      })),
+      options: input.zahlungspartner.map((partner) => {
+        const iban = partner.ibans[0] ?? "";
+        return {
+          id: `partner:${partner.id}`,
+          kind: "partner" as const,
+          name: partner.name,
+          label: partner.name,
+          subtitle: iban,
+          iban,
+        };
+      }),
     },
   ];
 
@@ -83,9 +99,9 @@ export function filterRecipientOptions(
     .map((group) => ({
       ...group,
       options: group.options.filter((option) => {
-        const name = option.name.toLowerCase();
+        const text = `${option.label} ${option.subtitle}`.toLowerCase();
         const iban = option.iban.replace(/\s+/g, "").toLowerCase();
-        return name.includes(needle) || iban.includes(compactNeedle);
+        return text.includes(needle) || iban.includes(compactNeedle);
       }),
     }))
     .filter((group) => group.options.length > 0);

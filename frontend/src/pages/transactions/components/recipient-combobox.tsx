@@ -76,10 +76,10 @@ export function RecipientCombobox({
                     }}
                   >
                     <span className="flex min-w-0 flex-col">
-                      <span className="truncate">{option.name}</span>
-                      {option.iban ? (
+                      <span className="truncate">{option.label}</span>
+                      {option.subtitle ? (
                         <span className="text-muted-foreground truncate text-xs">
-                          {option.iban}
+                          {option.subtitle}
                         </span>
                       ) : null}
                     </span>

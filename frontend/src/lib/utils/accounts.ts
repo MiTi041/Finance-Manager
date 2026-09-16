@@ -7,6 +7,7 @@ type LinkedBankEntry = SelectedBankOption | StoredBankCredentials;
 export type BankAccountOption = {
   accountIban: string;
   accountName: string;
+  holderName?: string;
   bankName: string;
   bankLogo?: string;
   username?: string;
@@ -35,6 +36,7 @@ export function buildAccountOptions(
               bank.bank_name ||
               bank.username ||
               "Konto",
+            holderName: account.holder_name || undefined,
             bankName: bank.bank_name || bank.bank_key,
             bankLogo: bank.bank_logo || undefined,
             username: bank.username,

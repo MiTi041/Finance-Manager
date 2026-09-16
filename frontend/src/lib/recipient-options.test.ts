@@ -6,7 +6,13 @@ import {
 
 const groups = buildRecipientOptions({
   ownAccounts: [
-    { accountIban: "DE89370400440532013000", accountName: "Giro", bankName: "Bank", scope: "s1" },
+    {
+      accountIban: "DE89370400440532013000",
+      accountName: "Giro",
+      holderName: "Michael Tissen",
+      bankName: "Bank",
+      scope: "s1",
+    },
     { accountIban: "DE75512108001245126199", accountName: "Tagesgeld", bankName: "Bank", scope: "s2" },
   ],
   recipientAccounts: [
@@ -38,13 +44,21 @@ assert.deepEqual(
   ["Eigene Konten", "Empfängerkonten", "Zahlungspartner"],
 );
 
-// Mapping eigene Konten
-assert.equal(groups[0].options[0].name, "Giro");
+// Mapping eigene Konten: Inhaber wird eingefügt, Anzeige bleibt Kontoname
+assert.equal(groups[0].options[0].name, "Michael Tissen");
+assert.equal(groups[0].options[0].label, "Giro");
+assert.equal(groups[0].options[0].subtitle, "Michael Tissen · DE89370400440532013000");
 assert.equal(groups[0].options[0].iban, "DE89370400440532013000");
+
+// Ohne Inhaber: Fallback auf Kontoname
+assert.equal(groups[0].options[1].name, "Tagesgeld");
+assert.equal(groups[0].options[1].label, "Tagesgeld");
+assert.equal(groups[0].options[1].subtitle, "DE75512108001245126199");
 
 // Mapping Empfängerkonten inkl. Fallback auf account_name
 assert.equal(groups[1].options[0].name, "Vermieter GmbH");
-assert.equal(groups[1].options[0].iban, "DE02120300000000202051");
+assert.equal(groups[1].options[0].label, "Vermieter GmbH");
+assert.equal(groups[1].options[0].subtitle, "DE02120300000000202051");
 assert.equal(groups[1].options[1].name, "Ohne Empfängername");
 
 // Dedupe über normalisierte IBAN: Zahlungspartner "Giro" (DE89…) fällt weg,
@@ -72,6 +86,16 @@ assert.deepEqual(byCompactIban[0].options.map((o) => o.name), ["Strom"]);
 // Query mit Leerzeichen findet Namen mit Leerzeichen
 const bySpacedName = filterRecipientOptions(groups, "Vermieter GmbH");
 assert.deepEqual(bySpacedName[0].options.map((o) => o.name), ["Vermieter GmbH"]);
+
+// Suche über Kontoname (label)
+const byLabel = filterRecipientOptions(groups, "giro");
+assert.deepEqual(byLabel.map((g) => g.label), ["Eigene Konten"]);
+assert.deepEqual(byLabel[0].options.map((o) => o.name), ["Michael Tissen"]);
+
+// Suche über Kontoinhaber (subtitle)
+const byHolder = filterRecipientOptions(groups, "michael");
+assert.deepEqual(byHolder.map((g) => g.label), ["Eigene Konten"]);
+assert.deepEqual(byHolder[0].options.map((o) => o.name), ["Michael Tissen"]);
 
 // Leeres Query gibt alles zurück, leere Gruppen werden entfernt
 assert.equal(filterRecipientOptions(groups, "   "), groups);

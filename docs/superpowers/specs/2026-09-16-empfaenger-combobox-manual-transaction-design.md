@@ -27,19 +27,24 @@ Freitext-Eingabe bleibt weiterhin möglich.
 ## Neue Dateien
 
 1. `frontend/src/lib/recipient-options.ts` — reine Logik, kein React:
-   - Typ `RecipientOption { id: string; name: string; iban: string; kind: "own" | "recipient" | "partner" }`
+   - Typ `RecipientOption { id: string; kind: "own" | "recipient" | "partner"; name: string; label: string; subtitle: string; iban: string }`
+     (`name` = Wert fürs Empfänger-Feld, `label`/`subtitle` = Dropdown-Anzeige)
    - Typ `RecipientOptionGroup { kind: ...; label: string; options: RecipientOption[] }`
    - `buildRecipientOptions({ ownAccounts, recipientAccounts, zahlungspartner })`
      → `RecipientOptionGroup[]` in Reihenfolge Eigene Konten → Empfängerkonten →
      Zahlungspartner. Leere Gruppen werden weggelassen.
    - `filterRecipientOptions(groups, query)` → gefilterte Gruppen; Treffer bei
-     Teilstring in `name` **oder** `iban` (case-insensitive, getrimmt). Leeres
-     Query gibt alles zurück. Leere Gruppen werden weggelassen.
+     Teilstring in `label`/`subtitle` **oder** IBAN (case-insensitive, getrimmt,
+     IBAN whitespace-kompakt). Leeres Query gibt alles zurück. Leere Gruppen
+     werden weggelassen.
 
    Mapping:
-   - eigene Konten (`BankAccountOption`): `name = accountName`, `iban = accountIban`
-   - Empfängerkonten (`RecipientAccountRecord`): `name = recipient_name || account_name`, `iban = iban`
-   - Zahlungspartner (`ZahlungspartnerRecord`): `name = name`, `iban = ibans[0] ?? ""`
+   - eigene Konten (`BankAccountOption`): `name = holderName || accountName`,
+     `label = accountName`, `subtitle = holderName ? "holderName · accountIban" : accountIban`,
+     `iban = accountIban`. Der Kontoinhaber (`holder_name`) wird als
+     Empfängername verwendet (wie in `banks.tsx` / `allocation_service.py`).
+   - Empfängerkonten (`RecipientAccountRecord`): `name = label = recipient_name || account_name`, `subtitle = iban`, `iban = iban`
+   - Zahlungspartner (`ZahlungspartnerRecord`): `name = label = name`, `subtitle = iban`, `iban = ibans[0] ?? ""`
 
    Dedupe: nach normalisierter IBAN (Whitespace entfernt, Uppercase) über alle
    Gruppen hinweg, Priorität in obiger Reihenfolge (erstes Vorkommen gewinnt).
