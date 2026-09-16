@@ -48,7 +48,10 @@ export function RecipientCombobox({
           value={value}
           placeholder={placeholder}
           autoComplete="off"
-          onFocus={() => setOpen(true)}
+          data-recipient-combobox-input
+          onFocus={() => {
+            if (value) setOpen(true);
+          }}
           onChange={(event) => {
             onValueChange(event.target.value);
             setOpen(true);
@@ -59,7 +62,26 @@ export function RecipientCombobox({
         align="start"
         sideOffset={4}
         className="w-[var(--radix-popover-trigger-width)] p-0"
+        data-recipient-combobox-content
         onOpenAutoFocus={(event) => event.preventDefault()}
+        onFocusOutside={(event) => {
+          const target = event.target;
+          if (
+            target instanceof HTMLElement &&
+            target.closest("[data-recipient-combobox-input],[data-recipient-combobox-content]")
+          ) {
+            event.preventDefault();
+          }
+        }}
+        onInteractOutside={(event) => {
+          const target = event.target;
+          if (
+            target instanceof HTMLElement &&
+            target.closest("[data-recipient-combobox-input],[data-recipient-combobox-content]")
+          ) {
+            event.preventDefault();
+          }
+        }}
       >
         <Command shouldFilter={false} className="overflow-visible">
           <CommandList
