@@ -80,7 +80,7 @@ Freitext-Eingabe bleibt weiterhin möglich.
    - Empfänger-`Input` (aktuell Zeile 122–130) durch `<RecipientCombobox>`
      ersetzen. `onSelect` setzt `recipient` = `option.name` und, falls
      `option.iban` nicht leer, `recipientIban` = `option.iban`.
-   - Zahlungspartner ohne IBAN: nur Name setzen, IBAN-Feld unangetastet.
+   - Zahlungspartner ohne IBAN: nur Name setzen, IBAN-Feld wird geleert.
 
 ## Bewusst weggelassen
 

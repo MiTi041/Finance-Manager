@@ -27,7 +27,7 @@ const groups = buildRecipientOptions({
   ],
   zahlungspartner: [
     { id: 5, name: "Giro", is_company: false, is_own_account: true, ibans: ["DE89 3704 0044 0532 0130 00"] },
-    { id: 6, name: "Strom", is_company: true, is_own_account: false, ibans: ["DE88100900001234567892"] },
+    { id: 6, name: "Strom", is_company: true, is_own_account: false, ibans: ["DE88 1009 0000 1234 5678 92"] },
     { id: 7, name: "Ohne IBAN", is_company: true, is_own_account: false, ibans: [] },
   ],
 });
@@ -63,6 +63,15 @@ assert.deepEqual(byName[0].options.map((o) => o.name), ["Strom"]);
 const byIban = filterRecipientOptions(groups, "2020");
 assert.deepEqual(byIban.map((g) => g.label), ["Empfängerkonten"]);
 assert.equal(byIban[0].options[0].name, "Vermieter GmbH");
+
+// Kompaktes Query findet Partner-IBAN mit Leerzeichen
+const byCompactIban = filterRecipientOptions(groups, "de881009");
+assert.deepEqual(byCompactIban.map((g) => g.label), ["Zahlungspartner"]);
+assert.deepEqual(byCompactIban[0].options.map((o) => o.name), ["Strom"]);
+
+// Query mit Leerzeichen findet Namen mit Leerzeichen
+const bySpacedName = filterRecipientOptions(groups, "Vermieter GmbH");
+assert.deepEqual(bySpacedName[0].options.map((o) => o.name), ["Vermieter GmbH"]);
 
 // Leeres Query gibt alles zurück, leere Gruppen werden entfernt
 assert.equal(filterRecipientOptions(groups, "   "), groups);

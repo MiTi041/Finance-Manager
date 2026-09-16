@@ -77,15 +77,16 @@ export function filterRecipientOptions(
 ): RecipientOptionGroup[] {
   const needle = query.trim().toLowerCase();
   if (!needle) return groups;
+  const compactNeedle = needle.replace(/\s+/g, "");
 
   return groups
     .map((group) => ({
       ...group,
-      options: group.options.filter(
-        (option) =>
-          option.name.toLowerCase().includes(needle) ||
-          option.iban.toLowerCase().includes(needle),
-      ),
+      options: group.options.filter((option) => {
+        const name = option.name.toLowerCase();
+        const iban = option.iban.replace(/\s+/g, "").toLowerCase();
+        return name.includes(needle) || iban.includes(compactNeedle);
+      }),
     }))
     .filter((group) => group.options.length > 0);
 }

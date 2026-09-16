@@ -144,7 +144,7 @@ export function ManualTransactionSheet({
               groups={recipientGroups}
               onSelect={(option) => {
                 setRecipient(option.name);
-                if (option.iban) setRecipientIban(option.iban);
+                setRecipientIban(option.iban);
               }}
             />
           </div>
