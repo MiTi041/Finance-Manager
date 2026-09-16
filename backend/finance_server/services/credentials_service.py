@@ -214,6 +214,11 @@ class CredentialsService:
             account_name=payload.get("account_name"),
             account_iban=payload.get("account_iban"),
             holder_name=payload.get("holder_name"),
+            **(
+                {"can_transfer_override": payload["can_transfer_override"]}
+                if "can_transfer_override" in payload
+                else {}
+            ),
         )
         if not updated:
             return {"error": "account_not_found"}

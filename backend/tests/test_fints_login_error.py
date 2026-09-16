@@ -105,7 +105,7 @@ def test_accounts_endpoint_enforces_rate_limit_without_tan():
         ),
     ):
         get_accounts(AccountsRequest(credentials=creds))
-    rate_mock.assert_called_once_with("fetch_accounts")
+    rate_mock.assert_called_once_with("fetch_accounts", "consorsbank")
 
 
 def test_with_state_retry_retries_once_on_connection_error():

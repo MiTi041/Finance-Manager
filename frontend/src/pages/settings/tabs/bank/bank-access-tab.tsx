@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -44,6 +44,25 @@ const INITIAL_FORM_STATE: SettingsFormState = {
   manual_iban: "",
 };
 
+const COOLDOWN_STORAGE_KEY = "finance-bank-check-cooldowns";
+
+function readCooldowns(): Record<string, number> {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(COOLDOWN_STORAGE_KEY) ?? "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeCooldowns(cooldowns: Record<string, number>) {
+  window.localStorage.setItem(COOLDOWN_STORAGE_KEY, JSON.stringify(cooldowns));
+}
+
+function secondsLeft(until: number): number {
+  return Math.max(0, Math.ceil((until - Date.now()) / 1000));
+}
+
 export function BankAccessTab() {
   const [form, setForm] = useState<SettingsFormState>(INITIAL_FORM_STATE);
   const [linkedAccounts, setLinkedAccounts] = useState<StoredBankCredentials[]>([]);
@@ -59,16 +78,34 @@ export function BankAccessTab() {
   } | null>(null);
   const [checkTanInput, setCheckTanInput] = useState("");
   const [checkIsWarning, setCheckIsWarning] = useState(false);
+  const [cooldowns, setCooldowns] = useState<Record<string, number>>(readCooldowns);
   const [cooldown, setCooldown] = useState(0);
   const [showPin, setShowPin] = useState(false);
-  const cooldownRef = useRef(cooldown);
-  cooldownRef.current = cooldown;
+
+  const cooldownUntil = cooldowns[form.bank_key] ?? 0;
 
   useEffect(() => {
-    if (cooldown <= 0) return;
-    const id = setInterval(() => setCooldown((c) => Math.max(0, c - 1)), 1000);
-    return () => clearInterval(id);
-  }, [cooldown]);
+    let timer: ReturnType<typeof setInterval> | undefined;
+
+    const tick = () => {
+      const left = secondsLeft(cooldownUntil);
+      setCooldown(left);
+      if (left <= 0 && cooldownUntil > 0) {
+        if (timer) clearInterval(timer);
+        setCooldowns((current) => {
+          if (!(form.bank_key in current)) return current;
+          const next = { ...current };
+          delete next[form.bank_key];
+          writeCooldowns(next);
+          return next;
+        });
+      }
+    };
+
+    tick();
+    if (cooldownUntil > Date.now()) timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [cooldownUntil, form.bank_key]);
 
   const loadData = async (options?: { forceRefresh?: boolean }) => {
     const [banks, credentials] = await Promise.all([
@@ -174,7 +211,12 @@ export function BankAccessTab() {
         return;
       }
       if (error instanceof RateLimitError) {
-        setCooldown(error.retryAfter);
+        const until = Date.now() + error.retryAfter * 1000;
+        setCooldowns((current) => {
+          const next = { ...current, [form.bank_key]: until };
+          writeCooldowns(next);
+          return next;
+        });
         setCheckDialogOpen(false);
         setCheckMessage("");
         return;
@@ -397,6 +439,19 @@ export function BankAccessTab() {
                 </div>
               </>
             )}
+
+            {cooldown > 0 ? (
+              <div className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                <Timer className="mt-0.5 h-5 w-5 shrink-0" />
+                <div className="space-y-1">
+                  <p className="font-medium">Bitte warte noch {cooldown}s</p>
+                  <p>
+                    Zwischen zwei Prüfungen ist eine kurze Pause nötig, damit deine Bank nicht
+                    überlastet wird.
+                  </p>
+                </div>
+              </div>
+            ) : null}
 
             <div className="flex flex-wrap gap-3 pt-2">
               <Button type="submit" disabled={isChecking || !canSubmit || cooldown > 0}>

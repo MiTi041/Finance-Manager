@@ -20,6 +20,8 @@ export type StoredBankCredentials = {
     holder_name?: string | null;
     balance?: number | null;
     can_transfer?: boolean | null;
+    can_transfer_detected?: boolean | null;
+    can_transfer_override?: boolean | null;
   }>;
 };
 
@@ -36,6 +38,8 @@ export type BankCredentials = {
     account_name?: string;
     holder_name?: string | null;
     can_transfer?: boolean | null;
+    can_transfer_detected?: boolean | null;
+    can_transfer_override?: boolean | null;
   }>;
 };
 
@@ -228,7 +232,12 @@ export async function updateBankCredentials(
 export async function updateBankAccount(
   scope: string,
   iban: string,
-  payload: { account_name?: string; account_iban?: string; holder_name?: string },
+  payload: {
+    account_name?: string;
+    account_iban?: string;
+    holder_name?: string;
+    can_transfer_override?: boolean | null;
+  },
 ): Promise<BankCredentialsStatus> {
   const response = await fetch(
     `${getApiBaseUrl()}/bank-credentials/${scope}/accounts/${encodeURIComponent(

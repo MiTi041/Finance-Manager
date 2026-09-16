@@ -53,6 +53,14 @@ function formatIban(value?: string) {
   return value.trim().replace(/(.{4})(?=.)/g, "$1 ");
 }
 
+function transferDescription(detected: boolean | null, override: boolean | null) {
+  const detectedLabel =
+    detected == null ? "keine Angabe" : detected ? "möglich" : "nicht möglich";
+  if (override != null) return `Manuell festgelegt (Bank: ${detectedLabel})`;
+  if (detected == null) return "Keine Angabe der Bank – wird als möglich angenommen";
+  return `Automatisch erkannt: ${detectedLabel}`;
+}
+
 function getAccounts(credential: StoredBankCredentials, bankCanTransfer: boolean | undefined) {
   const accounts = credential.accounts ?? [];
   if (accounts.length > 0) {
@@ -61,6 +69,8 @@ function getAccounts(credential: StoredBankCredentials, bankCanTransfer: boolean
       account_name: account.account_name ?? credential.account_name ?? "",
       holder_name: account.holder_name ?? "",
       can_transfer: account.can_transfer ?? bankCanTransfer ?? null,
+      can_transfer_detected: account.can_transfer_detected ?? null,
+      can_transfer_override: account.can_transfer_override ?? null,
       fallback: index === 0 && !account.iban && credential.account_iban,
     }));
   }
@@ -70,6 +80,8 @@ function getAccounts(credential: StoredBankCredentials, bankCanTransfer: boolean
       account_name: credential.account_name ?? "",
       holder_name: "",
       can_transfer: bankCanTransfer ?? null,
+      can_transfer_detected: null,
+      can_transfer_override: null,
       fallback: true,
     },
   ];
@@ -92,6 +104,7 @@ export function Banks({
   const [discardChangesOpen, setDiscardChangesOpen] = useState(false);
   const [balanceError, setBalanceError] = useState<string | null>(null);
   const [autoSyncSaving, setAutoSyncSaving] = useState<string | null>(null);
+  const [transferSaving, setTransferSaving] = useState<string | null>(null);
 
   const bankCount = useMemo(() => linkedBanks.length, [linkedBanks.length]);
 
@@ -135,6 +148,23 @@ export function Banks({
       onAutoSyncChange(scope, !checked);
     } finally {
       setAutoSyncSaving(null);
+    }
+  };
+
+  const handleToggleTransfer = async (
+    scope: string,
+    iban: string,
+    accountKey: string,
+    canTransfer: boolean,
+    detected: boolean | null,
+  ) => {
+    setTransferSaving(accountKey);
+    try {
+      await updateBankAccount(scope, iban, {
+        can_transfer_override: detected === canTransfer ? null : canTransfer,
+      });
+    } finally {
+      setTransferSaving(null);
     }
   };
 
@@ -277,14 +307,29 @@ export function Banks({
                           <p className="mt-0.5 text-xs text-muted-foreground font-mono tracking-wide">
                             {formatIban(account.iban)}
                           </p>
-                          {account.can_transfer === false ? (
-                            <Badge
-                              variant="secondary"
-                              className="mt-1.5 bg-muted text-muted-foreground text-[11px] px-1.5 py-0"
-                            >
-                              Überweisungen nicht möglich
-                            </Badge>
-                          ) : null}
+                          <ToggleRow
+                            title="Überweisungen möglich"
+                            description={transferDescription(
+                              account.can_transfer_detected,
+                              account.can_transfer_override,
+                            )}
+                            color="amber"
+                            size="sm"
+                            fullWidth={false}
+                            className="mt-1.5"
+                            disabled={transferSaving === accountKey}
+                            pill={transferSaving === accountKey ? "…" : undefined}
+                            checked={account.can_transfer !== false}
+                            onCheckedChange={(checked) =>
+                              void handleToggleTransfer(
+                                bank.scope,
+                                account.iban,
+                                accountKey,
+                                checked,
+                                account.can_transfer_detected,
+                              )
+                            }
+                          />
                         </div>
 
                         {/* Actions */}

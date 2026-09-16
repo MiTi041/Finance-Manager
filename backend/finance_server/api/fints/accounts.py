@@ -18,7 +18,8 @@ router = APIRouter()
 def get_accounts(request: AccountsRequest) -> dict[str, Any]:
     try:
         if request.tan is None:
-            enforce_rate_limit("fetch_accounts")
+            scope = request.credentials.bank_key if request.credentials is not None else None
+            enforce_rate_limit("fetch_accounts", scope)
         if request.credentials is not None:
             credentials = resolve_bank_connection_details(request.credentials)
         else:

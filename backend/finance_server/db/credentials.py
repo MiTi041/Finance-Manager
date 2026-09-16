@@ -65,6 +65,27 @@ def _to_stored_can_transfer(value: Any, previous: Any = None) -> int | None:
     return 1 if coerced else 0
 
 
+_UNSET = object()
+
+
+def _to_stored_override(value: Any) -> int | None:
+    """NULL (automatisch) bleibt NULL, sonst 0/1. Anders als _to_stored_can_transfer
+    wird None hier bewusst als 'Override löschen' interpretiert."""
+    coerced = _coerce_can_transfer(value)
+    if coerced is None:
+        return None
+    return 1 if coerced else 0
+
+
+def _effective_can_transfer(detected: Any, override: Any) -> bool | None:
+    """Manueller Override gewinnt, sonst das erkannte can_transfer."""
+    if override is not None:
+        return bool(override)
+    if detected is None:
+        return None
+    return bool(detected)
+
+
 def _normalize_accounts(accounts: Any) -> list[dict[str, Any]]:
     normalized_accounts: list[dict[str, Any]] = []
     if not isinstance(accounts, list):
@@ -96,7 +117,8 @@ def _sync_bank_accounts(
     accounts: list[dict[str, Any]],
 ) -> None:
     existing = connection.execute(
-        "SELECT iban, holder_name, can_transfer FROM bank_accounts WHERE scope = ?",
+        "SELECT iban, holder_name, can_transfer, can_transfer_override "
+        "FROM bank_accounts WHERE scope = ?",
         (scope,),
     ).fetchall()
     previous_holder = {
@@ -104,6 +126,9 @@ def _sync_bank_accounts(
     }
     previous_can_transfer = {
         normalize_text(row["iban"]).upper(): row["can_transfer"] for row in existing
+    }
+    previous_override = {
+        normalize_text(row["iban"]).upper(): row["can_transfer_override"] for row in existing
     }
 
     connection.execute("DELETE FROM bank_accounts WHERE scope = ?", (scope,))
@@ -115,8 +140,9 @@ def _sync_bank_accounts(
     connection.executemany(
         """
         INSERT INTO bank_accounts
-            (scope, iban, account_name, holder_name, can_transfer, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+            (scope, iban, account_name, holder_name, can_transfer,
+             can_transfer_override, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
             (
@@ -129,6 +155,7 @@ def _sync_bank_accounts(
                     account.get("can_transfer"),
                     previous_can_transfer.get(normalize_text(account["iban"]).upper()),
                 ),
+                previous_override.get(normalize_text(account["iban"]).upper()),
                 now,
                 now,
             )
@@ -140,7 +167,7 @@ def _sync_bank_accounts(
 def _load_bank_accounts(connection: sqlite3.Connection, scope: str) -> list[dict[str, Any]]:
     rows = connection.execute(
         """
-        SELECT iban, account_name, holder_name, balance, can_transfer
+        SELECT iban, account_name, holder_name, balance, can_transfer, can_transfer_override
         FROM bank_accounts
         WHERE scope = ?
         ORDER BY created_at ASC, id ASC
@@ -154,7 +181,15 @@ def _load_bank_accounts(connection: sqlite3.Connection, scope: str) -> list[dict
             "account_name": row["account_name"],
             "holder_name": row["holder_name"],
             "balance": row["balance"],
-            "can_transfer": None if row["can_transfer"] is None else bool(row["can_transfer"]),
+            "can_transfer": _effective_can_transfer(
+                row["can_transfer"], row["can_transfer_override"]
+            ),
+            "can_transfer_detected": None
+            if row["can_transfer"] is None
+            else bool(row["can_transfer"]),
+            "can_transfer_override": None
+            if row["can_transfer_override"] is None
+            else bool(row["can_transfer_override"]),
         }
         for row in rows
     ]
@@ -283,7 +318,7 @@ def find_bank_account_by_iban(iban: str) -> dict[str, Any] | None:
     with get_connection() as connection:
         row = connection.execute(
             """
-            SELECT scope, iban, account_name, holder_name, can_transfer
+            SELECT scope, iban, account_name, holder_name, can_transfer, can_transfer_override
             FROM bank_accounts
             WHERE UPPER(iban) = UPPER(?)
             ORDER BY created_at ASC, id ASC
@@ -298,7 +333,7 @@ def find_bank_account_by_iban(iban: str) -> dict[str, Any] | None:
         "iban": row["iban"],
         "account_name": row["account_name"],
         "holder_name": row["holder_name"],
-        "can_transfer": None if row["can_transfer"] is None else bool(row["can_transfer"]),
+        "can_transfer": _effective_can_transfer(row["can_transfer"], row["can_transfer_override"]),
     }
 
 
@@ -364,6 +399,7 @@ def update_bank_account(
     account_iban: str | None = None,
     holder_name: str | None = None,
     can_transfer: bool | None = None,
+    can_transfer_override: Any = _UNSET,
 ) -> bool:
     normalized_iban = normalize_text(iban)
     if not normalized_iban:
@@ -372,7 +408,7 @@ def update_bank_account(
     with get_connection() as connection:
         row = connection.execute(
             """
-            SELECT iban, account_name, holder_name, can_transfer
+            SELECT iban, account_name, holder_name, can_transfer, can_transfer_override
             FROM bank_accounts
             WHERE scope = ? AND UPPER(iban) = UPPER(?)
             """,
@@ -392,14 +428,29 @@ def update_bank_account(
             if can_transfer is not None
             else row["can_transfer"]
         )
+        new_override = (
+            _to_stored_override(can_transfer_override)
+            if can_transfer_override is not _UNSET
+            else row["can_transfer_override"]
+        )
         now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
         connection.execute(
             """
             UPDATE bank_accounts
-            SET iban = ?, account_name = ?, holder_name = ?, can_transfer = ?, updated_at = ?
+            SET iban = ?, account_name = ?, holder_name = ?, can_transfer = ?,
+                can_transfer_override = ?, updated_at = ?
             WHERE scope = ? AND UPPER(iban) = UPPER(?)
             """,
-            (new_iban, new_name, new_holder, new_can_transfer, now, scope, normalized_iban),
+            (
+                new_iban,
+                new_name,
+                new_holder,
+                new_can_transfer,
+                new_override,
+                now,
+                scope,
+                normalized_iban,
+            ),
         )
         return True
 
