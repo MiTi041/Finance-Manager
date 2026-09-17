@@ -162,12 +162,7 @@ export function useFinanceData(
       const kontoIban = normalizeIban(transaction.konto?.iban);
       return kontoIban === selectedAccountIban;
     });
-  }, [
-    activeAccountIban,
-    selectedAccountIban,
-    rawTransactions,
-    ignoreActiveAccountFilter,
-  ]);
+  }, [activeAccountIban, selectedAccountIban, rawTransactions, ignoreActiveAccountFilter]);
 
   const accountFilteredPendingTransactions = useMemo(() => {
     if (ignoreActiveAccountFilter || activeAccountIban === "all" || !selectedAccountIban) {
@@ -177,12 +172,7 @@ export function useFinanceData(
       const kontoIban = normalizeIban(transaction.konto?.iban);
       return kontoIban === selectedAccountIban;
     });
-  }, [
-    activeAccountIban,
-    selectedAccountIban,
-    rawPendingTransactions,
-    ignoreActiveAccountFilter,
-  ]);
+  }, [activeAccountIban, selectedAccountIban, rawPendingTransactions, ignoreActiveAccountFilter]);
 
   const ibanReferenceLookup = useMemo(
     () => buildIbanReferenceLookup(ibanReferences),

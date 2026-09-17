@@ -11,15 +11,8 @@ import { buildAccountFlowGraph } from "./account-flow-data";
 
 export default function AccountFlowPage() {
   const { dateFilter, setDateFilter } = useGlobalDateFilter();
-  const {
-    loading,
-    refreshing,
-    error,
-    transactions,
-    linkedAccounts,
-    accountBalances,
-    activeAccountIban,
-  } = useFinanceData(dateFilter, { ignoreActiveAccountFilter: true });
+  const { loading, refreshing, error, transactions, linkedAccounts, accountBalances } =
+    useFinanceData(dateFilter, { ignoreActiveAccountFilter: true });
 
   const graph = useMemo(
     () => buildAccountFlowGraph(linkedAccounts, transactions, accountBalances),
@@ -61,7 +54,7 @@ export default function AccountFlowPage() {
           illustration={<CircleDashed />}
         />
       ) : (
-        <AccountFlowGraph graph={graph} activeAccountIban={activeAccountIban} />
+        <AccountFlowGraph graph={graph} activeAccountIban="all" />
       )}
     </div>
   );

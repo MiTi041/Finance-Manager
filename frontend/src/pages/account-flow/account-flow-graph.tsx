@@ -26,6 +26,7 @@ const MIN_SCALE = 0.4;
 const MAX_SCALE = 2.4;
 const ZOOM_STEP = 0.2;
 const TRANSITION_MS = 220;
+const FIT_PADDING = 56;
 
 const COLOR_DEFAULT = "#64748b";
 const COLOR_HOVER = "#54a0ff";
@@ -65,6 +66,40 @@ function initialPosition(index: number, count: number): Point {
   return {
     x: WIDTH / 2 + Math.cos(angle) * 360,
     y: HEIGHT / 2 + Math.sin(angle) * 225,
+  };
+}
+
+function getFitView(nodes: AccountFlowNode[], positions: Map<string, Point>) {
+  const nodePositions = nodes
+    .map((node) => positions.get(node.id))
+    .filter((position): position is Point => Boolean(position));
+
+  if (nodePositions.length === 0) {
+    return { scale: 1, offset: { x: 0, y: 0 } };
+  }
+
+  const minX = Math.min(...nodePositions.map((position) => position.x - CARD_WIDTH / 2));
+  const maxX = Math.max(...nodePositions.map((position) => position.x + CARD_WIDTH / 2));
+  const minY = Math.min(...nodePositions.map((position) => position.y - CARD_HEIGHT / 2));
+  const maxY = Math.max(...nodePositions.map((position) => position.y + CARD_HEIGHT / 2));
+  const contentWidth = maxX - minX;
+  const contentHeight = maxY - minY;
+  const scale = clamp(
+    Math.min(
+      1,
+      (WIDTH - FIT_PADDING * 2) / contentWidth,
+      (HEIGHT - FIT_PADDING * 2) / contentHeight,
+    ),
+    MIN_SCALE,
+    MAX_SCALE,
+  );
+
+  return {
+    scale,
+    offset: {
+      x: (WIDTH - scale * (minX + maxX)) / 2,
+      y: (HEIGHT - scale * (minY + maxY)) / 2,
+    },
   };
 }
 
@@ -353,20 +388,26 @@ export function AccountFlowGraph({
     fetchAccountFlowLayout()
       .then((layout) => {
         if (cancelled) return;
-        setPositions((current) => {
-          const next = new Map<string, Point>();
-          graph.nodes.forEach((node, index) => {
-            next.set(
-              node.id,
-              layout.positions[node.id] ??
-                current.get(node.id) ??
-                initialPosition(index, graph.nodes.length),
-            );
-          });
-          return next;
+        const next = new Map<string, Point>();
+        graph.nodes.forEach((node, index) => {
+          next.set(
+            node.id,
+            layout.positions[node.id] ??
+              positions.get(node.id) ??
+              initialPosition(index, graph.nodes.length),
+          );
         });
+        setPositions(next);
+        const fitView = getFitView(graph.nodes, next);
+        setScale(fitView.scale);
+        setOffset(fitView.offset);
       })
-      .catch(() => undefined)
+      .catch(() => {
+        if (cancelled) return;
+        const fitView = getFitView(graph.nodes, positions);
+        setScale(fitView.scale);
+        setOffset(fitView.offset);
+      })
       .finally(() => {
         if (!cancelled) setLayoutLoaded(true);
       });
@@ -488,14 +529,14 @@ export function AccountFlowGraph({
   );
 
   const resetView = useCallback(() => {
+    const nextPositions = new Map(
+      graph.nodes.map((node, index) => [node.id, initialPosition(index, graph.nodes.length)]),
+    );
+    const fitView = getFitView(graph.nodes, nextPositions);
     applyWithTransition(() => {
-      setScale(1);
-      setOffset({ x: 0, y: 0 });
-      setPositions(
-        new Map(
-          graph.nodes.map((node, index) => [node.id, initialPosition(index, graph.nodes.length)]),
-        ),
-      );
+      setScale(fitView.scale);
+      setOffset(fitView.offset);
+      setPositions(nextPositions);
     });
     setSelectedEdgeId(null);
   }, [applyWithTransition, graph.nodes]);
