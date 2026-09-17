@@ -10,6 +10,7 @@ from finance_server.fints.transactions import (
     _is_out_of_range_error,
     _storage_days_from_segment,
 )
+from finance_server.fints.sync import _archived_ibans
 
 
 class FakeAccount:
@@ -37,6 +38,17 @@ class FakeBpd:
 
     def find_segment_highest_version(self, name):
         return self._segments.get(name)
+
+
+def test_archived_ibans_are_normalized_for_sync_exclusion():
+    assert _archived_ibans(
+        {
+            "accounts": [
+                {"iban": "DE12 3456", "archived": True},
+                {"iban": "DE98 7654", "archived": False},
+            ]
+        }
+    ) == {"DE123456"}
 
 
 def test_chunked_fetch_returns_newer_data_when_oldest_block_out_of_range():

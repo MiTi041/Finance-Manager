@@ -19,6 +19,8 @@ export type StoredBankCredentials = {
     account_name?: string;
     holder_name?: string | null;
     balance?: number | null;
+    archived?: boolean;
+    migrated_to_iban?: string | null;
     can_transfer?: boolean | null;
     can_transfer_detected?: boolean | null;
     can_transfer_override?: boolean | null;
@@ -37,6 +39,7 @@ export type BankCredentials = {
     iban?: string;
     account_name?: string;
     holder_name?: string | null;
+    archived?: boolean;
     can_transfer?: boolean | null;
     can_transfer_detected?: boolean | null;
     can_transfer_override?: boolean | null;
@@ -83,6 +86,7 @@ export type BankAccountDiscoveryResponse = {
     account_name?: string;
     product_name?: string;
     holder_name?: string | null;
+    archived?: boolean;
     can_transfer?: boolean | null;
     iban_label?: string;
     bank_name?: string;
@@ -108,13 +112,23 @@ export async function fetchBankCredentialsStatus(): Promise<BankCredentialsStatu
 export async function fetchBankCredentials(options?: {
   forceRefresh?: boolean;
 }): Promise<StoredBankCredentials[]> {
-  return fetchCachedResource("bank-credentials", "/bank-credentials", (p) => p?.credentials ?? [], options);
+  return fetchCachedResource(
+    "bank-credentials",
+    "/bank-credentials",
+    (p) => p?.credentials ?? [],
+    options,
+  );
 }
 
 export async function fetchAvailableBanks(options?: {
   forceRefresh?: boolean;
 }): Promise<BankDefinition[]> {
-  return fetchCachedResource("available-banks", "/bank-credentials/banks", (p) => p?.banks ?? [], options);
+  return fetchCachedResource(
+    "available-banks",
+    "/bank-credentials/banks",
+    (p) => p?.banks ?? [],
+    options,
+  );
 }
 
 export async function fetchBankAccounts(
@@ -132,10 +146,7 @@ export async function fetchBankAccounts(
   const payload = await response.json().catch(() => ({}));
 
   if (response.status === 409 && payload?.detail?.code === "TAN_REQUIRED") {
-    throw new TanRequiredError(
-      payload.detail.challenge,
-      payload.detail.decoupled ?? false,
-    );
+    throw new TanRequiredError(payload.detail.challenge, payload.detail.decoupled ?? false);
   }
 
   if (response.status === 429 && payload?.code === "RATE_LIMITED") {
@@ -169,9 +180,7 @@ export async function saveBankCredentials(
 
   try {
     clearCachedJson("bank-credentials");
-    window.dispatchEvent(
-      new CustomEvent("finance-bank-credentials-changed", { detail: payload }),
-    );
+    window.dispatchEvent(new CustomEvent("finance-bank-credentials-changed", { detail: payload }));
   } catch {
     // ignore if running in non-browser environment
   }
@@ -193,9 +202,7 @@ export async function deleteBankCredentials(scope?: string): Promise<void> {
 
   try {
     clearCachedJson("bank-credentials");
-    window.dispatchEvent(
-      new CustomEvent("finance-bank-credentials-changed", { detail: payload }),
-    );
+    window.dispatchEvent(new CustomEvent("finance-bank-credentials-changed", { detail: payload }));
   } catch {
     // ignore if running in non-browser environment
   }
@@ -236,13 +243,12 @@ export async function updateBankAccount(
     account_name?: string;
     account_iban?: string;
     holder_name?: string;
+    archived?: boolean;
     can_transfer_override?: boolean | null;
   },
 ): Promise<BankCredentialsStatus> {
   const response = await fetch(
-    `${getApiBaseUrl()}/bank-credentials/${scope}/accounts/${encodeURIComponent(
-      iban,
-    )}`,
+    `${getApiBaseUrl()}/bank-credentials/${scope}/accounts/${encodeURIComponent(iban)}`,
     {
       method: "PATCH",
       headers: {
@@ -268,14 +274,9 @@ export async function updateBankAccount(
   return payloadData;
 }
 
-export async function deleteBankAccount(
-  scope: string,
-  iban: string,
-): Promise<void> {
+export async function deleteBankAccount(scope: string, iban: string): Promise<void> {
   const response = await fetch(
-    `${getApiBaseUrl()}/bank-credentials/${scope}/accounts/${encodeURIComponent(
-      iban,
-    )}`,
+    `${getApiBaseUrl()}/bank-credentials/${scope}/accounts/${encodeURIComponent(iban)}`,
     {
       method: "DELETE",
     },
@@ -285,9 +286,7 @@ export async function deleteBankAccount(
 
   try {
     clearCachedJson("bank-credentials");
-    window.dispatchEvent(
-      new CustomEvent("finance-bank-credentials-changed", { detail: payload }),
-    );
+    window.dispatchEvent(new CustomEvent("finance-bank-credentials-changed", { detail: payload }));
   } catch {
     // ignore if running in non-browser environment
   }
@@ -299,9 +298,7 @@ export async function adjustBankAccountBalance(
   note?: string,
 ): Promise<AccountBalanceAdjustmentResult> {
   const response = await fetch(
-    `${getApiBaseUrl()}/bank-credentials/${scope}/accounts/${encodeURIComponent(
-      iban,
-    )}/balance`,
+    `${getApiBaseUrl()}/bank-credentials/${scope}/accounts/${encodeURIComponent(iban)}/balance`,
     {
       method: "POST",
       headers: {
@@ -321,9 +318,7 @@ export async function adjustBankAccountBalance(
 
   try {
     clearCachedJson("bank-credentials");
-    window.dispatchEvent(
-      new CustomEvent("finance-bank-credentials-changed", { detail: payload }),
-    );
+    window.dispatchEvent(new CustomEvent("finance-bank-credentials-changed", { detail: payload }));
   } catch {
     // ignore if running in non-browser environment
   }

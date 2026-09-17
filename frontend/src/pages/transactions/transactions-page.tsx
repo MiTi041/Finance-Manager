@@ -54,9 +54,10 @@ import { ManualTransactionSheet } from "./components/manual-transaction-sheet";
 import { useSelection } from "./hooks/use-selection";
 import { useBatchActions } from "./hooks/use-batch-actions";
 import { buildCategoryOptions, type TransactionCategoryOption } from "@/lib/utils/categories";
-import { buildLinkedAccountLookup } from "@/lib/utils/accounts";
+import { buildAccountOptions, buildLinkedAccountLookup } from "@/lib/utils/accounts";
 import { formatDate, formatAmount } from "@/lib/utils/format";
 import { normalizeIban } from "@/lib/iban";
+import { isFullyRefunded } from "@/lib/utils/refunds";
 
 export default function TransactionsPage() {
   const { dateFilter, setDateFilter } = useGlobalDateFilter();
@@ -68,6 +69,7 @@ export default function TransactionsPage() {
     pendingTransactions = [],
     reload,
     linkedAccounts = [],
+    linkedBanks = [],
     selectedBank = null,
     accountBalances = [],
   } = useFinanceData(dateFilter, { deletedBankTransactionsIncluded: true });
@@ -107,6 +109,10 @@ export default function TransactionsPage() {
   const categoryTriggerRefs = useRef(new Map<number, HTMLButtonElement | null>());
   const virtualListRef = useRef<VirtualizedListRef>(null);
   const pendingRefundScrollRef = useRef<number | null>(null);
+  const recipientAccountOptions = useMemo(
+    () => buildAccountOptions(linkedBanks, { includeArchived: true }),
+    [linkedBanks],
+  );
 
   const loadZahlungspartnerData = useCallback(async (options?: { forceRefresh?: boolean }) => {
     try {
@@ -225,10 +231,7 @@ export default function TransactionsPage() {
     };
   }, []);
 
-  const linkedAccountByIban = useMemo(
-    () => buildLinkedAccountLookup(linkedAccounts),
-    [linkedAccounts],
-  );
+  const linkedAccountByIban = useMemo(() => buildLinkedAccountLookup(linkedBanks), [linkedBanks]);
 
   const categoryOptions = useMemo(() => buildCategoryOptions(categories), [categories]);
 
@@ -247,7 +250,7 @@ export default function TransactionsPage() {
 
     for (const transaction of transactions) {
       const kategorieId = transaction.technisch.kategorieId;
-      const isUnassigned = kategorieId == null;
+      const isUnassigned = kategorieId == null && !isFullyRefunded(transaction);
       const isIncome = transaction.betrag.wert >= 0;
       const partnerIban = normalizeIban(transaction.zahlungspartner.iban);
       const isUnknownIban = partnerIban.length > 0 && !ibanToZahlungspartner.has(partnerIban);
@@ -537,7 +540,7 @@ export default function TransactionsPage() {
   const filteredTransactions = useMemo(() => {
     return transactions.filter((transaction) => {
       const currentCategoryId = transaction.technisch.kategorieId;
-      const isUnassigned = currentCategoryId == null;
+      const isUnassigned = currentCategoryId == null && !isFullyRefunded(transaction);
       const isIncome = transaction.betrag.wert >= 0;
       const partnerIban = normalizeIban(transaction.zahlungspartner.iban);
       const unknownIban = partnerIban.length > 0 && !ibanToZahlungspartner.has(partnerIban);
@@ -792,7 +795,7 @@ export default function TransactionsPage() {
               isSubscriptionTransaction={subscriptionTransactionIds.has(transaction.id)}
               subscriptionOverride={subscriptionOverrideMap.get(transaction.id) ?? null}
               subscriptionLink={subscriptionLinkMap.get(transaction.id) ?? null}
-              isUnassigned={currentCategoryId == null}
+              isUnassigned={currentCategoryId == null && !isFullyRefunded(transaction)}
               isSelected={selectedTransactionIds.has(transaction.id)}
               predictedCategoryId={predictedCategoryId}
               predictedSimilarity={predictedSimilarity}
@@ -883,7 +886,7 @@ export default function TransactionsPage() {
           accountIban={selectedBank.accountIban}
           accountName={selectedBank.accountName}
           categoryOptions={categoryOptions}
-          ownAccounts={linkedAccounts}
+          ownAccounts={recipientAccountOptions}
           recipientAccounts={recipientAccounts}
           zahlungspartner={zahlungspartner}
           onCreated={reload}

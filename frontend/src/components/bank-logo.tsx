@@ -1,4 +1,4 @@
-import { Building2, Store } from "lucide-react";
+import { Archive, Building2, Store } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -10,6 +10,7 @@ type IconFrameProps = {
   backgroundClassName?: string;
   imgNoPadding?: boolean;
   kind?: "company" | "person";
+  archived?: boolean;
 };
 
 function IconFrame({
@@ -20,6 +21,7 @@ function IconFrame({
   backgroundClassName = "bg-zinc-900",
   imgNoPadding = false,
   kind = "company",
+  archived = false,
   CompanyFallback,
 }: IconFrameProps & { CompanyFallback: typeof Store }) {
   const bare = backgroundClassName === "";
@@ -34,7 +36,9 @@ function IconFrame({
         className,
       )}
     >
-      {src ? (
+      {archived ? (
+        <Archive className="size-5 text-amber-700 dark:text-amber-300" />
+      ) : src ? (
         <img
           src={src}
           alt={alt}

@@ -4,6 +4,7 @@ import json
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Iterable
 import sqlite3
+import uuid
 
 from finance_server.core.database import get_connection
 
@@ -107,6 +108,12 @@ TRANSACTION_IDENTITY_COLUMNS = (
     "currency",
 )
 
+TRANSACTION_STABLE_IDENTITY_COLUMNS = tuple(
+    column
+    for column in TRANSACTION_IDENTITY_COLUMNS
+    if not column.startswith("account_")
+)
+
 
 def _find_equivalent_transaction_id(
     connection: sqlite3.Connection,
@@ -114,6 +121,30 @@ def _find_equivalent_transaction_id(
 ) -> int | None:
     row = connection.execute(
         "SELECT id FROM umsaetze WHERE transaction_hash = ?",
+        (payload["transaction_hash"],),
+    ).fetchone()
+    if row:
+        return int(row["id"])
+
+    transaction_id = payload.get("transaction_id")
+    if transaction_id:
+        row = connection.execute(
+            """
+            SELECT id
+            FROM umsaetze
+            WHERE origin_account_iban = ?
+              AND transaction_id = ?
+              AND ABS(amount - ?) < 0.0001
+            ORDER BY id
+            LIMIT 1
+            """,
+            (payload.get("account_iban"), transaction_id, payload["amount"]),
+        ).fetchone()
+        if row:
+            return int(row["id"])
+
+    row = connection.execute(
+        "SELECT id FROM umsaetze WHERE origin_transaction_hash = ?",
         (payload["transaction_hash"],),
     ).fetchone()
     if row:
@@ -129,7 +160,38 @@ def _find_equivalent_transaction_id(
         f"SELECT id FROM umsaetze WHERE {' AND '.join(where)} ORDER BY id LIMIT 1",
         values,
     ).fetchone()
+    if row:
+        return int(row["id"])
+
+    stable_where = ["origin_account_iban = ?", "ABS(amount - ?) < 0.0001"]
+    stable_values: list[Any] = [payload.get("account_iban"), payload["amount"]]
+    for col in TRANSACTION_STABLE_IDENTITY_COLUMNS:
+        stable_where.append(f"COALESCE({col}, '') = COALESCE(?, '')")
+        stable_values.append(payload.get(col))
+
+    row = connection.execute(
+        f"SELECT id FROM umsaetze WHERE {' AND '.join(stable_where)} ORDER BY id LIMIT 1",
+        stable_values,
+    ).fetchone()
     return int(row["id"]) if row else None
+
+
+def _backfill_origin_transaction_hashes(connection: sqlite3.Connection) -> None:
+    rows = connection.execute(
+        """
+        SELECT *
+        FROM umsaetze
+        WHERE origin_account_iban IS NOT NULL
+          AND origin_transaction_hash IS NULL
+        """
+    ).fetchall()
+    for row in rows:
+        payload = dict(row)
+        payload["account_iban"] = row["origin_account_iban"]
+        connection.execute(
+            "UPDATE umsaetze SET origin_transaction_hash = ? WHERE id = ?",
+            (build_transaction_hash(payload), row["id"]),
+        )
 
 
 def insert_transactions(rows: Iterable[dict[str, Any]]) -> dict[str, int]:
@@ -142,6 +204,7 @@ def insert_transactions(rows: Iterable[dict[str, Any]]) -> dict[str, int]:
     received = len(normalized_rows)
 
     with get_connection() as connection:
+        _backfill_origin_transaction_hashes(connection)
         normalized_rows = [
             row for row in normalized_rows
             if _find_equivalent_transaction_id(connection, row) is None
@@ -376,6 +439,11 @@ def row_to_dict(
         "account_accountnumber": row["account_accountnumber"],
         "account_subaccount": row["account_subaccount"],
         "account_blz": row["account_blz"],
+        "origin_account_iban": row["origin_account_iban"],
+        "origin_transaction_hash": row["origin_transaction_hash"],
+        "origin_bank_name": row["origin_bank_name"],
+        "migrated_at": row["migrated_at"],
+        "migration_batch_id": row["migration_batch_id"],
         "status": row["status"],
         "funds_code": row["funds_code"],
         "transaction_id": row["transaction_id"],
@@ -426,6 +494,122 @@ def row_to_dict(
         "refund_total": row["refund_total"],
         "is_refund": row["amount"] > 0 and len(links) > 0,
     }
+
+
+def migrate_transactions_to_account(
+    source_iban: str,
+    target_iban: str,
+    from_date: str | None,
+    to_date: str | None,
+    origin_bank_name: str | None = None,
+) -> dict[str, Any]:
+    source = normalize_text(source_iban).upper()
+    target = normalize_text(target_iban).upper()
+    start = normalize_text(from_date)
+    end = normalize_text(to_date)
+
+    if not source or not target or source == target:
+        raise ValueError("SOURCE_AND_TARGET_MUST_DIFFER")
+    if (start and not end) or (end and not start) or (start and end and start > end):
+        raise ValueError("INVALID_DATE_RANGE")
+
+    batch_id = str(uuid.uuid4())
+    migrated_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    with get_connection() as connection:
+        source_account = connection.execute(
+            "SELECT iban FROM bank_accounts WHERE UPPER(iban) = ? LIMIT 1", (source,)
+        ).fetchone()
+        target_account = connection.execute(
+            "SELECT iban FROM bank_accounts WHERE UPPER(iban) = ? LIMIT 1", (target,)
+        ).fetchone()
+        if source_account is None:
+            raise ValueError("SOURCE_ACCOUNT_NOT_FOUND")
+        if target_account is None:
+            raise ValueError("TARGET_ACCOUNT_NOT_FOUND")
+
+        date_clause = ""
+        date_values: list[Any] = [source]
+        if start:
+            date_clause += " AND COALESCE(entry_date, date, substr(created_at, 1, 10)) >= ?"
+            date_values.append(start)
+        if end:
+            date_clause += " AND COALESCE(entry_date, date, substr(created_at, 1, 10)) <= ?"
+            date_values.append(end)
+        rows = connection.execute(
+            f"""
+            SELECT *
+            FROM umsaetze
+            WHERE UPPER(account_iban) = ?{date_clause}
+            ORDER BY id
+            """,
+            date_values,
+        ).fetchall()
+        migrated_rows = connection.execute(
+            f"""
+            SELECT id
+            FROM umsaetze
+            WHERE UPPER(origin_account_iban) = ?{date_clause}
+            LIMIT 1
+            """,
+            date_values,
+        ).fetchone()
+        if rows and any(row["origin_account_iban"] is not None for row in rows):
+            raise ValueError("TRANSACTIONS_ALREADY_MIGRATED")
+        if migrated_rows is not None:
+            raise ValueError("TRANSACTIONS_ALREADY_MIGRATED")
+
+        for row in rows:
+            migrated_payload = dict(row)
+            migrated_payload["account_iban"] = target
+            transaction_hash = build_transaction_hash(migrated_payload)
+            connection.execute(
+                """
+                UPDATE umsaetze
+                SET account_iban = ?,
+                    transaction_hash = ?,
+                    origin_transaction_hash = ?,
+                    origin_account_iban = ?,
+                    origin_bank_name = ?,
+                    migrated_at = ?,
+                    migration_batch_id = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    target,
+                    transaction_hash,
+                    row["transaction_hash"],
+                    source,
+                    normalize_text(origin_bank_name) or None,
+                    migrated_at,
+                    batch_id,
+                    migrated_at,
+                    row["id"],
+                ),
+            )
+            _log(
+                "umsaetze",
+                row["id"],
+                "UPDATE",
+                {
+                    "account_iban": target,
+                    "transaction_hash": transaction_hash,
+                    "origin_account_iban": source,
+                    "origin_bank_name": normalize_text(origin_bank_name) or None,
+                    "migrated_at": migrated_at,
+                    "migration_batch_id": batch_id,
+                },
+                connection=connection,
+            )
+
+        return {
+            "batch_id": batch_id,
+            "migrated": len(rows),
+            "source_iban": source,
+            "target_iban": target,
+            "from_date": start,
+            "to_date": end,
+        }
 
 
 def fetch_transactions(

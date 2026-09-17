@@ -129,6 +129,7 @@ VALID_SYNC_COLUMNS: dict[str, set[str]] = {
         "original_amount", "amount", "currency",
         "dummy_entry", "transaction_hash",
         "kategorie", "note", "splits", "purpose_edit",
+        "origin_account_iban", "origin_transaction_hash", "origin_bank_name", "migrated_at", "migration_batch_id",
         "created_at", "updated_at",
     },
     "zahlungspartner": {"id", "name", "website", "logo_url", "local_logo_path", "is_company",

@@ -24,6 +24,18 @@ class CredentialsService:
     def __init__(self):
         self._fints_service = FintsService()
 
+    @staticmethod
+    def _has_active_accounts(scope: str) -> bool:
+        return any(
+            account.get("iban") and not account.get("archived", False)
+            for account in list_bank_accounts(scope)
+        )
+
+    def _enforce_auto_sync_state(self, scope: str, credentials: dict[str, Any]) -> None:
+        if self._has_active_accounts(scope):
+            return
+        credentials["auto_sync"] = False
+
     def _public_status(self, credentials: dict[str, Any] | None) -> dict[str, Any]:
         if not credentials:
             return {"configured": False}
@@ -66,7 +78,12 @@ class CredentialsService:
         }
 
     def get_status(self, scope: str | None = None) -> dict[str, Any]:
-        return self._public_status(load_bank_credentials(scope))
+        credentials = load_bank_credentials(scope)
+        if credentials is not None:
+            self._enforce_auto_sync_state(scope or credentials.get("scope", ""), credentials)
+            save_bank_credentials(credentials, scope=scope or credentials.get("scope"))
+            credentials = load_bank_credentials(scope)
+        return self._public_status(credentials)
 
     def create(self, credentials: dict[str, Any]) -> dict[str, Any]:
         if normalize_text(credentials.get("bank_key", "")).lower() == "manual":
@@ -94,6 +111,10 @@ class CredentialsService:
                 raise ValueError("BANK_CREDENTIALS_ALREADY_STORED")
 
         scope = save_bank_credentials(credentials)
+        stored_credentials = load_bank_credentials(scope)
+        if stored_credentials is not None:
+            self._enforce_auto_sync_state(scope, stored_credentials)
+            save_bank_credentials(stored_credentials, scope=scope)
         return self._public_status(load_bank_credentials(scope))
 
     def _manual_credentials(self) -> list[dict[str, Any]]:
@@ -175,6 +196,10 @@ class CredentialsService:
     def list_all(self) -> dict[str, Any]:
         self._upsert_manual_accounts([])
         credentials = list_bank_credentials()
+        for credential in credentials:
+            self._enforce_auto_sync_state(credential["scope"], credential)
+            save_bank_credentials(credential, scope=credential["scope"])
+        credentials = list_bank_credentials()
         return {
             "count": len(credentials),
             "credentials": [self._public_status(item) for item in credentials],
@@ -194,6 +219,7 @@ class CredentialsService:
             upsert_bank_accounts(scope, payload["accounts"])
             credentials["accounts"] = list_bank_accounts(scope)
 
+        self._enforce_auto_sync_state(scope, credentials)
         save_bank_credentials(credentials, scope=scope)
         return self._public_status(load_bank_credentials(scope))
 
@@ -214,6 +240,7 @@ class CredentialsService:
             account_name=payload.get("account_name"),
             account_iban=payload.get("account_iban"),
             holder_name=payload.get("holder_name"),
+            archived=payload.get("archived") if "archived" in payload else None,
             **(
                 {"can_transfer_override": payload["can_transfer_override"]}
                 if "can_transfer_override" in payload
@@ -222,6 +249,11 @@ class CredentialsService:
         )
         if not updated:
             return {"error": "account_not_found"}
+
+        updated_credentials = load_bank_credentials(scope)
+        if updated_credentials is not None:
+            self._enforce_auto_sync_state(scope, updated_credentials)
+            save_bank_credentials(updated_credentials, scope=scope)
 
         return self._public_status(load_bank_credentials(scope))
 
@@ -236,6 +268,11 @@ class CredentialsService:
             and not list_bank_accounts(scope)
         ):
             delete_bank_credentials(scope)
+        else:
+            updated_credentials = load_bank_credentials(scope)
+            if updated_credentials is not None:
+                self._enforce_auto_sync_state(scope, updated_credentials)
+                save_bank_credentials(updated_credentials, scope=scope)
         return {"deleted": deleted}
 
     def adjust_balance(

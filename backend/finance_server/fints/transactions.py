@@ -212,8 +212,14 @@ def resolve_auto_sync_days(iban: str | None) -> int:
 
 
 def fetch_transactions(
-    creds: BankCredentials, days: int, tan: str | None, iban: str | None
+    creds: BankCredentials,
+    days: int,
+    tan: str | None,
+    iban: str | None,
+    excluded_ibans: set[str] | None = None,
 ) -> dict[str, Any]:
+    excluded = {"".join(str(value).split()).upper() for value in (excluded_ibans or set())}
+
     def _run(from_data: bytes | None, tan_value: str | None) -> dict[str, Any]:
         client = make_client(creds, from_data)
         bootstrap_client(client)
@@ -230,7 +236,12 @@ def fetch_transactions(
             save_state(client, creds)
 
             min_start_date: datetime.date | None = None
-            for account in [a for a in client.get_sepa_accounts() if not iban or a.iban == iban]:
+            for account in [
+                a
+                for a in client.get_sepa_accounts()
+                if (not iban or a.iban == iban)
+                and "".join(str(a.iban).split()).upper() not in excluded
+            ]:
                 try:
                     bal_obj = client.get_balance(account)
                     bal_amt = getattr(bal_obj, "amount", None)

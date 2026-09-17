@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from finance_server.models.transaction import BatchIdsRequest, ManualTransactionCreateRequest, RefundLinkCreateRequest, TransactionNoteUpdateRequest, TransactionPurposeUpdateRequest, TransactionSplitUpdateRequest
+from finance_server.models.transaction import BatchIdsRequest, ManualTransactionCreateRequest, RefundLinkCreateRequest, TransactionAccountMigrationRequest, TransactionNoteUpdateRequest, TransactionPurposeUpdateRequest, TransactionSplitUpdateRequest
 from finance_server.services.transaction_service import TransactionService
 from finance_server.api._crud import crud_delete
 from finance_server.api.deps import get_transaction_service
@@ -82,6 +82,24 @@ def remove_transactions_batch(
     except ValueError as err:
         raise HTTPException(status_code=400, detail=str(err)) from err
     return {"deleted": deleted}
+
+
+@router.post("/db/transactions/migrate-account")
+def migrate_transaction_account(
+    request: TransactionAccountMigrationRequest,
+    service: TransactionService = Depends(get_transaction_service),
+) -> dict[str, Any]:
+    try:
+        return service.migrate_account(
+            source_iban=request.source_iban,
+            target_iban=request.target_iban,
+            from_date=request.from_date,
+            to_date=request.to_date,
+            origin_bank_name=request.origin_bank_name,
+        )
+    except ValueError as err:
+        status = 409 if str(err) == "TRANSACTIONS_ALREADY_MIGRATED" else 400
+        raise HTTPException(status_code=status, detail=str(err)) from err
 
 
 @router.delete("/db/transactions/{transaction_id}")

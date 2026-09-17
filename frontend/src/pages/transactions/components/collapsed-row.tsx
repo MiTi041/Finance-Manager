@@ -111,7 +111,12 @@ export function CollapsedRow({
                 src={accountBank.bankLogo || undefined}
                 alt={accountBank.accountName || accountBank.bankName || "Bank"}
                 sizeClassName="size-12 shrink-0 p-1"
-                backgroundClassName="bg-muted/70"
+                backgroundClassName={
+                  accountBank.archived
+                    ? "border-amber-300 bg-amber-100 dark:border-amber-800 dark:bg-amber-950"
+                    : "bg-muted/70"
+                }
+                archived={accountBank.archived}
               />
             ) : transaction.technisch.bankDeleted ? (
               <div className="flex size-12 shrink-0 items-center justify-center rounded-lg border bg-red-500/15 text-red-600 dark:text-red-400 text-[10px] font-semibold">
@@ -192,6 +197,11 @@ export function CollapsedRow({
                 {isKontotransfer ? (
                   <span className="hidden shrink-0 rounded-full bg-sky-500/15 px-1.5 py-px text-[10px] font-medium text-sky-700 sm:inline dark:text-sky-400">
                     Kontotransfer
+                  </span>
+                ) : null}
+                {transaction.herkunft ? (
+                  <span className="hidden shrink-0 rounded-full bg-orange-500/15 px-1.5 py-px text-[10px] font-medium text-orange-700 sm:inline dark:text-orange-400">
+                    Migriert
                   </span>
                 ) : null}
               </div>

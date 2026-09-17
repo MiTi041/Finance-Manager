@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchIbanZahlungspartnerReferences } from "@/lib/reference-data";
-import type { IbanZahlungspartnerReference, IbanZahlungspartnerReferenceDto } from "@/types/iban-reference";
+import type {
+  IbanZahlungspartnerReference,
+  IbanZahlungspartnerReferenceDto,
+} from "@/types/iban-reference";
 
 export function useIbanReferences(refreshVersion: number) {
   const [references, setReferences] = useState<IbanZahlungspartnerReference[]>([]);
@@ -20,6 +23,7 @@ export function useIbanReferences(refreshVersion: number) {
           zahlungspartnerLogoBackground: ref.zahlungspartner_logo_background ?? "dark",
           zahlungspartnerLogoPadding: ref.zahlungspartner_logo_padding ?? false,
           zahlungspartnerIsCompany: Boolean(ref.zahlungspartner_is_company ?? true),
+          zahlungspartnerIsOwnAccount: Boolean(ref.zahlungspartner_is_own_account ?? false),
           resolvedLogoUrl: ref.resolved_logo_url ?? null,
         })),
       );

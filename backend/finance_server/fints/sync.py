@@ -17,6 +17,14 @@ _sync_status_lock = threading.Lock()
 _sync_state: dict[str, Any] = {"current": None, "progress": [], "last_run": None}
 
 
+def _archived_ibans(stored: dict[str, Any]) -> set[str]:
+    return {
+        "".join(str(account.get("iban", "")).split()).upper()
+        for account in stored.get("accounts", []) or []
+        if account.get("archived") and account.get("iban")
+    }
+
+
 def update_sync_state(scope: str, status: str, message: str | None = None) -> None:
     with _sync_status_lock:
         found = False
@@ -73,7 +81,11 @@ def sync_all_worker(days: int | None = None) -> None:
             update_sync_state(scope, "running", None)
             try:
                 payload = fetch_transactions(
-                    creds, days=days if days is not None else resolve_auto_sync_days(None), tan=None, iban=None
+                    creds,
+                    days=days if days is not None else resolve_auto_sync_days(None),
+                    tan=None,
+                    iban=None,
+                    excluded_ibans=_archived_ibans(stored),
                 )
                 try:
                     store_transactions_in_local_db(payload.get("transactions", []))

@@ -18,11 +18,15 @@ export type BankAccountOption = {
 
 export function buildAccountOptions(
   linkedBanks: StoredBankCredentials[],
+  { includeArchived = false }: { includeArchived?: boolean } = {},
 ): BankAccountOption[] {
   const items: BankAccountOption[] = [];
 
   linkedBanks.forEach((bank) => {
-    const accounts = (bank.accounts ?? []).filter((account) => Boolean(account?.iban));
+    const storedAccounts = bank.accounts ?? [];
+    const accounts = (bank.accounts ?? []).filter(
+      (account) => Boolean(account?.iban) && (includeArchived || account.archived !== true),
+    );
 
     if (accounts.length > 0) {
       accounts.forEach((account) => {
@@ -47,6 +51,8 @@ export function buildAccountOptions(
       });
       return;
     }
+
+    if (storedAccounts.length > 0) return;
 
     const fallbackIban = normalizeIban(bank.account_iban);
     if (fallbackIban) {
@@ -74,9 +80,7 @@ export function resolveAccountSelection(
 
   const normalizedSelection = normalizeIban(selection);
   if (normalizedSelection) {
-    const byIban = accountOptions.find(
-      (item) => item.accountIban === normalizedSelection,
-    );
+    const byIban = accountOptions.find((item) => item.accountIban === normalizedSelection);
     if (byIban) return byIban.accountIban;
   }
 
@@ -91,6 +95,30 @@ export function buildLinkedAccountLookup(linkedAccounts: LinkedBankEntry[]) {
   const lookup = new Map<string, SelectedBankOption>();
 
   linkedAccounts.forEach((entry) => {
+    if ("accounts" in entry && entry.accounts?.length) {
+      entry.accounts.forEach((account) => {
+        const iban = normalizeIban(account.iban);
+        if (iban) {
+          lookup.set(iban, {
+            accountIban: iban,
+            accountName:
+              account.account_name ||
+              entry.account_name ||
+              entry.bank_name ||
+              entry.username ||
+              "Konto",
+            bankName: entry.bank_name || entry.bank_key,
+            bankLogo: entry.bank_logo,
+            username: entry.username,
+            scope: entry.scope,
+            manual: entry.manual === true,
+            archived: account.archived === true,
+          });
+        }
+      });
+      return;
+    }
+
     const candidates: Array<string | undefined | null> = [];
 
     if ("accountIban" in entry && entry.accountIban) {
@@ -106,11 +134,7 @@ export function buildLinkedAccountLookup(linkedAccounts: LinkedBankEntry[]) {
         ? entry
         : {
             accountIban: normalizeIban(entry.account_iban),
-            accountName:
-              entry.account_name ||
-              entry.bank_name ||
-              entry.username ||
-              "Konto",
+            accountName: entry.account_name || entry.bank_name || entry.username || "Konto",
             bankName: entry.bank_name || entry.bank_key,
             bankLogo: entry.bank_logo,
             username: entry.username,

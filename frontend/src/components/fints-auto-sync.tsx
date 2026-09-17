@@ -17,12 +17,8 @@ import { getErrorMessage } from "@/lib/utils/error";
 import { dispatchRefresh } from "@/lib/refresh-store";
 import { readFintsSyncCache, rememberSyncRun } from "@/lib/sync-cache";
 
-const FALLBACK_SYNC_DAYS = Number(
-  import.meta.env.VITE_FINTS_DAYS ?? "730",
-);
-const MAX_SYNC_DAYS = Number(
-  import.meta.env.VITE_FINTS_MAX_DAYS ?? "36500",
-);
+const FALLBACK_SYNC_DAYS = Number(import.meta.env.VITE_FINTS_DAYS ?? "730");
+const MAX_SYNC_DAYS = Number(import.meta.env.VITE_FINTS_MAX_DAYS ?? "36500");
 const AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 
 declare global {
@@ -62,25 +58,26 @@ export default function FintsAutoSync() {
           );
           rememberSyncRun(daysToSync);
         } else {
-          const eligibleBanks =
-            (source === "auto"
-              ? banksToSync.filter((bank) => bank.auto_sync !== false)
-              : banksToSync
-            ).filter((bank) => bank.manual !== true && bank.bank_key !== "manual");
+          const eligibleBanks = (
+            source === "auto" ? banksToSync.filter((bank) => bank.auto_sync !== false) : banksToSync
+          ).filter(
+            (bank) =>
+              bank.manual !== true &&
+              bank.bank_key !== "manual" &&
+              (bank.accounts ?? []).some(
+                (account) => account.archived !== true && Boolean(account.iban),
+              ),
+          );
           // ponytail: gewähltes Konto zuerst syncen; bei "all" ist die Reihenfolge egal
           const activeIban = normalizeIban(readActiveAccountIban());
           if (activeIban) {
             const selectedIndex = eligibleBanks.findIndex(
               (bank) =>
                 normalizeIban(bank.account_iban) === activeIban ||
-                (bank.accounts ?? []).some(
-                  (account) => normalizeIban(account.iban) === activeIban,
-                ),
+                (bank.accounts ?? []).some((account) => normalizeIban(account.iban) === activeIban),
             );
             if (selectedIndex > 0) {
-              eligibleBanks.unshift(
-                ...eligibleBanks.splice(selectedIndex, 1),
-              );
+              eligibleBanks.unshift(...eligibleBanks.splice(selectedIndex, 1));
             }
           }
           for (const bank of eligibleBanks) {
@@ -169,10 +166,7 @@ export default function FintsAutoSync() {
     };
 
     autoSyncIfNeeded();
-    const interval = window.setInterval(
-      autoSyncIfNeeded,
-      AUTO_SYNC_INTERVAL_MS,
-    );
+    const interval = window.setInterval(autoSyncIfNeeded, AUTO_SYNC_INTERVAL_MS);
 
     return () => {
       window.removeEventListener(FINTS_SYNC_REQUEST_EVENT, onManualSyncRequest);
@@ -216,9 +210,7 @@ function parseFlexibleDate(value: unknown): Date | null {
 }
 
 async function getDaysToSync(accountIbans?: string[]): Promise<number> {
-  const fallback = Number.isFinite(FALLBACK_SYNC_DAYS)
-    ? FALLBACK_SYNC_DAYS
-    : 730;
+  const fallback = Number.isFinite(FALLBACK_SYNC_DAYS) ? FALLBACK_SYNC_DAYS : 730;
   const cap = Number.isFinite(MAX_SYNC_DAYS) ? MAX_SYNC_DAYS : 36500;
   const minimumDays = Math.max(1, Math.min(cap, fallback));
 
@@ -230,9 +222,7 @@ async function getDaysToSync(accountIbans?: string[]): Promise<number> {
   }
 
   const latestDates = await Promise.all(
-    cleanedIbans.map((iban) =>
-      fetchLatestDbTransaction(iban).catch(() => null),
-    ),
+    cleanedIbans.map((iban) => fetchLatestDbTransaction(iban).catch(() => null)),
   );
 
   const parsedDates = latestDates

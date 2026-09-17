@@ -9,12 +9,10 @@ export type SelectedBankOption = {
   scope: string;
   manual?: boolean;
   balanceCorrection?: number | null;
+  archived?: boolean;
 };
 
-export function getSelectedBank(
-  accountOptions: SelectedBankOption[],
-  activeAccountIban: string,
-) {
+export function getSelectedBank(accountOptions: SelectedBankOption[], activeAccountIban: string) {
   if (activeAccountIban === "all") {
     return null;
   }
@@ -24,8 +22,5 @@ export function getSelectedBank(
     return null;
   }
 
-  return (
-    accountOptions.find((item) => item.accountIban === normalizedSelection) ??
-    null
-  );
+  return accountOptions.find((item) => item.accountIban === normalizedSelection) ?? null;
 }

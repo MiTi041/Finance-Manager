@@ -85,6 +85,61 @@ def test_public_status_falls_back_to_bank_level():
     assert status["accounts"][1]["can_transfer"] is False
 
 
+def test_auto_sync_is_disabled_when_all_accounts_are_archived():
+    from finance_server.services.credentials_service import CredentialsService
+
+    scope = save_bank_credentials(
+        {
+            "bank_key": "norisbank",
+            "username": "archive-sync-user",
+            "pin": "p",
+            "auto_sync": True,
+            "accounts": [{"iban": "DE_ARCHIVE_SYNC", "account_name": "Konto"}],
+        }
+    )
+
+    status = CredentialsService().update_account(
+        scope, "DE_ARCHIVE_SYNC", {"archived": True}
+    )
+
+    assert status["auto_sync"] is False
+
+
+def test_auto_sync_is_disabled_when_an_account_is_deleted():
+    from finance_server.services.credentials_service import CredentialsService
+
+    scope = save_bank_credentials(
+        {
+            "bank_key": "norisbank",
+            "username": "delete-sync-user",
+            "pin": "p",
+            "auto_sync": True,
+            "accounts": [{"iban": "DE_DELETE_SYNC", "account_name": "Konto"}],
+        }
+    )
+
+    CredentialsService().delete_account(scope, "DE_DELETE_SYNC")
+
+    assert load_bank_credentials(scope)["auto_sync"] is False
+
+
+def test_auto_sync_is_disabled_for_a_bank_access_without_accounts():
+    from finance_server.services.credentials_service import CredentialsService
+
+    scope = save_bank_credentials(
+        {
+            "bank_key": "norisbank",
+            "username": "empty-sync-user",
+            "pin": "p",
+            "auto_sync": True,
+        }
+    )
+
+    status = CredentialsService().get_status(scope)
+
+    assert status["auto_sync"] is False
+
+
 def _save_account(iban: str, can_transfer=None):
     scope = save_bank_credentials(
         {

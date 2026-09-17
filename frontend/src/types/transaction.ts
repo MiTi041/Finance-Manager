@@ -25,6 +25,10 @@ export interface TransactionDto {
   account_accountnumber: string;
   account_subaccount: string;
   account_blz: string;
+  origin_account_iban?: string | null;
+  origin_bank_name?: string | null;
+  migrated_at?: string | null;
+  migration_batch_id?: string | null;
 
   /**
    * MT940 Debit/Credit Indicator
@@ -141,6 +145,12 @@ export interface Transaction {
     blz: string;
   };
 
+  herkunft: {
+    iban: string | null;
+    bankName: string | null;
+    migratedAt: Date | null;
+  } | null;
+
   /**
    * Originaler MT940 Code.
    */
@@ -232,9 +242,8 @@ export interface Transaction {
     bankDeleted: boolean;
 
     isRefund: boolean;
+    isKontotransfer: boolean;
 
     isPending?: boolean;
   };
 }
-
-

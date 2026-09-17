@@ -9,6 +9,7 @@ export interface IbanZahlungspartnerReferenceDto {
   zahlungspartner_logo_background?: LogoBackground | null;
   zahlungspartner_logo_padding?: boolean | null;
   zahlungspartner_is_company?: boolean | number | null;
+  zahlungspartner_is_own_account?: boolean | number | null;
   resolved_logo_url?: string | null;
 }
 
@@ -22,4 +23,5 @@ export interface IbanZahlungspartnerReference {
   zahlungspartnerLogoPadding?: boolean;
   resolvedLogoUrl?: string | null;
   zahlungspartnerIsCompany?: boolean;
+  zahlungspartnerIsOwnAccount?: boolean;
 }

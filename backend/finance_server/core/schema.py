@@ -58,8 +58,13 @@ def create_umsaetze_table(connection: sqlite3.Connection) -> None:
             currency TEXT,
             dummy_entry INTEGER NOT NULL DEFAULT 0,
             transaction_hash TEXT NOT NULL UNIQUE,
+            origin_transaction_hash TEXT,
             kategorie INTEGER,
             note TEXT,
+            origin_account_iban TEXT,
+            origin_bank_name TEXT,
+            migrated_at TEXT,
+            migration_batch_id TEXT,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
         """
@@ -206,6 +211,7 @@ def create_bank_accounts_table(connection: sqlite3.Connection) -> None:
             scope TEXT NOT NULL,
             iban TEXT NOT NULL,
             account_name TEXT,
+            archived INTEGER NOT NULL DEFAULT 0,
             can_transfer INTEGER,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -591,6 +597,7 @@ def initialize_database(connection: sqlite3.Connection) -> None:
     create_umsaetze_table(connection)
     create_bank_credentials_table(connection)
     create_bank_accounts_table(connection)
+    _ensure_table_columns(connection, "bank_accounts", {"archived": "INTEGER NOT NULL DEFAULT 0"})
     _ensure_table_columns(
         connection,
         "umsaetze",
@@ -599,7 +606,24 @@ def initialize_database(connection: sqlite3.Connection) -> None:
             "note": "TEXT",
             "splits": "TEXT",
             "purpose_edit": "TEXT",
+            "origin_account_iban": "TEXT",
+            "origin_bank_name": "TEXT",
+            "migrated_at": "TEXT",
+            "migration_batch_id": "TEXT",
+            "origin_transaction_hash": "TEXT",
         },
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_umsaetze_origin_account
+        ON umsaetze (origin_account_iban)
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_umsaetze_origin_hash
+        ON umsaetze (origin_transaction_hash)
+        """
     )
     create_reference_tables(connection)
     migrate_reference_tables(connection)

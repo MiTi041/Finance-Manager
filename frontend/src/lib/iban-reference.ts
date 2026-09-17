@@ -2,12 +2,8 @@ import type { IbanZahlungspartnerReference } from "@/types/iban-reference";
 import type { Transaction } from "@/types/transaction";
 import { normalizeIban } from "@/lib/iban";
 
-export function buildIbanReferenceLookup(
-  references: IbanZahlungspartnerReference[],
-) {
-  return new Map(
-    references.map((reference) => [normalizeIban(reference.iban), reference]),
-  );
+export function buildIbanReferenceLookup(references: IbanZahlungspartnerReference[]) {
+  return new Map(references.map((reference) => [normalizeIban(reference.iban), reference]));
 }
 
 export function resolveTransactionCounterparty(
@@ -21,14 +17,16 @@ export function resolveTransactionCounterparty(
     ...transaction,
     zahlungspartner: {
       ...transaction.zahlungspartner,
-      datenbankName:
-        resolved?.zahlungspartnerName || transaction.zahlungspartner.name || "",
+      datenbankName: resolved?.zahlungspartnerName || transaction.zahlungspartner.name || "",
       website: resolved?.zahlungspartnerWebsite ?? null,
-      logoUrl:
-        resolved?.resolvedLogoUrl ?? resolved?.zahlungspartnerLogoUrl ?? null,
+      logoUrl: resolved?.resolvedLogoUrl ?? resolved?.zahlungspartnerLogoUrl ?? null,
       logoBackground: resolved?.zahlungspartnerLogoBackground ?? "dark",
       logoPadding: resolved?.zahlungspartnerLogoPadding ?? false,
       isCompany: resolved?.zahlungspartnerIsCompany ?? true,
+    },
+    technisch: {
+      ...transaction.technisch,
+      isKontotransfer: resolved?.zahlungspartnerIsOwnAccount ?? false,
     },
   };
 }
@@ -37,7 +35,5 @@ export function resolveTransactionsCounterparty(
   transactions: Transaction[],
   lookup: Map<string, IbanZahlungspartnerReference>,
 ): Transaction[] {
-  return transactions.map((transaction) =>
-    resolveTransactionCounterparty(transaction, lookup),
-  );
+  return transactions.map((transaction) => resolveTransactionCounterparty(transaction, lookup));
 }

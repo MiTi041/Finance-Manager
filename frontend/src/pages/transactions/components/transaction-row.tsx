@@ -206,6 +206,17 @@ export function TransactionRow({
                 <span>Bankzugang nicht mehr verfügbar</span>
               </div>
             )}
+            {transaction.herkunft && (
+              <div className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-xs font-medium text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300">
+                <AlertCircle className="size-3.5 shrink-0" />
+                <span>
+                  Ursprünglich {transaction.herkunft.bankName || "anderes Konto"}
+                  {transaction.herkunft.migratedAt
+                    ? ` · migriert am ${new Intl.DateTimeFormat("de-DE").format(transaction.herkunft.migratedAt)}`
+                    : ""}
+                </span>
+              </div>
+            )}
             <div className="grid grid-cols-1 divide-y divide-border/60 border-b border-muted sm:grid-cols-3 sm:divide-x sm:divide-y-0">
               <ZahlungspartnerSection
                 transaction={transaction}

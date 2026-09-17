@@ -1,9 +1,6 @@
 import type { Transaction, TransactionDto, DebitCreditIndicator } from "@/types/transaction";
 
-function mapDebitCreditIndicator(
-  indicator: string,
-  amount?: number,
-): DebitCreditIndicator {
+function mapDebitCreditIndicator(indicator: string, amount?: number): DebitCreditIndicator {
   const normalized = indicator?.trim().toUpperCase();
 
   if (normalized === "C" || normalized === "D") {
@@ -34,6 +31,14 @@ export function mapTransaction(dto: TransactionDto): Transaction {
       unterkonto: dto.account_subaccount,
       blz: dto.account_blz,
     },
+
+    herkunft: dto.origin_account_iban
+      ? {
+          iban: dto.origin_account_iban,
+          bankName: dto.origin_bank_name ?? null,
+          migratedAt: dto.migrated_at ? new Date(dto.migrated_at) : null,
+        }
+      : null,
 
     debitCreditIndicator,
 
@@ -78,7 +83,10 @@ export function mapTransaction(dto: TransactionDto): Transaction {
     },
 
     zahlungspartner: {
-      name: dto.applicant_name && !/^[A-Z]{2}\d/.test(dto.applicant_name) ? dto.applicant_name : dto.recipient_name || "",
+      name:
+        dto.applicant_name && !/^[A-Z]{2}\d/.test(dto.applicant_name)
+          ? dto.applicant_name
+          : dto.recipient_name || "",
       datenbankName: "",
       website: null,
       logoUrl: null,
@@ -140,6 +148,8 @@ export function mapTransaction(dto: TransactionDto): Transaction {
       bankDeleted: dto.bank_deleted,
 
       isRefund: !!dto.is_refund,
+
+      isKontotransfer: false,
     },
   };
 }

@@ -21,6 +21,14 @@ class BatchIdsRequest(BaseModel):
     transaction_ids: list[int]
 
 
+class TransactionAccountMigrationRequest(BaseModel):
+    source_iban: str = Field(min_length=1)
+    target_iban: str = Field(min_length=1)
+    from_date: str | None = Field(default=None, min_length=10)
+    to_date: str | None = Field(default=None, min_length=10)
+    origin_bank_name: str | None = None
+
+
 class RefundLinkCreateRequest(BaseModel):
     expense_transaction_id: int
     amount: float

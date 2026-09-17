@@ -207,7 +207,14 @@ export function useFinanceData(
       return base + (c ?? 0);
     }
     return base + (accountOptions ?? []).reduce((s, a) => s + (a.balanceCorrection ?? 0), 0);
-  }, [cleanedTransactions, filteredTransactions, accountOptions, selectedAccountIban, needsCorrection, summary]);
+  }, [
+    cleanedTransactions,
+    filteredTransactions,
+    accountOptions,
+    selectedAccountIban,
+    needsCorrection,
+    summary,
+  ]);
 
   const balanceFormatted = useMemo(() => formatBalance(balance), [balance]);
 
@@ -228,7 +235,14 @@ export function useFinanceData(
       if (c && c > 0) positiveCorrectionSum += c;
     }
     return base + positiveCorrectionSum;
-  }, [cleanedTransactions, filteredTransactions, accountOptions, selectedAccountIban, needsCorrection, summary]);
+  }, [
+    cleanedTransactions,
+    filteredTransactions,
+    accountOptions,
+    selectedAccountIban,
+    needsCorrection,
+    summary,
+  ]);
 
   const expenses = useMemo(() => {
     const txs = needsCorrection ? cleanedTransactions : filteredTransactions;
@@ -247,7 +261,14 @@ export function useFinanceData(
       if (c && c < 0) negativeCorrectionSum += Math.abs(c);
     }
     return base + negativeCorrectionSum;
-  }, [cleanedTransactions, filteredTransactions, accountOptions, selectedAccountIban, needsCorrection, summary]);
+  }, [
+    cleanedTransactions,
+    filteredTransactions,
+    accountOptions,
+    selectedAccountIban,
+    needsCorrection,
+    summary,
+  ]);
 
   const incomesFormatted = useMemo(() => formatBalance(incomes), [incomes]);
   const expensesFormatted = useMemo(() => formatBalance(-expenses), [expenses]);
@@ -263,9 +284,7 @@ export function useFinanceData(
     }
 
     return (accountOptions ?? []).map((account) => {
-      const apiBalance = accountBalancesApi.find(
-        (ab) => ab.account_iban === account.accountIban,
-      );
+      const apiBalance = accountBalancesApi.find((ab) => ab.account_iban === account.accountIban);
       return {
         bankLogo: account.bankLogo,
         accountIban: account.accountIban,
@@ -277,7 +296,13 @@ export function useFinanceData(
         balancePending: apiBalance?.balance_pending ?? 0,
       };
     });
-  }, [accountOptions, cleanedTransactions, filteredTransactions, needsCorrection, accountBalancesApi]);
+  }, [
+    accountOptions,
+    cleanedTransactions,
+    filteredTransactions,
+    needsCorrection,
+    accountBalancesApi,
+  ]);
 
   const error = txError;
   const transactions = filteredTransactions;

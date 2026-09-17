@@ -12,6 +12,7 @@ from finance_server.db import (
     fetch_pending_transactions,
     fetch_transactions,
     insert_transactions,
+    migrate_transactions_to_account,
     load_bank_credentials_by_iban,
     update_transaction_category,
     update_transaction_note,
@@ -89,6 +90,22 @@ class TransactionService:
 
     def delete_transactions_batch(self, transaction_ids: list[int]) -> int:
         return delete_transactions_batch(transaction_ids)
+
+    def migrate_account(
+        self,
+        source_iban: str,
+        target_iban: str,
+        from_date: str,
+        to_date: str,
+        origin_bank_name: str | None = None,
+    ) -> dict[str, Any]:
+        return migrate_transactions_to_account(
+            source_iban,
+            target_iban,
+            from_date,
+            to_date,
+            origin_bank_name,
+        )
 
     def update_note(self, transaction_id: int, note: str | None) -> bool:
         return update_transaction_note(transaction_id, note)

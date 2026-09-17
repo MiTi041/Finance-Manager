@@ -27,7 +27,12 @@ export function PendingRow({ transaction, accountBank }: PendingRowProps) {
             src={accountBank.bankLogo || undefined}
             alt={accountBank.accountName || accountBank.bankName || "Bank"}
             sizeClassName="size-12 shrink-0 p-1"
-            backgroundClassName="bg-muted/70"
+            backgroundClassName={
+              accountBank.archived
+                ? "border-amber-300 bg-amber-100 dark:border-amber-800 dark:bg-amber-950"
+                : "bg-muted/70"
+            }
+            archived={accountBank.archived}
           />
         </div>
       ) : (
@@ -36,9 +41,7 @@ export function PendingRow({ transaction, accountBank }: PendingRowProps) {
             src={transaction.zahlungspartner.logoUrl || undefined}
             alt={transaction.zahlungspartner.name || "Bank"}
             sizeClassName="size-12 shrink-0"
-            backgroundClassName={logoBackgroundClass(
-              transaction.zahlungspartner.logoBackground,
-            )}
+            backgroundClassName={logoBackgroundClass(transaction.zahlungspartner.logoBackground)}
             kind={transaction.zahlungspartner.isCompany ? "company" : "person"}
             imgNoPadding={!transaction.zahlungspartner.logoPadding}
           />

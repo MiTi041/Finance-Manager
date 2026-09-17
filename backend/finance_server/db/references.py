@@ -766,6 +766,7 @@ def list_iban_zahlungspartner_references() -> list[dict[str, Any]]:
                 , k.logo_background AS zahlungspartner_logo_background
                 , k.logo_padding AS zahlungspartner_logo_padding
                 , k.is_company AS zahlungspartner_is_company
+                , k.is_own_account AS zahlungspartner_is_own_account
             FROM ibans i
             INNER JOIN zahlungspartner k ON k.id = i.f_zahlungspartner_id
             ORDER BY i.iban
@@ -788,6 +789,7 @@ def list_iban_zahlungspartner_references() -> list[dict[str, Any]]:
                 row["zahlungspartner_logo_padding"]
             ),
             "zahlungspartner_is_company": bool(row["zahlungspartner_is_company"]),
+            "zahlungspartner_is_own_account": bool(row["zahlungspartner_is_own_account"]),
             "resolved_logo_url": resolve_zahlungspartner_logo(
                 row["zahlungspartner_id"],
                 row["zahlungspartner_website"],
