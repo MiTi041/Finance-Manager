@@ -22,6 +22,7 @@ import {
 
 import { BankLogo } from "@/components/bank-logo";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { fetchAccountFlowLayout, saveAccountFlowLayout } from "@/lib/account-flow";
 import type { AccountFlowZone } from "@/lib/account-flow";
@@ -314,34 +315,44 @@ function AccountFlowZoneLayer({
               onBlur={commitTitle}
             />
           ) : (
-            <button
-              type="button"
-              className="max-w-[calc(100%-2rem)] cursor-text truncate text-left text-xs font-semibold text-[#35556d] outline-none hover:text-[#0f6cbd] dark:text-[#b8d8eb] dark:hover:text-[#8ac7f5]"
-              title="Titel bearbeiten"
-              onDoubleClick={(event) => {
-                event.stopPropagation();
-                setDraftTitle(zone.title);
-                setEditing(true);
-              }}
-              onPointerDown={(event) => event.stopPropagation()}
-            >
-              {zone.title}
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="max-w-[calc(100%-2rem)] cursor-text truncate text-left text-xs font-semibold text-[#35556d] outline-none hover:text-[#0f6cbd] dark:text-[#b8d8eb] dark:hover:text-[#8ac7f5]"
+                  title="Titel bearbeiten"
+                  onDoubleClick={(event) => {
+                    event.stopPropagation();
+                    setDraftTitle(zone.title);
+                    setEditing(true);
+                  }}
+                  onPointerDown={(event) => event.stopPropagation()}
+                >
+                  {zone.title}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Titel bearbeiten</TooltipContent>
+            </Tooltip>
           )}
-          <button
-            type="button"
-            className={cn(
-              "flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-control text-[#58758a] transition-opacity hover:bg-[#d7e8f3] hover:text-[#b42318] dark:hover:bg-[#31566d]",
-              hovered ? "opacity-100" : "opacity-0 group-hover:opacity-100",
-            )}
-            aria-label={`Zone ${zone.title} löschen`}
-            title="Zone löschen"
-            onPointerEnter={onPointerEnter}
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={onDelete}
-          >
-            <Trash2 className="size-3.5" />
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  "flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-control text-[#58758a] transition-opacity hover:bg-[#d7e8f3] hover:text-[#b42318] dark:hover:bg-[#31566d]",
+                  hovered ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+                )}
+                aria-label={`Zone ${zone.title} löschen`}
+                title="Zone löschen"
+                onPointerEnter={onPointerEnter}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={onDelete}
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Zone löschen</TooltipContent>
+          </Tooltip>
         </div>
         <ZoneResizeHandle direction="top" zoneTitle={zone.title} onResizeStart={onResizeStart} />
         <ZoneResizeHandle direction="right" zoneTitle={zone.title} onResizeStart={onResizeStart} />
@@ -489,24 +500,31 @@ function AccountCard({
           if (event.key === "Enter" || event.key === " ") onSelect();
         }}
       >
-        <button
-          type="button"
-          className={cn(
-            "absolute right-2 top-2 z-10 flex size-6 cursor-pointer items-center justify-center rounded-control text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-            note && "text-[#0f6cbd]",
-          )}
-          aria-label={note ? "Kontonotiz bearbeiten" : "Kontonotiz hinzufügen"}
-          title={note || "Kontonotiz hinzufügen"}
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => {
-            event.stopPropagation();
-            setDraftNote(note);
-            setEditingNote((current) => !current);
-            onNoteEditingChange(!editingNote);
-          }}
-        >
-          <StickyNote className="size-3.5" />
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              className={cn(
+                "absolute right-2 top-2 z-10 flex size-6 cursor-pointer items-center justify-center rounded-control text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                note && "text-[#0f6cbd]",
+              )}
+              aria-label={note ? "Kontonotiz bearbeiten" : "Kontonotiz hinzufügen"}
+              title={note || "Kontonotiz hinzufügen"}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                setDraftNote(note);
+                setEditingNote((current) => !current);
+                onNoteEditingChange(!editingNote);
+              }}
+            >
+              <StickyNote className="size-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            {note ? "Kontonotiz bearbeiten" : "Kontonotiz hinzufügen"}
+          </TooltipContent>
+        </Tooltip>
         {editingNote && (
           <div
             className="absolute left-2 top-[calc(100%+6px)] z-30 w-[210px] rounded-lg border border-border/70 bg-popover/95 p-1 shadow-[0_8px_24px_rgba(15,23,42,0.16)] backdrop-blur"
@@ -1161,67 +1179,99 @@ export function AccountFlowGraph({
           </span>
         </div>
         <div className="absolute bottom-4 right-4 z-10 flex gap-1 rounded-lg border border-border bg-card/90 p-1 backdrop-blur">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-8"
-            aria-label="Zone erstellen"
-            title="Zone erstellen"
-            onClick={addZone}
-          >
-            <FolderPlus className="size-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-8"
-            aria-label={showEdgeLabels ? "Labels ausblenden" : "Labels einblenden"}
-            aria-pressed={showEdgeLabels}
-            title={showEdgeLabels ? "Labels ausblenden" : "Labels einblenden"}
-            onClick={() => setShowEdgeLabels((visible) => !visible)}
-          >
-            {showEdgeLabels ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-8"
-            aria-label="Vergrößern"
-            title="Vergrößern"
-            onClick={() => zoomBy(ZOOM_STEP)}
-          >
-            <Plus className="size-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-8"
-            aria-label="Verkleinern"
-            title="Verkleinern"
-            onClick={() => zoomBy(-ZOOM_STEP)}
-          >
-            <Minus className="size-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-8"
-            aria-label="Konten zentrieren"
-            title="Konten zentrieren"
-            onClick={centerView}
-          >
-            <LocateFixed className="size-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-8"
-            aria-label="Ansicht zurücksetzen"
-            title="Ansicht zurücksetzen"
-            onClick={resetView}
-          >
-            <RotateCcw className="size-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                aria-label="Zone erstellen"
+                title="Zone erstellen"
+                onClick={addZone}
+              >
+                <FolderPlus className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Zone erstellen</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                aria-label={showEdgeLabels ? "Labels ausblenden" : "Labels einblenden"}
+                aria-pressed={showEdgeLabels}
+                title={showEdgeLabels ? "Labels ausblenden" : "Labels einblenden"}
+                onClick={() => setShowEdgeLabels((visible) => !visible)}
+              >
+                {showEdgeLabels ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              {showEdgeLabels ? "Labels ausblenden" : "Labels einblenden"}
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                aria-label="Vergrößern"
+                title="Vergrößern"
+                onClick={() => zoomBy(ZOOM_STEP)}
+              >
+                <Plus className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Vergrößern</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                aria-label="Verkleinern"
+                title="Verkleinern"
+                onClick={() => zoomBy(-ZOOM_STEP)}
+              >
+                <Minus className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Verkleinern</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                aria-label="Konten zentrieren"
+                title="Konten zentrieren"
+                onClick={centerView}
+              >
+                <LocateFixed className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Konten zentrieren</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                aria-label="Ansicht zurücksetzen"
+                title="Ansicht zurücksetzen"
+                onClick={resetView}
+              >
+                <RotateCcw className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Ansicht zurücksetzen</TooltipContent>
+          </Tooltip>
         </div>
         <svg
           ref={svgRef}

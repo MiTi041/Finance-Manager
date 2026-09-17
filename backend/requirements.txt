@@ -6,8 +6,6 @@ cryptography
 python-multipart
 numpy
 scikit-learn
-easyocr
-Pillow
 boto3
 fints
 mt-940==4.30.0

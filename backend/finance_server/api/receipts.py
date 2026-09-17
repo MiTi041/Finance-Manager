@@ -9,7 +9,10 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
 
 from finance_server.db.transactions import update_transaction_splits
-from finance_server.services.receipt_service import ReceiptService
+from finance_server.services.receipt_service import (
+    ReceiptRecognitionUnavailableError,
+    ReceiptService,
+)
 from finance_server.api.deps import get_receipt_service
 
 router = APIRouter()
@@ -56,6 +59,9 @@ def upload_receipt(
             image_path=str(dest),
             image_filename=file.filename or "receipt",
         )
+    except ReceiptRecognitionUnavailableError as err:
+        dest.unlink(missing_ok=True)
+        raise HTTPException(status_code=501, detail=str(err))
     except ValueError as err:
         dest.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail=str(err))

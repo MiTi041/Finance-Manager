@@ -1,7 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
+from pathlib import Path
+
 from PyInstaller.utils.hooks import collect_data_files
 
-datas = [('.env', '.'), ('finance_server/assets', 'finance_server/assets')]
+datas = [('finance_server/assets', 'finance_server/assets')]
+if Path('.env').is_file():
+    datas.append(('.env', '.'))
 datas += collect_data_files('sepaxml')
 
 
@@ -14,7 +18,21 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        'cv2',
+        'nltk',
+        'PIL',
+        'paddle',
+        'paddleocr',
+        'tensorflow',
+        'tensorflow_probability',
+        'torch',
+        'torchvision',
+        'onnxruntime',
+        'openvino',
+        'transformers',
+        'mlx',
+    ],
     noarchive=False,
     optimize=0,
 )

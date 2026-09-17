@@ -329,21 +329,16 @@ def _match_transaction(store_name: str | None, total_amount: float | None, recei
     return candidates[0][1] if candidates else None
 
 
-class ReceiptService:
-    _reader: Any = None
+class ReceiptRecognitionUnavailableError(RuntimeError):
+    """Raised when receipt OCR is not included in the desktop build."""
 
-    @classmethod
-    def _get_reader(cls) -> Any:
-        if cls._reader is None:
-            import easyocr
-            import torch
-            gpu = torch.backends.mps.is_available() if hasattr(torch.backends, "mps") else False
-            cls._reader = easyocr.Reader(["de", "en"], gpu=gpu)
-        return cls._reader
+
+class ReceiptService:
 
     def process_receipt(self, umsatz_id: int, image_path: str, image_filename: str) -> dict[str, Any]:
-        reader = self._get_reader()
-        results = reader.readtext(image_path)
+        raise ReceiptRecognitionUnavailableError(
+            "Die automatische Belegerkennung ist in dieser App-Version nicht enthalten."
+        )
 
         buckets: dict[int, list[tuple[float, str, float]]] = {}
         for bbox, text, conf in results:
