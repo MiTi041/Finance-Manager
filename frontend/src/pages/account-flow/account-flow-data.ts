@@ -15,7 +15,8 @@ export type AccountFlowEdge = {
   id: string;
   source: string;
   target: string;
-  amount: number;
+  amountSourceToTarget: number;
+  amountTargetToSource: number;
   transactionCount: number;
   transactions: Transaction[];
 };
@@ -43,6 +44,15 @@ export function buildAccountFlowGraph(
       .map((account) => [normalizeIban(account.accountIban), account] as const)
       .filter(([iban]) => Boolean(iban)),
   );
+  const migratedIbanToCurrentIban = new Map<string, string>();
+  for (const transaction of transactions) {
+    const currentIban = normalizeIban(transaction.konto.iban);
+    const originIban = normalizeIban(transaction.herkunft?.iban ?? "");
+    if (currentIban && originIban && accountByIban.has(currentIban)) {
+      migratedIbanToCurrentIban.set(originIban, currentIban);
+    }
+  }
+  const resolveAccountIban = (iban: string) => migratedIbanToCurrentIban.get(iban) ?? iban;
 
   const nodes = accounts
     .map((account) => {
@@ -61,29 +71,36 @@ export function buildAccountFlowGraph(
   const edgesByPair = new Map<string, AccountFlowEdge>();
 
   for (const transaction of transactions) {
-    if (!transaction.technisch.isKontotransfer) continue;
-
-    const sourceAccount = normalizeIban(transaction.konto.iban);
-    const counterparty = normalizeIban(transaction.zahlungspartner.iban);
+    const sourceAccount = resolveAccountIban(normalizeIban(transaction.konto.iban));
+    const counterparty = resolveAccountIban(normalizeIban(transaction.zahlungspartner.iban));
     if (!accountByIban.has(sourceAccount) || !accountByIban.has(counterparty)) continue;
     if (!sourceAccount || !counterparty || sourceAccount === counterparty) continue;
+
+    const transferAmount = Math.abs(transaction.betrag.wert);
+    if (!Number.isFinite(transferAmount) || transferAmount <= 0) continue;
 
     const outgoing = transaction.betrag.wert < 0;
     const source = outgoing ? sourceAccount : counterparty;
     const target = outgoing ? counterparty : sourceAccount;
-    const id = `${source}->${target}`;
+    const [firstAccount, secondAccount] = [source, target].sort();
+    const id = `${firstAccount}|${secondAccount}`;
     const existing = edgesByPair.get(id);
 
     if (existing) {
-      existing.amount += Math.abs(transaction.betrag.wert);
+      if (source === firstAccount) {
+        existing.amountSourceToTarget += transferAmount;
+      } else {
+        existing.amountTargetToSource += transferAmount;
+      }
       existing.transactionCount += 1;
       existing.transactions.push(transaction);
     } else {
       edgesByPair.set(id, {
         id,
-        source,
-        target,
-        amount: Math.abs(transaction.betrag.wert),
+        source: firstAccount,
+        target: secondAccount,
+        amountSourceToTarget: source === firstAccount ? transferAmount : 0,
+        amountTargetToSource: source === secondAccount ? transferAmount : 0,
         transactionCount: 1,
         transactions: [transaction],
       });
@@ -92,6 +109,13 @@ export function buildAccountFlowGraph(
 
   return {
     nodes,
-    edges: [...edgesByPair.values()].sort((a, b) => b.amount - a.amount),
+    edges: [...edgesByPair.values()]
+      .filter((edge) => edge.amountSourceToTarget > 0 || edge.amountTargetToSource > 0)
+      .sort(
+        (a, b) =>
+          b.amountSourceToTarget +
+          b.amountTargetToSource -
+          (a.amountSourceToTarget + a.amountTargetToSource),
+      ),
   };
 }

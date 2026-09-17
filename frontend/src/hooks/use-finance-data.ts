@@ -69,7 +69,13 @@ function filterTransactionsByDate(transactions: Transaction[], dateFilter: DateF
 
 export function useFinanceData(
   dateFilter: DateFilterValue = {},
-  { deletedBankTransactionsIncluded = false }: { deletedBankTransactionsIncluded?: boolean } = {},
+  {
+    deletedBankTransactionsIncluded = false,
+    ignoreActiveAccountFilter = false,
+  }: {
+    deletedBankTransactionsIncluded?: boolean;
+    ignoreActiveAccountFilter?: boolean;
+  } = {},
 ) {
   const { refreshVersion } = useRefresh();
 
@@ -87,11 +93,11 @@ export function useFinanceData(
     } else {
       params.set("days", "36500");
     }
-    if (activeAccountIban !== "all") {
+    if (!ignoreActiveAccountFilter && activeAccountIban !== "all") {
       params.set("iban", activeAccountIban);
     }
     return params.toString();
-  }, [activeAccountIban, dateFilter]);
+  }, [activeAccountIban, dateFilter, ignoreActiveAccountFilter]);
 
   const { banks: linkedBanks } = useBankCredentials(refreshVersion);
   const { references: ibanReferences } = useIbanReferences(refreshVersion);
@@ -149,20 +155,34 @@ export function useFinanceData(
   const selectedAccountIban = activeAccountIban === "all" ? null : activeAccountIban;
 
   const accountFilteredTransactions = useMemo(() => {
-    if (activeAccountIban === "all" || !selectedAccountIban) return rawTransactions;
+    if (ignoreActiveAccountFilter || activeAccountIban === "all" || !selectedAccountIban) {
+      return rawTransactions;
+    }
     return rawTransactions.filter((transaction) => {
       const kontoIban = normalizeIban(transaction.konto?.iban);
       return kontoIban === selectedAccountIban;
     });
-  }, [activeAccountIban, selectedAccountIban, rawTransactions]);
+  }, [
+    activeAccountIban,
+    selectedAccountIban,
+    rawTransactions,
+    ignoreActiveAccountFilter,
+  ]);
 
   const accountFilteredPendingTransactions = useMemo(() => {
-    if (activeAccountIban === "all" || !selectedAccountIban) return rawPendingTransactions;
+    if (ignoreActiveAccountFilter || activeAccountIban === "all" || !selectedAccountIban) {
+      return rawPendingTransactions;
+    }
     return rawPendingTransactions.filter((transaction) => {
       const kontoIban = normalizeIban(transaction.konto?.iban);
       return kontoIban === selectedAccountIban;
     });
-  }, [activeAccountIban, selectedAccountIban, rawPendingTransactions]);
+  }, [
+    activeAccountIban,
+    selectedAccountIban,
+    rawPendingTransactions,
+    ignoreActiveAccountFilter,
+  ]);
 
   const ibanReferenceLookup = useMemo(
     () => buildIbanReferenceLookup(ibanReferences),

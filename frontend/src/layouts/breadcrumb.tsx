@@ -105,6 +105,7 @@ function DynamicBreadcrumbs() {
     analytics: "Analyse",
     "finance-plan": "Finanzplan",
     budgets: "Budgets",
+    "account-flow": "Kontenfluss",
   };
 
   return (
