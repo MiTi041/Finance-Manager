@@ -5,8 +5,20 @@ export type AccountFlowPoint = {
   y: number;
 };
 
+export type AccountFlowZone = {
+  id: string;
+  title: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
 export type AccountFlowLayout = {
   positions: Record<string, AccountFlowPoint>;
+  zones: AccountFlowZone[];
+  showEdgeLabels: boolean;
+  notes: Record<string, string>;
 };
 
 export async function fetchAccountFlowLayout(): Promise<AccountFlowLayout> {

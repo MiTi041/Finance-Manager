@@ -16,8 +16,20 @@ class AccountFlowPoint(BaseModel):
     y: float
 
 
+class AccountFlowZone(BaseModel):
+    id: str
+    title: str
+    x: float
+    y: float
+    width: float
+    height: float
+
+
 class AccountFlowLayout(BaseModel):
     positions: dict[str, AccountFlowPoint] = Field(default_factory=dict)
+    zones: list[AccountFlowZone] = Field(default_factory=list)
+    showEdgeLabels: bool = True
+    notes: dict[str, str] = Field(default_factory=dict)
 
 
 @router.get("/account-flow/layout", response_model=AccountFlowLayout)

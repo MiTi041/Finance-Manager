@@ -7,19 +7,32 @@ import {
   type PointerEvent as ReactPointerEvent,
   type WheelEvent as ReactWheelEvent,
 } from "react";
-import { LocateFixed, Minus, Plus, RotateCcw, Waypoints } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  FolderPlus,
+  LocateFixed,
+  Minus,
+  Plus,
+  RotateCcw,
+  StickyNote,
+  Trash2,
+  Waypoints,
+} from "lucide-react";
 
 import { BankLogo } from "@/components/bank-logo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { fetchAccountFlowLayout, saveAccountFlowLayout } from "@/lib/account-flow";
+import type { AccountFlowZone } from "@/lib/account-flow";
 
 import type { AccountFlowEdge, AccountFlowGraph, AccountFlowNode } from "./account-flow-data";
 
 const WIDTH = 1200;
 const HEIGHT = 680;
-const CARD_WIDTH = 196;
-const CARD_HEIGHT = 104;
+const CARD_WIDTH = 250;
+const CARD_MIN_HEIGHT = 104;
+const CARD_MAX_HEIGHT = 152;
 const CORNER_RADIUS = 16;
 
 const MIN_SCALE = 0.4;
@@ -27,12 +40,23 @@ const MAX_SCALE = 2.4;
 const ZOOM_STEP = 0.2;
 const TRANSITION_MS = 220;
 const FIT_PADDING = 56;
+const CONNECTION_LANE_SPACING = 10;
+const MIN_ZONE_WIDTH = 180;
+const MIN_ZONE_HEIGHT = 120;
 
 const COLOR_DEFAULT = "#64748b";
 const COLOR_HOVER = "#54a0ff";
 const COLOR_ACTIVE = "#00d4a1";
 
 type Point = { x: number; y: number };
+
+function getCardHeight(note: string) {
+  if (!note.trim()) return CARD_MIN_HEIGHT;
+  const lineCount = note
+    .split("\n")
+    .reduce((count, line) => count + Math.max(1, Math.ceil(line.length / 34)), 0);
+  return Math.min(CARD_MAX_HEIGHT, CARD_MIN_HEIGHT + Math.max(1, lineCount) * 14);
+}
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -80,8 +104,8 @@ function getFitView(nodes: AccountFlowNode[], positions: Map<string, Point>) {
 
   const minX = Math.min(...nodePositions.map((position) => position.x - CARD_WIDTH / 2));
   const maxX = Math.max(...nodePositions.map((position) => position.x + CARD_WIDTH / 2));
-  const minY = Math.min(...nodePositions.map((position) => position.y - CARD_HEIGHT / 2));
-  const maxY = Math.max(...nodePositions.map((position) => position.y + CARD_HEIGHT / 2));
+  const minY = Math.min(...nodePositions.map((position) => position.y - CARD_MAX_HEIGHT / 2));
+  const maxY = Math.max(...nodePositions.map((position) => position.y + CARD_MAX_HEIGHT / 2));
   const contentWidth = maxX - minX;
   const contentHeight = maxY - minY;
   const scale = clamp(
@@ -112,7 +136,30 @@ function laneOffset(index: number, count: number) {
 }
 
 /** Orthogonal (Manhattan) waypoints between two card edges, offset into a lane to avoid overlap. */
-function connectionWaypoints(source: Point, target: Point, lane: number): Point[] {
+type ConnectionSide = "left" | "right" | "top" | "bottom";
+
+function connectionSide(source: Point, target: Point, isSource: boolean): ConnectionSide {
+  const horizontal = Math.abs(target.x - source.x) >= Math.abs(target.y - source.y);
+  if (horizontal) {
+    const pointsRight = target.x >= source.x;
+    if (isSource) return pointsRight ? "right" : "left";
+    return pointsRight ? "left" : "right";
+  }
+
+  const pointsDown = target.y >= source.y;
+  if (isSource) return pointsDown ? "bottom" : "top";
+  return pointsDown ? "top" : "bottom";
+}
+
+function connectionWaypoints(
+  source: Point,
+  target: Point,
+  lane: number,
+  sourcePort: number,
+  targetPort: number,
+  sourceHeight: number,
+  targetHeight: number,
+): Point[] {
   const dx = target.x - source.x;
   const dy = target.y - source.y;
   const horizontal = Math.abs(dx) >= Math.abs(dy);
@@ -120,23 +167,27 @@ function connectionWaypoints(source: Point, target: Point, lane: number): Point[
   if (horizontal) {
     const sourceX = source.x + (dx >= 0 ? CARD_WIDTH / 2 : -CARD_WIDTH / 2);
     const targetX = target.x - (dx >= 0 ? CARD_WIDTH / 2 : -CARD_WIDTH / 2);
+    const sourceY = source.y + sourcePort * CONNECTION_LANE_SPACING;
+    const targetY = target.y + targetPort * CONNECTION_LANE_SPACING;
     const bendX = (sourceX + targetX) / 2 + lane * 32;
     return [
-      { x: sourceX, y: source.y },
-      { x: bendX, y: source.y },
-      { x: bendX, y: target.y },
-      { x: targetX, y: target.y },
+      { x: sourceX, y: sourceY },
+      { x: bendX, y: sourceY },
+      { x: bendX, y: targetY },
+      { x: targetX, y: targetY },
     ];
   }
 
-  const sourceY = source.y + (dy >= 0 ? CARD_HEIGHT / 2 : -CARD_HEIGHT / 2);
-  const targetY = target.y - (dy >= 0 ? CARD_HEIGHT / 2 : -CARD_HEIGHT / 2);
+  const sourceY = source.y + (dy >= 0 ? sourceHeight / 2 : -sourceHeight / 2);
+  const targetY = target.y - (dy >= 0 ? targetHeight / 2 : -targetHeight / 2);
+  const sourceX = source.x + sourcePort * CONNECTION_LANE_SPACING;
+  const targetX = target.x + targetPort * CONNECTION_LANE_SPACING;
   const bendY = (sourceY + targetY) / 2 + lane * 32;
   return [
-    { x: source.x, y: sourceY },
-    { x: source.x, y: bendY },
-    { x: target.x, y: bendY },
-    { x: target.x, y: targetY },
+    { x: sourceX, y: sourceY },
+    { x: sourceX, y: bendY },
+    { x: targetX, y: bendY },
+    { x: targetX, y: targetY },
   ];
 }
 
@@ -192,9 +243,184 @@ function clientToSvgPoint(svg: SVGSVGElement, clientX: number, clientY: number):
   };
 }
 
+function createZoneId() {
+  return `zone-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function AccountFlowZoneLayer({
+  zone,
+  hovered,
+  onPointerEnter,
+  onPointerLeave,
+  onDelete,
+  onRename,
+  onMoveStart,
+  onResizeStart,
+}: {
+  zone: AccountFlowZone;
+  hovered: boolean;
+  onPointerEnter: () => void;
+  onPointerLeave: () => void;
+  onDelete: () => void;
+  onRename: (title: string) => void;
+  onMoveStart: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  onResizeStart: (direction: ZoneResizeDirection, event: ReactPointerEvent<HTMLDivElement>) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draftTitle, setDraftTitle] = useState(zone.title);
+
+  const commitTitle = () => {
+    const title = draftTitle.trim();
+    if (title) onRename(title);
+    else setDraftTitle(zone.title);
+    setEditing(false);
+  };
+
+  return (
+    <foreignObject
+      x={zone.x}
+      y={zone.y}
+      width={zone.width}
+      height={zone.height}
+      style={{ overflow: "visible" }}
+    >
+      <div
+        className={cn(
+          "group relative h-full w-full rounded-xl border border-dashed border-[#8aa5bd] bg-[#eaf2f8]/70 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.65)] transition-[border-color,background-color,box-shadow] duration-150 dark:border-[#45657c] dark:bg-[#203442]/60",
+          hovered &&
+            "border-[#0f6cbd] bg-[#e4f0f8]/80 shadow-[0_4px_16px_rgba(15,108,189,0.12)] dark:bg-[#24465c]/70",
+        )}
+        onPointerEnter={onPointerEnter}
+        onPointerLeave={onPointerLeave}
+        onPointerDown={onMoveStart}
+      >
+        <div className="absolute inset-x-0 top-0 flex h-9 items-center justify-between border-b border-dashed border-[#8aa5bd]/70 px-3 dark:border-[#45657c]">
+          {editing ? (
+            <input
+              autoFocus
+              value={draftTitle}
+              className="min-w-0 max-w-[calc(100%-2rem)] flex-1 rounded-sm border border-[#8aa5bd] bg-card px-1.5 text-xs font-semibold text-foreground outline-none focus:border-[#0f6cbd]"
+              aria-label="Zonentitel bearbeiten"
+              onChange={(event) => setDraftTitle(event.target.value)}
+              onPointerDown={(event) => event.stopPropagation()}
+              onKeyDown={(event) => {
+                event.stopPropagation();
+                if (event.key === "Enter") commitTitle();
+                if (event.key === "Escape") {
+                  setDraftTitle(zone.title);
+                  setEditing(false);
+                }
+              }}
+              onBlur={commitTitle}
+            />
+          ) : (
+            <button
+              type="button"
+              className="max-w-[calc(100%-2rem)] cursor-text truncate text-left text-xs font-semibold text-[#35556d] outline-none hover:text-[#0f6cbd] dark:text-[#b8d8eb] dark:hover:text-[#8ac7f5]"
+              title="Titel bearbeiten"
+              onDoubleClick={(event) => {
+                event.stopPropagation();
+                setDraftTitle(zone.title);
+                setEditing(true);
+              }}
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              {zone.title}
+            </button>
+          )}
+          <button
+            type="button"
+            className={cn(
+              "flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-control text-[#58758a] transition-opacity hover:bg-[#d7e8f3] hover:text-[#b42318] dark:hover:bg-[#31566d]",
+              hovered ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+            )}
+            aria-label={`Zone ${zone.title} löschen`}
+            title="Zone löschen"
+            onPointerEnter={onPointerEnter}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={onDelete}
+          >
+            <Trash2 className="size-3.5" />
+          </button>
+        </div>
+        <ZoneResizeHandle direction="top" zoneTitle={zone.title} onResizeStart={onResizeStart} />
+        <ZoneResizeHandle direction="right" zoneTitle={zone.title} onResizeStart={onResizeStart} />
+        <ZoneResizeHandle direction="bottom" zoneTitle={zone.title} onResizeStart={onResizeStart} />
+        <ZoneResizeHandle direction="left" zoneTitle={zone.title} onResizeStart={onResizeStart} />
+        <ZoneResizeHandle
+          direction="top-left"
+          zoneTitle={zone.title}
+          onResizeStart={onResizeStart}
+        />
+        <ZoneResizeHandle
+          direction="top-right"
+          zoneTitle={zone.title}
+          onResizeStart={onResizeStart}
+        />
+        <ZoneResizeHandle
+          direction="bottom-right"
+          zoneTitle={zone.title}
+          onResizeStart={onResizeStart}
+        />
+        <ZoneResizeHandle
+          direction="bottom-left"
+          zoneTitle={zone.title}
+          onResizeStart={onResizeStart}
+        />
+      </div>
+    </foreignObject>
+  );
+}
+
+type ZoneResizeDirection =
+  | "top"
+  | "right"
+  | "bottom"
+  | "left"
+  | "top-left"
+  | "top-right"
+  | "bottom-right"
+  | "bottom-left";
+
+function ZoneResizeHandle({
+  direction,
+  zoneTitle,
+  onResizeStart,
+}: {
+  direction: ZoneResizeDirection;
+  zoneTitle: string;
+  onResizeStart: (direction: ZoneResizeDirection, event: ReactPointerEvent<HTMLDivElement>) => void;
+}) {
+  const edgeClasses: Record<ZoneResizeDirection, string> = {
+    top: "inset-x-2 -top-1 h-2 cursor-ns-resize",
+    right: "inset-y-2 -right-1 w-2 cursor-ew-resize",
+    bottom: "inset-x-2 -bottom-1 h-2 cursor-ns-resize",
+    left: "inset-y-2 -left-1 w-2 cursor-ew-resize",
+    "top-left": "-left-1 -top-1 size-3 cursor-nwse-resize rounded-tl",
+    "top-right": "-right-1 -top-1 size-3 cursor-nesw-resize rounded-tr",
+    "bottom-right": "-bottom-1 -right-1 size-3 cursor-nwse-resize rounded-br",
+    "bottom-left": "-bottom-1 -left-1 size-3 cursor-nesw-resize rounded-bl",
+  };
+
+  return (
+    <div
+      className={cn(
+        "absolute z-10 opacity-0 transition-opacity group-hover:opacity-100",
+        edgeClasses[direction],
+      )}
+      aria-label={`Zone ${zoneTitle} an ${direction} resizen`}
+      onPointerDown={(event) => {
+        event.stopPropagation();
+        onResizeStart(direction, event);
+      }}
+    />
+  );
+}
+
 function AccountCard({
   node,
   position,
+  note,
   active,
   dimmed,
   dragging,
@@ -203,9 +429,14 @@ function AccountCard({
   onPointerEnter,
   onPointerLeave,
   onDragStart,
+  onNoteChange,
+  onNoteEditingChange,
+  noteEditing,
+  noteFocusMode,
 }: {
   node: AccountFlowNode;
   position: Point;
+  note: string;
   active: boolean;
   dimmed: boolean;
   dragging: boolean;
@@ -214,13 +445,27 @@ function AccountCard({
   onPointerEnter: () => void;
   onPointerLeave: () => void;
   onDragStart: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  onNoteChange: (note: string) => void;
+  onNoteEditingChange: (editing: boolean) => void;
+  noteEditing: boolean;
+  noteFocusMode: boolean;
 }) {
+  const cardHeight = getCardHeight(note);
+  const [editingNote, setEditingNote] = useState(false);
+  const [draftNote, setDraftNote] = useState(note);
+
+  const commitNote = () => {
+    onNoteChange(draftNote.trim());
+    setEditingNote(false);
+    onNoteEditingChange(false);
+  };
+
   return (
     <foreignObject
       x={position.x - CARD_WIDTH / 2}
-      y={position.y - CARD_HEIGHT / 2}
+      y={position.y - cardHeight / 2}
       width={CARD_WIDTH}
-      height={CARD_HEIGHT}
+      height={cardHeight}
       style={{ overflow: "visible" }}
     >
       <div
@@ -234,6 +479,7 @@ function AccountCard({
           hovered && !dimmed && "border-[#54a0ff]/60 shadow-md",
           dragging && "scale-[1.03] shadow-xl",
           dimmed && "opacity-35",
+          noteFocusMode && !noteEditing && "blur-[3px] opacity-60",
         )}
         onClick={onSelect}
         onPointerEnter={onPointerEnter}
@@ -243,19 +489,70 @@ function AccountCard({
           if (event.key === "Enter" || event.key === " ") onSelect();
         }}
       >
+        <button
+          type="button"
+          className={cn(
+            "absolute right-2 top-2 z-10 flex size-6 cursor-pointer items-center justify-center rounded-control text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+            note && "text-[#0f6cbd]",
+          )}
+          aria-label={note ? "Kontonotiz bearbeiten" : "Kontonotiz hinzufügen"}
+          title={note || "Kontonotiz hinzufügen"}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            setDraftNote(note);
+            setEditingNote((current) => !current);
+            onNoteEditingChange(!editingNote);
+          }}
+        >
+          <StickyNote className="size-3.5" />
+        </button>
+        {editingNote && (
+          <div
+            className="absolute left-2 top-[calc(100%+6px)] z-30 w-[210px] rounded-lg border border-border/70 bg-popover/95 p-1 shadow-[0_8px_24px_rgba(15,23,42,0.16)] backdrop-blur"
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <textarea
+              autoFocus
+              value={draftNote}
+              rows={3}
+              className="block w-full resize-none rounded-sm border-0 bg-muted/45 px-2.5 py-2 text-xs leading-5 text-foreground outline-none placeholder:text-muted-foreground/70 focus:bg-background focus:ring-2 focus:ring-[#0f6cbd]/25"
+              placeholder="z. B. 3,5 % Zinsen"
+              aria-label={`Notiz für ${node.label}`}
+              onChange={(event) => setDraftNote(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  setDraftNote(note);
+                  setEditingNote(false);
+                  onNoteEditingChange(false);
+                }
+                if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) commitNote();
+              }}
+              onBlur={commitNote}
+            />
+          </div>
+        )}
         <BankLogo
           src={node.bankLogo}
           alt={node.bankName}
           sizeClassName="size-11"
           backgroundClassName="bg-muted/70"
         />
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1 pr-7">
           <p className="truncate text-sm font-semibold">{node.label}</p>
           <p className="truncate text-[10px] text-muted-foreground">{node.bankName}</p>
           <p className="truncate text-[10px] text-muted-foreground">{formatIban(node.iban)}</p>
           <p className="truncate text-[10px] font-medium text-foreground">
             Kontostand: {node.balance === undefined ? "-" : formatAmount(node.balance)}
           </p>
+          {note && (
+            <p
+              className="mt-1 line-clamp-3 overflow-hidden text-ellipsis border-t border-border/70 pt-1 text-[10px] font-medium text-[#0f6cbd]"
+              title={note}
+            >
+              {note}
+            </p>
+          )}
         </div>
       </div>
     </foreignObject>
@@ -353,6 +650,11 @@ export function AccountFlowGraph({
   const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
+  const [showEdgeLabels, setShowEdgeLabels] = useState(true);
+  const [hoveredZoneId, setHoveredZoneId] = useState<string | null>(null);
+  const [zones, setZones] = useState<AccountFlowZone[]>([]);
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [editingNoteNodeId, setEditingNoteNodeId] = useState<string | null>(null);
   const [isPanning, setIsPanning] = useState(false);
   const [smoothTransition, setSmoothTransition] = useState(false);
   const [scale, setScale] = useState(1);
@@ -369,6 +671,16 @@ export function AccountFlowGraph({
   const transitionTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const layoutSaveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragState = useRef<{ id: string; origin: Point; position: Point } | null>(null);
+  const zoneDragState = useRef<{ id: string; origin: Point; position: Point } | null>(null);
+  const zoneResizeState = useRef<{
+    id: string;
+    origin: Point;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    direction: ZoneResizeDirection;
+  } | null>(null);
   const panState = useRef<{ origin: Point; offset: Point } | null>(null);
   const pointers = useRef<Map<number, Point>>(new Map());
   const pinchState = useRef<PinchState | null>(null);
@@ -398,6 +710,9 @@ export function AccountFlowGraph({
           );
         });
         setPositions(next);
+        setZones((current) => (current.length > 0 ? current : (layout.zones ?? [])));
+        setShowEdgeLabels(layout.showEdgeLabels ?? true);
+        setNotes((current) => (Object.keys(current).length > 0 ? current : (layout.notes ?? {})));
         const fitView = getFitView(graph.nodes, next);
         setScale(fitView.scale);
         setOffset(fitView.offset);
@@ -424,13 +739,16 @@ export function AccountFlowGraph({
     layoutSaveTimeout.current = setTimeout(() => {
       void saveAccountFlowLayout({
         positions: Object.fromEntries(positions.entries()),
+        zones,
+        showEdgeLabels,
+        notes,
       }).catch(() => undefined);
     }, 400);
 
     return () => {
       if (layoutSaveTimeout.current) clearTimeout(layoutSaveTimeout.current);
     };
-  }, [layoutLoaded, positions]);
+  }, [layoutLoaded, positions, zones, showEdgeLabels, notes]);
 
   useEffect(
     () => () => {
@@ -454,6 +772,28 @@ export function AccountFlowGraph({
     return lanes;
   }, [graph.edges]);
 
+  const edgePorts = useMemo(() => {
+    const groups = new Map<string, string[]>();
+    graph.edges.forEach((edge) => {
+      const source = positions.get(edge.source);
+      const target = positions.get(edge.target);
+      if (!source || !target) return;
+
+      const sourceKey = `${edge.source}|${connectionSide(source, target, true)}`;
+      const targetKey = `${edge.target}|${connectionSide(source, target, false)}`;
+      groups.set(sourceKey, [...(groups.get(sourceKey) ?? []), `${edge.id}:source`]);
+      groups.set(targetKey, [...(groups.get(targetKey) ?? []), `${edge.id}:target`]);
+    });
+
+    const ports = new Map<string, number>();
+    groups.forEach((edgeKeys) => {
+      edgeKeys.forEach((edgeKey, index) => {
+        ports.set(edgeKey, laneOffset(index, edgeKeys.length));
+      });
+    });
+    return ports;
+  }, [graph.edges, positions]);
+
   const edgeGeometry = useMemo(() => {
     const result = new Map<string, { path: string; label: Point }>();
     graph.edges.forEach((edge) => {
@@ -461,7 +801,15 @@ export function AccountFlowGraph({
       const target = positions.get(edge.target);
       if (!source || !target) return;
       const lane = edgeLanes.get(edge.id) ?? 0;
-      const waypoints = connectionWaypoints(source, target, lane);
+      const waypoints = connectionWaypoints(
+        source,
+        target,
+        lane,
+        edgePorts.get(`${edge.id}:source`) ?? 0,
+        edgePorts.get(`${edge.id}:target`) ?? 0,
+        getCardHeight(notes[edge.source] ?? ""),
+        getCardHeight(notes[edge.target] ?? ""),
+      );
       const mid = waypoints[Math.floor(waypoints.length / 2) - 1];
       const midNext = waypoints[Math.floor(waypoints.length / 2)];
       result.set(edge.id, {
@@ -470,7 +818,7 @@ export function AccountFlowGraph({
       });
     });
     return result;
-  }, [graph.edges, positions, edgeLanes]);
+  }, [graph.edges, positions, edgeLanes, edgePorts, notes]);
 
   const connectedEdgeIds = useMemo(() => {
     if (!hoveredNodeId) return null;
@@ -493,12 +841,12 @@ export function AccountFlowGraph({
 
   const orderedNodes = useMemo(() => {
     // Render the hovered/dragged card last so it visually sits above its neighbours.
-    const raised = draggingNodeId ?? hoveredNodeId;
+    const raised = editingNoteNodeId ?? draggingNodeId ?? hoveredNodeId;
     if (!raised) return graph.nodes;
     const rest = graph.nodes.filter((node) => node.id !== raised);
     const front = graph.nodes.find((node) => node.id === raised);
     return front ? [...rest, front] : graph.nodes;
-  }, [graph.nodes, draggingNodeId, hoveredNodeId]);
+  }, [graph.nodes, draggingNodeId, hoveredNodeId, editingNoteNodeId]);
 
   const applyWithTransition = useCallback((next: () => void) => {
     if (transitionTimeout.current) clearTimeout(transitionTimeout.current);
@@ -542,17 +890,88 @@ export function AccountFlowGraph({
   }, [applyWithTransition, graph.nodes]);
 
   const centerView = useCallback(() => {
+    const fitView = getFitView(graph.nodes, positions);
     applyWithTransition(() => {
-      setScale(1);
-      setOffset({ x: 0, y: 0 });
+      setScale(fitView.scale);
+      setOffset(fitView.offset);
     });
-  }, [applyWithTransition]);
+  }, [applyWithTransition, graph.nodes, positions]);
+
+  const addZone = useCallback(() => {
+    let title = "Neue Zone";
+    try {
+      title = window.prompt("Titel der neuen Zone", title)?.trim() || title;
+    } catch {}
+
+    setZones((current) => [
+      ...current,
+      {
+        id: createZoneId(),
+        title,
+        x: 260 + (current.length % 3) * 40,
+        y: 190 + (current.length % 3) * 36,
+        width: 360,
+        height: 220,
+      },
+    ]);
+  }, []);
+
+  const renameZone = useCallback((id: string, title: string) => {
+    setZones((current) => current.map((zone) => (zone.id === id ? { ...zone, title } : zone)));
+  }, []);
+
+  const deleteZone = useCallback((id: string) => {
+    setZones((current) => current.filter((zone) => zone.id !== id));
+    setHoveredZoneId((current) => (current === id ? null : current));
+  }, []);
+
+  const handleZoneMoveStart = useCallback(
+    (id: string, event: ReactPointerEvent<HTMLDivElement>) => {
+      if (editingNoteNodeId) return;
+      event.stopPropagation();
+      const svg = svgRef.current;
+      const zone = zones.find((item) => item.id === id);
+      if (!svg || !zone) return;
+      event.currentTarget.setPointerCapture(event.pointerId);
+      pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      zoneDragState.current = {
+        id,
+        origin: clientToSvgPoint(svg, event.clientX, event.clientY),
+        position: { x: zone.x, y: zone.y },
+      };
+    },
+    [editingNoteNodeId, zones],
+  );
+
+  const handleZoneResizeStart = useCallback(
+    (id: string, direction: ZoneResizeDirection, event: ReactPointerEvent<HTMLDivElement>) => {
+      if (editingNoteNodeId) return;
+      event.stopPropagation();
+      const svg = svgRef.current;
+      const zone = zones.find((item) => item.id === id);
+      if (!svg || !zone) return;
+      event.currentTarget.setPointerCapture(event.pointerId);
+      pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      zoneResizeState.current = {
+        id,
+        origin: clientToSvgPoint(svg, event.clientX, event.clientY),
+        x: zone.x,
+        y: zone.y,
+        width: zone.width,
+        height: zone.height,
+        direction,
+      };
+    },
+    [editingNoteNodeId, zones],
+  );
 
   const endGesture = useCallback((pointerId: number) => {
     pointers.current.delete(pointerId);
     if (pointers.current.size < 2) pinchState.current = null;
     if (pointers.current.size === 0) {
       dragState.current = null;
+      zoneDragState.current = null;
+      zoneResizeState.current = null;
       panState.current = null;
       setDraggingNodeId(null);
       setIsPanning(false);
@@ -560,6 +979,7 @@ export function AccountFlowGraph({
   }, []);
 
   const handleWheel = (event: ReactWheelEvent<SVGSVGElement>) => {
+    if (editingNoteNodeId) return;
     event.preventDefault();
     const svg = svgRef.current;
     if (!svg) return;
@@ -576,6 +996,7 @@ export function AccountFlowGraph({
   };
 
   const handleCanvasPointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (editingNoteNodeId) return;
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (transitionTimeout.current) {
       clearTimeout(transitionTimeout.current);
@@ -613,6 +1034,7 @@ export function AccountFlowGraph({
   };
 
   const handleCanvasPointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (editingNoteNodeId) return;
     if (pointers.current.has(event.pointerId)) {
       pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     }
@@ -638,6 +1060,47 @@ export function AccountFlowGraph({
       return;
     }
 
+    if (zoneResizeState.current) {
+      const resize = zoneResizeState.current;
+      const origin = resize.origin;
+      const current = clientToSvgPoint(svg, event.clientX, event.clientY);
+      const deltaX = (current.x - origin.x) / scale;
+      const deltaY = (current.y - origin.y) / scale;
+      const resizeLeft = resize.direction.includes("left");
+      const resizeTop = resize.direction.includes("top");
+      const nextWidth = Math.max(MIN_ZONE_WIDTH, resize.width + (resizeLeft ? -deltaX : deltaX));
+      const nextHeight = Math.max(MIN_ZONE_HEIGHT, resize.height + (resizeTop ? -deltaY : deltaY));
+      setZones((currentZones) =>
+        currentZones.map((zone) =>
+          zone.id === resize.id
+            ? {
+                ...zone,
+                x: resizeLeft ? resize.x + resize.width - nextWidth : resize.x,
+                y: resizeTop ? resize.y + resize.height - nextHeight : resize.y,
+                width: nextWidth,
+                height: nextHeight,
+              }
+            : zone,
+        ),
+      );
+      return;
+    }
+
+    if (zoneDragState.current) {
+      const drag = zoneDragState.current;
+      const currentSvg = clientToSvgPoint(svg, event.clientX, event.clientY);
+      const deltaX = (currentSvg.x - drag.origin.x) / scale;
+      const deltaY = (currentSvg.y - drag.origin.y) / scale;
+      setZones((currentZones) =>
+        currentZones.map((zone) =>
+          zone.id === drag.id
+            ? { ...zone, x: drag.position.x + deltaX, y: drag.position.y + deltaY }
+            : zone,
+        ),
+      );
+      return;
+    }
+
     if (dragState.current) {
       const drag = dragState.current;
       const currentSvg = clientToSvgPoint(svg, event.clientX, event.clientY);
@@ -660,15 +1123,18 @@ export function AccountFlowGraph({
   };
 
   const handleCanvasPointerUp = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (editingNoteNodeId) return;
     endGesture(event.pointerId);
   };
 
   const handleCanvasDoubleClick = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (editingNoteNodeId) return;
     if (event.target !== event.currentTarget) return;
     resetView();
   };
 
   const handleContainerKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (editingNoteNodeId) return;
     if (event.key === "+" || event.key === "=") {
       event.preventDefault();
       zoomBy(ZOOM_STEP);
@@ -695,6 +1161,27 @@ export function AccountFlowGraph({
           </span>
         </div>
         <div className="absolute bottom-4 right-4 z-10 flex gap-1 rounded-lg border border-border bg-card/90 p-1 backdrop-blur">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            aria-label="Zone erstellen"
+            title="Zone erstellen"
+            onClick={addZone}
+          >
+            <FolderPlus className="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            aria-label={showEdgeLabels ? "Labels ausblenden" : "Labels einblenden"}
+            aria-pressed={showEdgeLabels}
+            title={showEdgeLabels ? "Labels ausblenden" : "Labels einblenden"}
+            onClick={() => setShowEdgeLabels((visible) => !visible)}
+          >
+            {showEdgeLabels ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
+          </Button>
           <Button
             variant="ghost"
             size="icon"
@@ -774,6 +1261,31 @@ export function AccountFlowGraph({
               fill="url(#canvas-dots)"
               data-canvas-background="true"
             />
+            {zones.map((zone) => (
+              <g
+                key={zone.id}
+                className={cn(editingNoteNodeId && "pointer-events-none blur-[3px] opacity-60")}
+              >
+                <AccountFlowZoneLayer
+                  zone={zone}
+                  hovered={hoveredZoneId === zone.id}
+                  onPointerEnter={() => {
+                    if (!editingNoteNodeId) setHoveredZoneId(zone.id);
+                  }}
+                  onPointerLeave={() => {
+                    if (!editingNoteNodeId) {
+                      setHoveredZoneId((current) => (current === zone.id ? null : current));
+                    }
+                  }}
+                  onDelete={() => deleteZone(zone.id)}
+                  onRename={(title) => renameZone(zone.id, title)}
+                  onMoveStart={(event) => handleZoneMoveStart(zone.id, event)}
+                  onResizeStart={(direction, event) =>
+                    handleZoneResizeStart(zone.id, direction, event)
+                  }
+                />
+              </g>
+            ))}
             {graph.edges.map((edge) => {
               const geometry = edgeGeometry.get(edge.id);
               if (!geometry) return null;
@@ -789,13 +1301,17 @@ export function AccountFlowGraph({
               const dimmedByHover = connectedEdgeIds !== null && !connected;
 
               return (
-                <g key={edge.id}>
+                <g
+                  key={edge.id}
+                  className={editingNoteNodeId ? "blur-[3px] opacity-60" : undefined}
+                >
                   <path
                     d={geometry.path}
                     fill="none"
+                    pointerEvents="none"
                     stroke={color}
                     strokeOpacity={dimmedByHover ? 0.1 : emphasized ? 0.65 : 0.35}
-                    strokeWidth={selected ? 2.5 : 2}
+                    strokeWidth={4}
                     strokeLinecap="round"
                     className="transition-[stroke,stroke-opacity,stroke-width] duration-150 ease-out"
                     onClick={() => setSelectedEdgeId(edge.id)}
@@ -817,15 +1333,38 @@ export function AccountFlowGraph({
                   key={node.id}
                   node={node}
                   position={position}
+                  note={notes[node.id] ?? ""}
+                  noteEditing={editingNoteNodeId === node.id}
+                  noteFocusMode={editingNoteNodeId !== null}
                   active={activeAccountIban !== "all" && activeAccountIban === node.id}
                   dimmed={dimmedByAccount || dimmedByHover}
                   dragging={draggingNodeId === node.id}
                   hovered={hoveredNodeId === node.id}
                   onSelect={() => setSelectedEdgeId(null)}
-                  onPointerEnter={() => setHoveredNodeId(node.id)}
-                  onPointerLeave={() =>
-                    setHoveredNodeId((current) => (current === node.id ? null : current))
+                  onPointerEnter={() => {
+                    if (!editingNoteNodeId) setHoveredNodeId(node.id);
+                  }}
+                  onPointerLeave={() => {
+                    if (!editingNoteNodeId) {
+                      setHoveredNodeId((current) => (current === node.id ? null : current));
+                    }
+                  }}
+                  onNoteChange={(note) =>
+                    setNotes((current) => {
+                      const next = { ...current };
+                      if (note) next[node.id] = note;
+                      else delete next[node.id];
+                      return next;
+                    })
                   }
+                  onNoteEditingChange={(editing) => {
+                    setEditingNoteNodeId(editing ? node.id : null);
+                    if (editing) {
+                      setHoveredNodeId(null);
+                      setHoveredEdgeId(null);
+                      setHoveredZoneId(null);
+                    }
+                  }}
                   onDragStart={(event) => {
                     event.stopPropagation();
                     if (transitionTimeout.current) {
@@ -849,40 +1388,45 @@ export function AccountFlowGraph({
                 />
               );
             })}
-            {graph.edges.map((edge) => {
-              const geometry = edgeGeometry.get(edge.id);
-              if (!geometry) return null;
-              const selected = edge.id === selectedEdgeId;
-              const hovered = edge.id === hoveredEdgeId;
-              const connected = connectedEdgeIds ? connectedEdgeIds.has(edge.id) : true;
-              const emphasized = selected || hovered || (connectedEdgeIds !== null && connected);
-              const color = selected
-                ? COLOR_ACTIVE
-                : hovered || connected
-                  ? COLOR_HOVER
-                  : COLOR_DEFAULT;
-              const dimmedByHover = connectedEdgeIds !== null && !connected;
+            {!editingNoteNodeId &&
+              showEdgeLabels &&
+              graph.edges.map((edge) => {
+                const geometry = edgeGeometry.get(edge.id);
+                if (!geometry) return null;
+                const selected = edge.id === selectedEdgeId;
+                const hovered = edge.id === hoveredEdgeId;
+                const connected = connectedEdgeIds ? connectedEdgeIds.has(edge.id) : true;
+                const emphasized = selected || hovered || (connectedEdgeIds !== null && connected);
+                const color = selected
+                  ? COLOR_ACTIVE
+                  : hovered || connected
+                    ? COLOR_HOVER
+                    : COLOR_DEFAULT;
+                const dimmedByHover = connectedEdgeIds !== null && !connected;
 
-              return (
-                <g
-                  key={`${edge.id}-label`}
-                  className="transition-opacity duration-150 ease-out"
-                  style={{ opacity: dimmedByHover ? 0.25 : 1 }}
-                >
-                  <EdgeLabel
-                    edge={edge}
-                    position={geometry.label}
-                    color={color}
-                    emphasized={emphasized}
-                    onSelect={() => setSelectedEdgeId(edge.id)}
-                    onPointerEnter={() => setHoveredEdgeId(edge.id)}
-                    onPointerLeave={() =>
-                      setHoveredEdgeId((current) => (current === edge.id ? null : current))
-                    }
-                  />
-                </g>
-              );
-            })}
+                return (
+                  <g
+                    key={`${edge.id}-label`}
+                    className={cn(
+                      "pointer-events-none transition-opacity duration-150 ease-out",
+                      editingNoteNodeId && "blur-[3px] opacity-60",
+                    )}
+                    style={{ opacity: dimmedByHover ? 0.25 : 1 }}
+                  >
+                    <EdgeLabel
+                      edge={edge}
+                      position={geometry.label}
+                      color={color}
+                      emphasized={emphasized}
+                      onSelect={() => setSelectedEdgeId(edge.id)}
+                      onPointerEnter={() => setHoveredEdgeId(edge.id)}
+                      onPointerLeave={() =>
+                        setHoveredEdgeId((current) => (current === edge.id ? null : current))
+                      }
+                    />
+                  </g>
+                );
+              })}
           </g>
         </svg>
       </div>
