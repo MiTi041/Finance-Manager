@@ -7,7 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { FilterX, SearchX, Landmark } from "lucide-react";
+import { FilterX, SearchX, Landmark, ArrowRightLeft } from "lucide-react";
 
 import { type TransactionCategoryOption } from "@/lib/utils/categories";
 
@@ -15,15 +15,18 @@ type TransactionsFilterBarProps = {
   onlyUnassigned: boolean;
   onlyUnknownIban: boolean;
   showDeletedBanks: boolean;
+  hideMigrated: boolean;
   unassignedCount: number;
   unknownIbanCount: number;
   deletedBankCount: number;
+  migratedCount: number;
   amountFilter: string;
   categoryFilter: string;
   categoryOptions: TransactionCategoryOption[];
   onToggleOnlyUnassigned: () => void;
   onToggleOnlyUnknownIban: () => void;
   onToggleShowDeletedBanks: () => void;
+  onToggleHideMigrated: () => void;
   onAmountFilterChange: (value: string) => void;
   onCategoryFilterChange: (value: string) => void;
 };
@@ -32,15 +35,18 @@ export function TransactionsFilterBar({
   onlyUnassigned,
   onlyUnknownIban,
   showDeletedBanks,
+  hideMigrated,
   unassignedCount,
   unknownIbanCount,
   deletedBankCount,
+  migratedCount,
   amountFilter,
   categoryFilter,
   categoryOptions,
   onToggleOnlyUnassigned,
   onToggleOnlyUnknownIban,
   onToggleShowDeletedBanks,
+  onToggleHideMigrated,
   onAmountFilterChange,
   onCategoryFilterChange,
 }: TransactionsFilterBarProps) {
@@ -120,6 +126,32 @@ export function TransactionsFilterBar({
             }
           >
             {deletedBankCount}
+          </span>
+        </Button>
+      )}
+
+      {(migratedCount > 0 || hideMigrated) && (
+        <Button
+          type="button"
+          variant="ghost"
+          aria-pressed={hideMigrated}
+          className={
+            hideMigrated
+              ? "!bg-foreground !text-background hover:!bg-foreground/90 hover:!text-background"
+              : "!bg-muted !text-muted-foreground hover:!bg-muted/80 hover:!text-foreground"
+          }
+          onClick={onToggleHideMigrated}
+        >
+          <ArrowRightLeft className="size-4" />
+          <span>Migrierte Transaktionen ausblenden</span>
+          <span
+            className={
+              hideMigrated
+                ? "hidden shrink-0 rounded-full bg-amber-500/20 px-1.5 py-px text-[10px] font-medium text-amber-200 sm:inline dark:text-amber-300"
+                : "hidden shrink-0 rounded-full bg-amber-500/10 px-1.5 py-px text-[10px] font-medium text-amber-700 sm:inline dark:text-amber-400"
+            }
+          >
+            {migratedCount}
           </span>
         </Button>
       )}

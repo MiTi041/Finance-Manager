@@ -3,6 +3,7 @@ from finance_server.db.credentials import (
     find_bank_account_by_iban,
     load_bank_credentials,
     save_bank_credentials,
+    update_account_balance,
     update_bank_account,
 )
 
@@ -66,6 +67,29 @@ def test_resave_without_can_transfer_keeps_previous():
     )
     loaded = load_bank_credentials(scope)
     assert loaded["accounts"][0]["can_transfer"] is False
+
+
+def test_resave_keeps_balance_correction():
+    scope = save_bank_credentials(
+        {
+            "bank_key": "norisbank",
+            "username": "balance-user",
+            "pin": "p",
+            "accounts": [{"iban": "DE1", "account_name": "Giro"}],
+        }
+    )
+    update_account_balance(scope, "DE1", 3.14)
+    save_bank_credentials(
+        {
+            "bank_key": "norisbank",
+            "username": "balance-user",
+            "pin": "p",
+            "accounts": [{"iban": "DE1", "account_name": "Giro"}],
+        },
+        scope=scope,
+    )
+    loaded = load_bank_credentials(scope)
+    assert loaded["accounts"][0]["balance"] == 3.14
 
 
 def test_public_status_falls_back_to_bank_level():

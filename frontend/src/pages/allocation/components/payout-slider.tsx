@@ -15,7 +15,10 @@ const sanitizeEuros = (s: string): string => {
   const sepIndex = scrubbed.search(/[,.]/);
   if (sepIndex === -1) return scrubbed;
   const intPart = scrubbed.slice(0, sepIndex);
-  const decPart = scrubbed.slice(sepIndex + 1).replace(/[,.]/g, "").slice(0, 2);
+  const decPart = scrubbed
+    .slice(sepIndex + 1)
+    .replace(/[,.]/g, "")
+    .slice(0, 2);
   return `${intPart},${decPart}`;
 };
 
@@ -60,14 +63,16 @@ export function PayoutSlider({
   const atAnchor = anchorValue != null && Math.abs(value - anchorValue) < 0.5;
 
   const fillClass = variant === "destructive" ? "bg-destructive" : "bg-primary";
-  const activePresetClass = variant === "destructive"
-    ? "bg-destructive/10 text-destructive"
-    : "bg-primary/10 text-primary";
-  const focusRingClass = variant === "destructive"
-    ? "focus-visible:ring-destructive/40"
-    : "focus-visible:ring-primary/40";
+  const activePresetClass =
+    variant === "destructive" ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary";
+  const focusRingClass =
+    variant === "destructive"
+      ? "focus-visible:ring-destructive/40"
+      : "focus-visible:ring-primary/40";
   const anchorLineClass = atAnchor
-    ? variant === "destructive" ? "bg-destructive" : "bg-primary"
+    ? variant === "destructive"
+      ? "bg-destructive"
+      : "bg-primary"
     : "bg-foreground/25";
 
   const resolveValue = (raw: number) => {
@@ -102,7 +107,7 @@ export function PayoutSlider({
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (max <= 0) return;
-    const coarseStep = Math.max(0.01, Math.round(max / 20 * 100) / 100);
+    const coarseStep = Math.max(0.01, Math.round((max / 20) * 100) / 100);
     const fineStep = max < 2 ? 0.01 : 1;
     const step = e.shiftKey ? coarseStep : fineStep;
     if (e.key === "ArrowRight" || e.key === "ArrowUp") {
@@ -137,7 +142,9 @@ export function PayoutSlider({
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               }).format(bigCents / 100)}
-              style={{ width: `${new Intl.NumberFormat("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(bigCents / 100).length}ch` }}
+              style={{
+                width: `${new Intl.NumberFormat("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(bigCents / 100).length}ch`,
+              }}
               onKeyDown={(e) => {
                 if (/^[0-9]$/.test(e.key)) {
                   e.preventDefault();
@@ -218,7 +225,7 @@ export function PayoutSlider({
         </p>
       )}
 
-      <div className="space-y-1">
+      <div className="space-y-1  px-3">
         <div
           ref={trackRef}
           className="relative flex h-5 items-center cursor-pointer touch-none select-none"
@@ -232,7 +239,9 @@ export function PayoutSlider({
             className={`absolute h-1.5 rounded-full ${fillClass} ${
               dragging ? "" : "transition-[width] duration-300 ease-out"
             }`}
-            style={{ width: `${pct}%`, minWidth: pct > 0 ? "8px" : undefined } as React.CSSProperties}
+            style={
+              { width: `${pct}%`, minWidth: pct > 0 ? "8px" : undefined } as React.CSSProperties
+            }
           />
 
           {anchorPct != null && (

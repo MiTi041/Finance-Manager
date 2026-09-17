@@ -90,6 +90,7 @@ export default function TransactionsPage() {
   const [onlyUnassigned, setOnlyUnassigned] = useState(false);
   const [onlyUnknownIban, setOnlyUnknownIban] = useState(false);
   const [showDeletedBanks, setShowDeletedBanks] = useState(false);
+  const [hideMigrated, setHideMigrated] = useState(false);
   const [amountFilter, setAmountFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [visibleTransactions, setVisibleTransactions] = useState<Transaction[]>([]);
@@ -247,6 +248,7 @@ export default function TransactionsPage() {
     let unassigned = 0;
     let unknownIban = 0;
     let deletedBank = 0;
+    let migrated = 0;
 
     for (const transaction of transactions) {
       const kategorieId = transaction.technisch.kategorieId;
@@ -255,6 +257,7 @@ export default function TransactionsPage() {
       const partnerIban = normalizeIban(transaction.zahlungspartner.iban);
       const isUnknownIban = partnerIban.length > 0 && !ibanToZahlungspartner.has(partnerIban);
       const isBankDeleted = transaction.technisch.bankDeleted;
+      const isMigrated = transaction.herkunft != null;
 
       if (amountFilter === "income" && !isIncome) continue;
       if (amountFilter === "expense" && isIncome) continue;
@@ -266,6 +269,7 @@ export default function TransactionsPage() {
         let passes = true;
         if (showDeletedBanks && !isBankDeleted) passes = false;
         if (onlyUnknownIban && !isUnknownIban) passes = false;
+        if (hideMigrated && isMigrated) passes = false;
         if (passes && isUnassigned) unassigned++;
       }
 
@@ -273,6 +277,7 @@ export default function TransactionsPage() {
         let passes = true;
         if (showDeletedBanks && !isBankDeleted) passes = false;
         if (onlyUnassigned && !isUnassigned) passes = false;
+        if (hideMigrated && isMigrated) passes = false;
         if (passes && isUnknownIban) unknownIban++;
       }
 
@@ -280,11 +285,20 @@ export default function TransactionsPage() {
         let passes = true;
         if (onlyUnassigned && !isUnassigned) passes = false;
         if (onlyUnknownIban && !isUnknownIban) passes = false;
+        if (hideMigrated && isMigrated) passes = false;
         if (passes && isBankDeleted) deletedBank++;
+      }
+
+      {
+        let passes = true;
+        if (showDeletedBanks && !isBankDeleted) passes = false;
+        if (onlyUnassigned && !isUnassigned) passes = false;
+        if (onlyUnknownIban && !isUnknownIban) passes = false;
+        if (passes && isMigrated) migrated++;
       }
     }
 
-    return { unassigned, unknownIban, deletedBank };
+    return { unassigned, unknownIban, deletedBank, migrated };
   }, [
     transactions,
     ibanToZahlungspartner,
@@ -293,6 +307,7 @@ export default function TransactionsPage() {
     onlyUnassigned,
     onlyUnknownIban,
     showDeletedBanks,
+    hideMigrated,
   ]);
 
   const transactionSortItems = useMemo(
@@ -546,6 +561,7 @@ export default function TransactionsPage() {
       const unknownIban = partnerIban.length > 0 && !ibanToZahlungspartner.has(partnerIban);
 
       if (showDeletedBanks && !transaction.technisch.bankDeleted) return false;
+      if (hideMigrated && transaction.herkunft) return false;
       if (onlyUnassigned && !isUnassigned) return false;
       if (onlyUnknownIban && !unknownIban) return false;
       if (amountFilter === "income" && !isIncome) return false;
@@ -563,6 +579,7 @@ export default function TransactionsPage() {
     onlyUnassigned,
     onlyUnknownIban,
     showDeletedBanks,
+    hideMigrated,
     transactions,
   ]);
 
@@ -739,15 +756,18 @@ export default function TransactionsPage() {
             onlyUnassigned={onlyUnassigned}
             onlyUnknownIban={onlyUnknownIban}
             showDeletedBanks={showDeletedBanks}
+            hideMigrated={hideMigrated}
             unassignedCount={filterCounts.unassigned}
             unknownIbanCount={filterCounts.unknownIban}
             deletedBankCount={filterCounts.deletedBank}
+            migratedCount={filterCounts.migrated}
             amountFilter={amountFilter}
             categoryFilter={categoryFilter}
             categoryOptions={categoryFilterOptions}
             onToggleOnlyUnassigned={() => setOnlyUnassigned((current) => !current)}
             onToggleOnlyUnknownIban={() => setOnlyUnknownIban((current) => !current)}
             onToggleShowDeletedBanks={() => setShowDeletedBanks((current) => !current)}
+            onToggleHideMigrated={() => setHideMigrated((current) => !current)}
             onAmountFilterChange={setAmountFilter}
             onCategoryFilterChange={setCategoryFilter}
           />,

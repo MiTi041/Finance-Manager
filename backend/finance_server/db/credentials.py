@@ -117,7 +117,7 @@ def _sync_bank_accounts(
     accounts: list[dict[str, Any]],
 ) -> None:
     existing = connection.execute(
-        "SELECT iban, holder_name, archived, can_transfer, can_transfer_override "
+        "SELECT iban, holder_name, archived, can_transfer, can_transfer_override, balance "
         "FROM bank_accounts WHERE scope = ?",
         (scope,),
     ).fetchall()
@@ -134,6 +134,12 @@ def _sync_bank_accounts(
     previous_override = {
         normalize_text(row["iban"]).upper(): row["can_transfer_override"] for row in existing
     }
+    # ponytail: Saldo-Korrektur gehört nicht in die Credentials, muss aber das
+    # DELETE+INSERT überleben, sonst ist der echte Kontostand nach jedem
+    # GET /bank-credentials wieder weg.
+    previous_balance = {
+        normalize_text(row["iban"]).upper(): row["balance"] for row in existing
+    }
 
     connection.execute("DELETE FROM bank_accounts WHERE scope = ?", (scope,))
 
@@ -145,8 +151,8 @@ def _sync_bank_accounts(
         """
         INSERT INTO bank_accounts
             (scope, iban, account_name, holder_name, archived, can_transfer,
-             can_transfer_override, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             can_transfer_override, balance, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
             (
@@ -161,6 +167,7 @@ def _sync_bank_accounts(
                     previous_can_transfer.get(normalize_text(account["iban"]).upper()),
                 ),
                 previous_override.get(normalize_text(account["iban"]).upper()),
+                previous_balance.get(normalize_text(account["iban"]).upper()),
                 now,
                 now,
             )
