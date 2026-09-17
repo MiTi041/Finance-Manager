@@ -5,6 +5,54 @@ on:
     branches: [main]
 
 permissions:
+  contents: write
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.package-version.outputs.version }}
+      tag_exists: ${{ steps.check-tag.outputs.exists }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read package.json version
+        id: package-version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check if tag already exists
+        id: check-tag
+        run: |
+          VERSION="${{ steps.package-version.outputs.version }}"
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Tag v$VERSION already exists — skipping release."
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    needs: check-version
+    if: needs.check-version.outputs.tag_exists == 'false'
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 9
@@ -39,6 +87,7 @@ permissions:
           pip install -r backend/requirements.txt pyinstaller
 
       - name: Build backend
+        shell: bash
         run: |
           cd backend
           pyinstaller --clean --noconfirm finance_server_bin.spec
