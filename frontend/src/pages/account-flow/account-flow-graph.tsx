@@ -1028,9 +1028,7 @@ export function AccountFlowGraph({
     }
 
     const anchorSvg = clientToSvgPoint(svg, event.clientX, event.clientY);
-    const sensitivity = event.ctrlKey
-      ? TRACKPAD_PINCH_SENSITIVITY
-      : MOUSE_WHEEL_ZOOM_SENSITIVITY;
+    const sensitivity = event.ctrlKey ? TRACKPAD_PINCH_SENSITIVITY : MOUSE_WHEEL_ZOOM_SENSITIVITY;
     zoomAround(scale * Math.exp(-event.deltaY * sensitivity), anchorSvg);
   };
 
