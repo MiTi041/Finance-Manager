@@ -640,6 +640,65 @@ class TestVorgemerkteLogging:
         ops = test_db.execute("SELECT table_name, op_type FROM sync_ops").fetchall()
         assert len(ops) == 1
 
+    def test_fetch_pending_matches_formatted_iban(self, test_db, monkeypatch):
+        from finance_server.db import transactions
+
+        monkeypatch.setattr(transactions, "get_connection", lambda: test_db)
+        iban = "DE89 3704 0044 0532 0130 00"
+        assert transactions.replace_pending_transactions(
+            [{"account": {"iban": iban}, "data": {"amount": -9.99, "date": "2026-07-01"}}]
+        ) == 1
+
+        rows = transactions.fetch_pending_transactions("DE89370400440532013000")
+
+        assert len(rows) == 1
+        assert rows[0]["account_iban"] == iban
+
+    def test_scoped_replace_keeps_other_accounts_pending(self, test_db, monkeypatch):
+        from finance_server.db import transactions
+
+        monkeypatch.setattr(transactions, "get_connection", lambda: test_db)
+        rows_a = [
+            {"account": {"iban": "DE111"}, "data": {"amount": -9.99, "date": "2026-07-01", "applicant_name": "A"}},
+        ]
+        rows_b = [
+            {"account": {"iban": "DE222"}, "data": {"amount": -4.99, "date": "2026-07-02", "applicant_name": "B"}},
+        ]
+        assert transactions.replace_pending_transactions(rows_a, ["DE111"]) == 1
+        assert transactions.replace_pending_transactions(rows_b, ["DE222"]) == 1
+
+        pending = test_db.execute(
+            "SELECT account_iban FROM vorgemerkte_umsaetze ORDER BY account_iban"
+        ).fetchall()
+        assert [row["account_iban"] for row in pending] == ["DE111", "DE222"]
+
+    def test_scoped_replace_clears_only_scoped_account(self, test_db, monkeypatch):
+        from finance_server.db import transactions
+
+        monkeypatch.setattr(transactions, "get_connection", lambda: test_db)
+        transactions.replace_pending_transactions(
+            [
+                {
+                    "account": {"iban": "DE111"},
+                    "data": {"amount": -9.99, "date": "2026-07-01"},
+                }
+            ],
+            ["DE111"],
+        )
+        transactions.replace_pending_transactions(
+            [
+                {
+                    "account": {"iban": "DE222"},
+                    "data": {"amount": -4.99, "date": "2026-07-02"},
+                }
+            ],
+            ["DE222"],
+        )
+
+        assert transactions.replace_pending_transactions([], ["DE111"]) == 0
+        pending = test_db.execute("SELECT account_iban FROM vorgemerkte_umsaetze").fetchall()
+        assert [row["account_iban"] for row in pending] == ["DE222"]
+
 
 class TestRefundLinks:
     def _link(self, row_id: int, refund_tx: int, expense_tx: int, amount: float) -> dict:

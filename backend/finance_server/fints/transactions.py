@@ -1,6 +1,6 @@
 import datetime
 import logging
-from typing import Any
+from typing import Any, Iterable
 
 from finance_server.db import (
     compute_and_store_balance_corrections,
@@ -170,8 +170,10 @@ def store_transactions_in_local_db(transactions: list[dict[str, Any]]) -> int:
     return int(result.get("inserted", 0))
 
 
-def store_pending_in_local_db(pending: list[dict[str, Any]]) -> int:
-    return replace_local_pending_transactions(pending)
+def store_pending_in_local_db(
+    pending: list[dict[str, Any]], account_ibans: Iterable[str] | None = None
+) -> int:
+    return replace_local_pending_transactions(pending, account_ibans)
 
 
 def list_transactions_from_local_db(days: int | None, iban: str | None) -> list[dict[str, Any]]:
@@ -224,6 +226,7 @@ def fetch_transactions(
         client = make_client(creds, from_data)
         bootstrap_client(client)
         all_columns, transactions, balances, pending_transactions = set(), [], [], []
+        synced_ibans: list[str] = []
         end = datetime.date.today()
 
         with client:
@@ -242,6 +245,7 @@ def fetch_transactions(
                 if (not iban or a.iban == iban)
                 and "".join(str(a.iban).split()).upper() not in excluded
             ]:
+                synced_ibans.append(account.iban)
                 try:
                     bal_obj = client.get_balance(account)
                     bal_amt = getattr(bal_obj, "amount", None)
@@ -385,6 +389,7 @@ def fetch_transactions(
                 "balances": balances, "all_columns": sorted(all_columns),
                 "count": len(transactions), "transactions": transactions,
                 "pending_count": len(pending_transactions), "pending": pending_transactions,
+                "synced_ibans": synced_ibans,
             }
 
     return with_state_retry(creds, _run, tan)
@@ -423,7 +428,7 @@ def fetch_and_store_transactions(
         logging.exception("Lokale DB-Synchronisation fehlgeschlagen")
         sync_error = str(err)
     try:
-        store_pending_in_local_db(payload.get("pending", []))
+        store_pending_in_local_db(payload.get("pending", []), payload.get("synced_ibans"))
     except Exception as err:
         logging.exception("Lokale DB-Synchronisation vorgemerkter Umsätze fehlgeschlagen")
         pending_error = str(err)

@@ -93,8 +93,9 @@ export function useFinanceData(
     } else {
       params.set("days", "36500");
     }
-    if (!ignoreActiveAccountFilter && activeAccountIban !== "all") {
-      params.set("iban", activeAccountIban);
+    const normalizedAccountIban = normalizeIban(activeAccountIban);
+    if (!ignoreActiveAccountFilter && normalizedAccountIban) {
+      params.set("iban", normalizedAccountIban);
     }
     return params.toString();
   }, [activeAccountIban, dateFilter, ignoreActiveAccountFilter]);
@@ -152,7 +153,7 @@ export function useFinanceData(
     [accountOptions, activeAccountIban],
   );
 
-  const selectedAccountIban = activeAccountIban === "all" ? null : activeAccountIban;
+  const selectedAccountIban = normalizeIban(activeAccountIban) || null;
 
   const accountFilteredTransactions = useMemo(() => {
     if (ignoreActiveAccountFilter || activeAccountIban === "all" || !selectedAccountIban) {

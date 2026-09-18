@@ -11,7 +11,12 @@ from finance_server.db import (
     list_bank_credentials,
 )
 
-from .transactions import fetch_transactions, store_transactions_in_local_db, resolve_auto_sync_days
+from .transactions import (
+    fetch_transactions,
+    resolve_auto_sync_days,
+    store_pending_in_local_db,
+    store_transactions_in_local_db,
+)
 
 _sync_status_lock = threading.Lock()
 _sync_state: dict[str, Any] = {"current": None, "progress": [], "last_run": None}
@@ -91,6 +96,12 @@ def sync_all_worker(days: int | None = None) -> None:
                     store_transactions_in_local_db(payload.get("transactions", []))
                 except Exception:
                     logging.exception("Lokale DB Sync failed for %s", scope)
+                try:
+                    store_pending_in_local_db(
+                        payload.get("pending", []), payload.get("synced_ibans")
+                    )
+                except Exception:
+                    logging.exception("Lokale DB Sync vorgemerkter Umsätze failed for %s", scope)
                 try:
                     compute_and_store_balance_corrections(scope, payload.get("balances", []))
                 except Exception:

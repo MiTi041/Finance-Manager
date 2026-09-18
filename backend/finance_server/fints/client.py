@@ -382,8 +382,9 @@ def _apply_bank_specific_client_config(
         # 0030/3955-Antwort kommt am HKIDN-Segment an (siehe fints/dialog.py).
         client._finance_force_tan_mechanism = "901"
         # Trotz HKKAZ:N in HIPINS lehnt Consorsbank den Umsatzabruf ohne HKTAN
-        # mit 9010 "Verarbeitung nicht moeglich" ab.
-        client.force_twostep_tan = {"HKKAZ"}
+        # mit 9010 "Verarbeitung nicht moeglich" ab. HKSAL antwortet ohne HKTAN
+        # mit 9075 "Starke Authentifizierung erforderlich".
+        client.force_twostep_tan = {"HKKAZ", "HKSAL"}
 
     bank = get_bank_definition(creds.bank_key)
     if bank.decoupled_login and not (creds.tan_medium or "").strip():

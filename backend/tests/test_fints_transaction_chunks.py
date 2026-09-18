@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import finance_server.services  # noqa: F401  breaks fints circular import
 from finance_server.fints.transactions import (
@@ -10,6 +11,7 @@ from finance_server.fints.transactions import (
     _is_out_of_range_error,
     _storage_days_from_segment,
 )
+from finance_server.fints import sync
 from finance_server.fints.sync import _archived_ibans
 
 
@@ -153,3 +155,35 @@ def test_account_storage_days_falls_back_to_camt():
 
 def test_account_storage_days_returns_none_without_bpd():
     assert _account_storage_days(SimpleNamespace(bpd=None), FakeAccount()) is None
+
+
+def test_sync_all_worker_stores_pending_transactions():
+    stored = {"bank_key": "norisbank", "scope": "norisbank"}
+    payload = {
+        "transactions": [{"id": "booked"}],
+        "pending": [{"id": "pending"}],
+        "balances": [],
+    }
+    stored_transactions = []
+    stored_pending = []
+
+    with (
+        patch.object(sync, "list_bank_credentials", return_value=[stored]),
+        patch.object(sync.BankCredentials, "model_validate", return_value=SimpleNamespace(scope="norisbank")),
+        patch.object(sync, "fetch_transactions", return_value=payload),
+        patch.object(
+            sync,
+            "store_transactions_in_local_db",
+            side_effect=lambda rows: stored_transactions.extend(rows),
+        ),
+        patch.object(
+            sync,
+            "store_pending_in_local_db",
+            side_effect=lambda rows, *args: stored_pending.extend(rows),
+        ),
+        patch.object(sync, "compute_and_store_balance_corrections"),
+    ):
+        sync.sync_all_worker(days=7)
+
+    assert stored_transactions == payload["transactions"]
+    assert stored_pending == payload["pending"]

@@ -121,7 +121,7 @@ def test_consorsbank_forces_decoupled_mechanism_without_skipping_init_tan():
         client, BankCredentials(bank_key="consorsbank", username="u", pin="p")
     )
     assert client._finance_force_tan_mechanism == "901"
-    assert client.force_twostep_tan == {"HKKAZ"}
+    assert client.force_twostep_tan == {"HKKAZ", "HKSAL"}
     assert not getattr(client, "_finance_skip_init_tan", False)
 
 

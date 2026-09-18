@@ -773,7 +773,9 @@ export default function TransactionsPage() {
           />,
         ]}
         filterItem={handleFilterTransaction}
-        getItemKey={(transaction) => transaction.id}
+        getItemKey={(transaction) =>
+          `${transaction.technisch.isPending ? "pending" : "booked"}:${transaction.id}`
+        }
         getItemHeight={(transaction) => {
           if (transaction.technisch.isPending) return 88;
           if (expandedTransactionId !== transaction.id) return 88;

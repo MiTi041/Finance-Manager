@@ -298,15 +298,47 @@ _PENDING_INSERT_PLACEHOLDERS = (
 )
 
 
-def replace_pending_transactions(rows: Iterable[dict[str, Any]]) -> int:
+def _normalize_iban(value: Any) -> str:
+    return "".join(str(value or "").split()).upper()
+
+
+def replace_pending_transactions(
+    rows: Iterable[dict[str, Any]], account_ibans: Iterable[str] | None = None
+) -> int:
     normalized_rows = [to_row_payload(row) for row in rows]
     normalized_rows = [row for row in normalized_rows if abs(row["amount"]) > 0.0001]
 
+    # ponytail: ohne account_ibans bleibt das alte globale Verhalten (Remote-Sync/Altpfad).
+    scoped_ibans: set[str] | None = None
+    if account_ibans is not None:
+        scoped_ibans = {_normalize_iban(value) for value in account_ibans if _normalize_iban(value)}
+        if not scoped_ibans:
+            return 0
+
     with get_connection() as connection:
-        old_rows = connection.execute(
-            "SELECT id, transaction_hash FROM vorgemerkte_umsaetze WHERE transaction_hash IS NOT NULL"
-        ).fetchall()
+        scope_clause, params = "", []
+        if scoped_ibans is not None:
+            placeholders = ", ".join("?" for _ in scoped_ibans)
+            scope_clause = f"REPLACE(UPPER(account_iban), ' ', '') IN ({placeholders})"
+            params = list(scoped_ibans)
+
+        old_query = (
+            "SELECT id, transaction_hash FROM vorgemerkte_umsaetze "
+            "WHERE transaction_hash IS NOT NULL"
+        )
+        if scope_clause:
+            old_query += f" AND {scope_clause}"
+        old_rows = connection.execute(old_query, params).fetchall()
         old_by_hash = {row["transaction_hash"]: row["id"] for row in old_rows}
+        # Vergleich gegen ALLE vorher vorhandenen Hashes (auch fremder Banken),
+        # sonst würden Vorgemerkte anderer Banken erneut als INSERT geloggt.
+        all_old_hashes = {
+            row["transaction_hash"]
+            for row in connection.execute(
+                "SELECT transaction_hash FROM vorgemerkte_umsaetze "
+                "WHERE transaction_hash IS NOT NULL"
+            ).fetchall()
+        }
         new_hashes = set(row["transaction_hash"] for row in normalized_rows)
 
         # ponytail: per-row delta instead of a global clear — a transiently empty
@@ -317,7 +349,10 @@ def replace_pending_transactions(rows: Iterable[dict[str, Any]]) -> int:
                 {"transaction_hash": gone_hash}, connection=connection,
             )
 
-        connection.execute("DELETE FROM vorgemerkte_umsaetze")
+        delete_query = "DELETE FROM vorgemerkte_umsaetze"
+        if scope_clause:
+            delete_query += f" WHERE {scope_clause}"
+        connection.execute(delete_query, params)
         if not normalized_rows:
             return 0
         cursor = connection.executemany(
@@ -329,7 +364,7 @@ def replace_pending_transactions(rows: Iterable[dict[str, Any]]) -> int:
             for new_row in connection.execute(
                 "SELECT * FROM vorgemerkte_umsaetze ORDER BY id"
             ).fetchall():
-                if new_row["transaction_hash"] in old_by_hash:
+                if new_row["transaction_hash"] in all_old_hashes:
                     continue
                 _log("vorgemerkte_umsaetze", new_row["id"], "INSERT", dict(new_row), connection=connection)
 
@@ -398,7 +433,7 @@ def fetch_pending_transactions(account_iban: str | None = None) -> list[dict[str
     query = "SELECT * FROM vorgemerkte_umsaetze"
     values: list[Any] = []
     if account_iban:
-        query += " WHERE account_iban = ?"
+        query += " WHERE REPLACE(UPPER(account_iban), ' ', '') = REPLACE(UPPER(?), ' ', '')"
         values.append(account_iban)
     query += " ORDER BY COALESCE(date, created_at) DESC"
     with get_connection() as connection:
