@@ -45,6 +45,12 @@ const CONNECTION_LANE_SPACING = 10;
 const MIN_ZONE_WIDTH = 180;
 const MIN_ZONE_HEIGHT = 120;
 
+// Trackpad tuning: a pinch gesture reports as a `wheel` event with `ctrlKey`
+// set to true and a much smaller deltaY per "tick" than a physical mouse
+// wheel notch, so it needs its own, steeper sensitivity curve.
+const TRACKPAD_PINCH_SENSITIVITY = 0.012;
+const MOUSE_WHEEL_ZOOM_SENSITIVITY = 0.0022;
+
 const COLOR_DEFAULT = "#64748b";
 const COLOR_HOVER = "#54a0ff";
 const COLOR_ACTIVE = "#00d4a1";
@@ -484,11 +490,11 @@ function AccountCard({
         tabIndex={0}
         aria-label={`Konto ${node.label}`}
         className={cn(
-          "flex h-full w-full origin-center items-center gap-3 rounded-xl border bg-card px-3 shadow-sm transition-[transform,box-shadow,border-color,opacity] duration-150 ease-out",
-          dragging ? "cursor-grabbing shadow-lg" : "cursor-grab",
+          "flex h-full w-full origin-center items-center gap-3 rounded-xl border bg-card px-3 shadow-sm transition-[transform,box-shadow,border-color,opacity] duration-150 ease-out will-change-transform",
+          dragging ? "cursor-grabbing shadow-xl" : "cursor-grab",
           active ? "border-[#00d4a1] ring-2 ring-[#00d4a1]/20" : "border-border",
-          hovered && !dimmed && "border-[#54a0ff]/60 shadow-md",
-          dragging && "scale-[1.03] shadow-xl",
+          hovered && !dimmed && !dragging && "-translate-y-0.5 border-[#54a0ff]/60 shadow-md",
+          dragging && "scale-[1.03] shadow-[0_18px_38px_-8px_rgba(15,23,42,0.28)]",
           dimmed && "opacity-35",
           noteFocusMode && !noteEditing && "blur-[3px] opacity-60",
         )}
@@ -813,7 +819,7 @@ export function AccountFlowGraph({
   }, [graph.edges, positions]);
 
   const edgeGeometry = useMemo(() => {
-    const result = new Map<string, { path: string; label: Point }>();
+    const result = new Map<string, { path: string; length: number; label: Point }>();
     graph.edges.forEach((edge) => {
       const source = positions.get(edge.source);
       const target = positions.get(edge.target);
@@ -830,8 +836,16 @@ export function AccountFlowGraph({
       );
       const mid = waypoints[Math.floor(waypoints.length / 2) - 1];
       const midNext = waypoints[Math.floor(waypoints.length / 2)];
+      let length = 0;
+      for (let i = 1; i < waypoints.length; i++) {
+        length += Math.hypot(
+          waypoints[i].x - waypoints[i - 1].x,
+          waypoints[i].y - waypoints[i - 1].y,
+        );
+      }
       result.set(edge.id, {
         path: roundedPath(waypoints, CORNER_RADIUS),
+        length,
         label: { x: (mid.x + midNext.x) / 2, y: (mid.y + midNext.y) / 2 },
       });
     });
@@ -873,6 +887,17 @@ export function AccountFlowGraph({
     transitionTimeout.current = setTimeout(() => setSmoothTransition(false), TRANSITION_MS);
   }, []);
 
+  const zoomAround = useCallback(
+    (nextScale: number, anchorSvg: Point) => {
+      const clamped = clamp(nextScale, MIN_SCALE, MAX_SCALE);
+      const localX = (anchorSvg.x - offset.x) / scale;
+      const localY = (anchorSvg.y - offset.y) / scale;
+      setScale(clamped);
+      setOffset({ x: anchorSvg.x - clamped * localX, y: anchorSvg.y - clamped * localY });
+    },
+    [offset, scale],
+  );
+
   const zoomBy = useCallback(
     (delta: number) => {
       const svg = svgRef.current;
@@ -883,15 +908,9 @@ export function AccountFlowGraph({
         rect.left + rect.width / 2,
         rect.top + rect.height / 2,
       );
-      const nextScale = clamp(scale + delta, MIN_SCALE, MAX_SCALE);
-      const localX = (anchorSvg.x - offset.x) / scale;
-      const localY = (anchorSvg.y - offset.y) / scale;
-      applyWithTransition(() => {
-        setScale(nextScale);
-        setOffset({ x: anchorSvg.x - nextScale * localX, y: anchorSvg.y - nextScale * localY });
-      });
+      applyWithTransition(() => zoomAround(scale + delta, anchorSvg));
     },
-    [applyWithTransition, offset, scale],
+    [applyWithTransition, scale, zoomAround],
   );
 
   const resetView = useCallback(() => {
@@ -996,6 +1015,8 @@ export function AccountFlowGraph({
     }
   }, []);
 
+  // A wheel gesture zooms around the cursor. Pinch and Ctrl/Cmd + scroll use
+  // a smaller sensitivity because browsers report finer-grained deltas.
   const handleWheel = (event: ReactWheelEvent<SVGSVGElement>) => {
     if (editingNoteNodeId) return;
     event.preventDefault();
@@ -1005,12 +1026,12 @@ export function AccountFlowGraph({
       clearTimeout(transitionTimeout.current);
       setSmoothTransition(false);
     }
+
     const anchorSvg = clientToSvgPoint(svg, event.clientX, event.clientY);
-    const nextScale = clamp(scale * Math.exp(-event.deltaY * 0.0018), MIN_SCALE, MAX_SCALE);
-    const localX = (anchorSvg.x - offset.x) / scale;
-    const localY = (anchorSvg.y - offset.y) / scale;
-    setScale(nextScale);
-    setOffset({ x: anchorSvg.x - nextScale * localX, y: anchorSvg.y - nextScale * localY });
+    const sensitivity = event.ctrlKey
+      ? TRACKPAD_PINCH_SENSITIVITY
+      : MOUSE_WHEEL_ZOOM_SENSITIVITY;
+    zoomAround(scale * Math.exp(-event.deltaY * sensitivity), anchorSvg);
   };
 
   const handleCanvasPointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
@@ -1165,6 +1186,8 @@ export function AccountFlowGraph({
     }
   };
 
+  const zoomPercent = Math.round(scale * 100);
+
   return (
     <div
       className="min-h-[760px] overflow-hidden rounded-panel border border-border bg-card"
@@ -1178,7 +1201,7 @@ export function AccountFlowGraph({
             {graph.nodes.length} Konten · {graph.edges.length} Geldflüsse
           </span>
         </div>
-        <div className="absolute bottom-4 right-4 z-10 flex gap-1 rounded-lg border border-border bg-card/90 p-1 backdrop-blur">
+        <div className="absolute bottom-4 right-4 z-10 flex items-center gap-1 rounded-lg border border-border bg-card/90 p-1 backdrop-blur">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -1212,21 +1235,7 @@ export function AccountFlowGraph({
               {showEdgeLabels ? "Labels ausblenden" : "Labels einblenden"}
             </TooltipContent>
           </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-8"
-                aria-label="Vergrößern"
-                title="Vergrößern"
-                onClick={() => zoomBy(ZOOM_STEP)}
-              >
-                <Plus className="size-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top">Vergrößern</TooltipContent>
-          </Tooltip>
+          <div className="mx-0.5 h-5 w-px bg-border" aria-hidden="true" />
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -1242,6 +1251,25 @@ export function AccountFlowGraph({
             </TooltipTrigger>
             <TooltipContent side="top">Verkleinern</TooltipContent>
           </Tooltip>
+          <span className="w-11 shrink-0 py-1 text-center text-[11px] font-medium tabular-nums text-muted-foreground">
+            {zoomPercent}%
+          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                aria-label="Vergrößern"
+                title="Vergrößern"
+                onClick={() => zoomBy(ZOOM_STEP)}
+              >
+                <Plus className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Vergrößern</TooltipContent>
+          </Tooltip>
+          <div className="mx-0.5 h-5 w-px bg-border" aria-hidden="true" />
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -1370,6 +1398,27 @@ export function AccountFlowGraph({
                       setHoveredEdgeId((current) => (current === edge.id ? null : current))
                     }
                   />
+                  {/* Flowing dash overlay: reads like a "running" connector, the way
+                      Copilot Studio highlights the active path through a workflow. */}
+                  {emphasized && !dimmedByHover && (
+                    <path
+                      d={geometry.path}
+                      fill="none"
+                      pointerEvents="none"
+                      stroke={color}
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeDasharray="1 11"
+                      opacity={0.9}
+                    >
+                      <animate
+                        attributeName="stroke-dashoffset"
+                        values="0;-12"
+                        dur="0.5s"
+                        repeatCount="indefinite"
+                      />
+                    </path>
+                  )}
                 </g>
               );
             })}
