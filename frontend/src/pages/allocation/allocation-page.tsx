@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { CheckCircle2, Loader2, TriangleAlert } from "lucide-react";
+import { CheckCircle2, ListTree, Loader2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { useAllocation } from "./hooks/use-allocation";
 import { BucketCard } from "./components/bucket-card";
@@ -7,6 +7,7 @@ import { SavingsPlansCard } from "./components/savings-plans-card";
 import { TransferDialog } from "./components/transfer-dialog";
 import { DonationAnalysisDialog } from "./components/donation-analysis-dialog";
 import { IncomeBreakdownDialog } from "./components/income-breakdown-dialog";
+import { MonthlyOverviewDialog } from "./components/monthly-overview-dialog";
 import {
   fetchRecipientAccountsReferenceData,
   type RecipientAccountRecord,
@@ -85,6 +86,7 @@ export default function AllocationPage() {
   });
   const [donationAnalysisOpen, setDonationAnalysisOpen] = useState(false);
   const [incomeDialogOpen, setIncomeDialogOpen] = useState(false);
+  const [overviewOpen, setOverviewOpen] = useState(false);
   const [bafoegEnabled, setBafoegEnabled] = useState(false);
   const { subscriptions } = useSubscriptions();
 
@@ -363,6 +365,15 @@ export default function AllocationPage() {
             <Button
               variant="outline"
               size="sm"
+              onClick={() => setOverviewOpen(true)}
+              className="h-7 gap-1 text-xs"
+            >
+              <ListTree className="size-3.5" />
+              Monatsübersicht
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => recalculate()}
               className="h-7 text-xs"
             >
@@ -451,6 +462,12 @@ export default function AllocationPage() {
         open={incomeDialogOpen}
         onOpenChange={setIncomeDialogOpen}
         sources={status.income_sources ?? []}
+      />
+
+      <MonthlyOverviewDialog
+        open={overviewOpen}
+        onOpenChange={setOverviewOpen}
+        status={status}
       />
     </div>
   );
