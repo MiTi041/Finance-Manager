@@ -59,6 +59,7 @@ export default function DashboardPage() {
   const { triggerRefresh } = useRefresh();
   const {
     balance,
+    totalBalance,
     incomes,
     expenses,
     transactionCount,
@@ -241,12 +242,11 @@ export default function DashboardPage() {
           <div className="grid grid-cols-2 gap-3.5 xl:grid-cols-4">
             <StatCard
               title="Gesamtvermögen"
-              value={balance}
+              value={totalBalance}
               valueFormat={{ style: "currency", currency: "EUR" }}
               valueLocales="de-DE"
-              accent={balance >= 0 ? "#00d4a1" : "#ff5c6c"}
+              accent={totalBalance >= 0 ? "#00d4a1" : "#ff5c6c"}
               icon={Wallet}
-              footer={dateFooter ?? undefined}
               pendingValue={selectedPending}
               action={
                 activeAccountIban !== "all" && senderAccounts.length > 0 ? (

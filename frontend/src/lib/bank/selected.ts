@@ -5,6 +5,7 @@ export type SelectedBankOption = {
   accountName: string;
   bankName: string;
   bankLogo?: string;
+  bankLogoDark?: string;
   username?: string;
   scope: string;
   manual?: boolean;

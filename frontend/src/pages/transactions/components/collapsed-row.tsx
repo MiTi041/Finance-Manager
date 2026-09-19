@@ -109,6 +109,7 @@ export function CollapsedRow({
             {accountBank ? (
               <BankLogo
                 src={accountBank.bankLogo || undefined}
+                srcDark={accountBank.bankLogoDark || undefined}
                 alt={accountBank.accountName || accountBank.bankName || "Bank"}
                 sizeClassName="size-12 shrink-0 p-1"
                 backgroundClassName={

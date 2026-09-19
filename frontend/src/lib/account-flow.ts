@@ -17,7 +17,6 @@ export type AccountFlowZone = {
 export type AccountFlowLayout = {
   positions: Record<string, AccountFlowPoint>;
   zones: AccountFlowZone[];
-  showEdgeLabels: boolean;
   notes: Record<string, string>;
 };
 

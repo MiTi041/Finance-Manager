@@ -25,6 +25,7 @@ export function PendingRow({ transaction, accountBank }: PendingRowProps) {
         <div className="flex items-center gap-2 pl-2">
           <BankLogo
             src={accountBank.bankLogo || undefined}
+            srcDark={accountBank.bankLogoDark || undefined}
             alt={accountBank.accountName || accountBank.bankName || "Bank"}
             sizeClassName="size-12 shrink-0 p-1"
             backgroundClassName={

@@ -6,7 +6,14 @@ export type BankDefinition = {
   blz: string;
   fints_url: string;
   bank_logo: string;
+  bank_logo_dark: string;
+  /** Extra padding around the logo in pixels. 0 keeps the default spacing. */
+  logo_padding?: number;
   can_transfer: boolean;
+  /** Fixed payout IBAN of a manual provider (e.g. Scalable's Verrechnungskonto). */
+  sender_iban?: string | null;
+  /** True when the bank has no FinTS endpoint and is maintained manually. */
+  manual?: boolean;
   needs_tan_medium_name?: boolean;
   username_hint?: string | null;
 };

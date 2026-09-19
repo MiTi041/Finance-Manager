@@ -48,8 +48,10 @@ export function BankSelectionGrid({
           >
             <BrandIcon
               src={bank.bank_logo || undefined}
+              srcDark={bank.bank_logo_dark || undefined}
               alt={"Bank"}
               sizeClassName="size-12 shrink-0"
+              imgPadding={bank.logo_padding || undefined}
               className={cn("p-1 transition-colors border-0 !bg-transparent")}
             />
 

@@ -7,6 +7,8 @@ export type StoredBankCredentials = {
   bank_key: string;
   bank_name?: string;
   bank_logo?: string;
+  bank_logo_dark?: string;
+  logo_padding?: number;
   blz?: string;
   manual?: boolean;
   account_name?: string;
@@ -18,6 +20,11 @@ export type StoredBankCredentials = {
     iban?: string;
     account_name?: string;
     holder_name?: string | null;
+    bank_key?: string | null;
+    sender_iban?: string | null;
+    bank_name?: string | null;
+    bank_logo?: string | null;
+    bank_logo_dark?: string | null;
     balance?: number | null;
     archived?: boolean;
     migrated_to_iban?: string | null;
@@ -39,6 +46,8 @@ export type BankCredentials = {
     iban?: string;
     account_name?: string;
     holder_name?: string | null;
+    bank_key?: string | null;
+    sender_iban?: string | null;
     archived?: boolean;
     can_transfer?: boolean | null;
     can_transfer_detected?: boolean | null;
@@ -52,6 +61,8 @@ export type BankCredentialsStatus = {
   bank_key?: string;
   bank_name?: string;
   bank_logo?: string;
+  bank_logo_dark?: string;
+  logo_padding?: number;
   blz?: string;
   manual?: boolean;
   account_name?: string;
@@ -99,6 +110,7 @@ export type BankDefinition = {
   blz: string;
   fints_url: string;
   bank_logo: string;
+  bank_logo_dark: string;
   can_transfer: boolean;
   needs_tan_medium_name?: boolean;
   username_hint?: string | null;
@@ -243,6 +255,7 @@ export async function updateBankAccount(
     account_name?: string;
     account_iban?: string;
     holder_name?: string;
+    sender_iban?: string;
     archived?: boolean;
     can_transfer_override?: boolean | null;
   },

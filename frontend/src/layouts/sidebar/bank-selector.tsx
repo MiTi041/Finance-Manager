@@ -20,6 +20,7 @@ export type AccountOption = {
   accountName: string;
   bankName: string;
   bankLogo?: string;
+  bankLogoDark?: string;
   username?: string;
   scope: string;
 };
@@ -58,6 +59,7 @@ export function BankSelector({
       : `${activeAccount?.bankName || "Bank"} · ${activeAccount?.accountIban || ""}`;
 
   const activeBankLogo = activeAccount?.bankLogo || undefined;
+  const activeBankLogoDark = activeAccount?.bankLogoDark || undefined;
 
   return (
     <DropdownMenu>
@@ -78,6 +80,7 @@ export function BankSelector({
             ) : (
               <BankLogo
                 src={activeBankLogo}
+                srcDark={activeBankLogoDark}
                 alt={
                   activeAccount?.bankName ??
                   activeAccount?.accountName ??
@@ -151,6 +154,7 @@ export function BankSelector({
               >
                 <BankLogo
                   src={account.bankLogo || undefined}
+                  srcDark={account.bankLogoDark || undefined}
                   alt={account.accountName || account.bankName || "Bank"}
                   sizeClassName="size-12"
                   className="p-1"

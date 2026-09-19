@@ -48,7 +48,7 @@ function calculateExpenses(transactions: Transaction[]) {
   );
 }
 
-function filterTransactionsByDate(transactions: Transaction[], dateFilter: DateFilterValue) {
+export function filterTransactionsByDate(transactions: Transaction[], dateFilter: DateFilterValue) {
   if (dateFilter.timeSpan) {
     const from = startOfDay(dateFilter.timeSpan.from);
     const until = endOfDay(dateFilter.timeSpan.until);
@@ -81,6 +81,8 @@ export function useFinanceData(
 
   const [activeAccountIban, setActiveAccountIban] = useState<string>(() => readActiveAccountIban());
 
+  const needsCorrection = !dateFilter.timeSpan && !dateFilter.timeRange;
+
   const queryParams = useMemo(() => {
     const params = new URLSearchParams();
     if (dateFilter.timeSpan) {
@@ -100,6 +102,15 @@ export function useFinanceData(
     return params.toString();
   }, [activeAccountIban, dateFilter, ignoreActiveAccountFilter]);
 
+  const totalQueryParams = useMemo(() => {
+    const params = new URLSearchParams();
+    const normalizedAccountIban = normalizeIban(activeAccountIban);
+    if (!ignoreActiveAccountFilter && normalizedAccountIban) {
+      params.set("iban", normalizedAccountIban);
+    }
+    return params.toString();
+  }, [activeAccountIban, ignoreActiveAccountFilter]);
+
   const { banks: linkedBanks } = useBankCredentials(refreshVersion);
   const { references: ibanReferences } = useIbanReferences(refreshVersion);
   const {
@@ -111,6 +122,7 @@ export function useFinanceData(
     reload: loadTransactions,
   } = useTransactions(queryParams, refreshVersion);
   const { summary } = useSummary(queryParams, refreshVersion);
+  const { summary: totalSummary } = useSummary(totalQueryParams, refreshVersion, !needsCorrection);
   const { balances: accountBalancesApi } = useAccountBalances(
     useMemo(() => {
       const params = new URLSearchParams(queryParams);
@@ -203,14 +215,8 @@ export function useFinanceData(
     [cleanedTransactions, dateFilter],
   );
 
-  const needsCorrection = useMemo(() => {
-    return !dateFilter.timeSpan && !dateFilter.timeRange;
-  }, [dateFilter]);
-
-  const balance = useMemo(() => {
-    if (!needsCorrection) return calculateBalance(filteredTransactions);
-
-    const base = summary?.balance ?? calculateBalance(cleanedTransactions);
+  const totalBalance = useMemo(() => {
+    const base = (totalSummary ?? summary)?.balance ?? calculateBalance(cleanedTransactions);
     if (selectedAccountIban) {
       const c = (accountOptions ?? []).find(
         (a) => a.accountIban === selectedAccountIban,
@@ -218,14 +224,12 @@ export function useFinanceData(
       return base + (c ?? 0);
     }
     return base + (accountOptions ?? []).reduce((s, a) => s + (a.balanceCorrection ?? 0), 0);
-  }, [
-    cleanedTransactions,
-    filteredTransactions,
-    accountOptions,
-    selectedAccountIban,
-    needsCorrection,
-    summary,
-  ]);
+  }, [cleanedTransactions, accountOptions, selectedAccountIban, summary, totalSummary]);
+
+  const balance = useMemo(() => {
+    if (!needsCorrection) return calculateBalance(filteredTransactions);
+    return totalBalance;
+  }, [filteredTransactions, needsCorrection, totalBalance]);
 
   const balanceFormatted = useMemo(() => formatBalance(balance), [balance]);
 
@@ -298,6 +302,7 @@ export function useFinanceData(
       const apiBalance = accountBalancesApi.find((ab) => ab.account_iban === account.accountIban);
       return {
         bankLogo: account.bankLogo,
+        bankLogoDark: account.bankLogoDark,
         accountIban: account.accountIban,
         accountName: account.accountName,
         bankName: account.bankName,
@@ -328,6 +333,7 @@ export function useFinanceData(
     pendingTransactions,
     transactionCount,
     balance,
+    totalBalance,
     balanceFormatted,
     incomes,
     incomesFormatted,

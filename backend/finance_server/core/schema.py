@@ -211,6 +211,8 @@ def create_bank_accounts_table(connection: sqlite3.Connection) -> None:
             scope TEXT NOT NULL,
             iban TEXT NOT NULL,
             account_name TEXT,
+            bank_key TEXT,
+            sender_iban TEXT,
             archived INTEGER NOT NULL DEFAULT 0,
             can_transfer INTEGER,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -597,7 +599,15 @@ def initialize_database(connection: sqlite3.Connection) -> None:
     create_umsaetze_table(connection)
     create_bank_credentials_table(connection)
     create_bank_accounts_table(connection)
-    _ensure_table_columns(connection, "bank_accounts", {"archived": "INTEGER NOT NULL DEFAULT 0"})
+    _ensure_table_columns(
+        connection,
+        "bank_accounts",
+        {
+            "archived": "INTEGER NOT NULL DEFAULT 0",
+            "bank_key": "TEXT",
+            "sender_iban": "TEXT",
+        },
+    )
     _ensure_table_columns(
         connection,
         "umsaetze",

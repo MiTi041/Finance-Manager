@@ -28,7 +28,6 @@ class AccountFlowZone(BaseModel):
 class AccountFlowLayout(BaseModel):
     positions: dict[str, AccountFlowPoint] = Field(default_factory=dict)
     zones: list[AccountFlowZone] = Field(default_factory=list)
-    showEdgeLabels: bool = True
     notes: dict[str, str] = Field(default_factory=dict)
 
 

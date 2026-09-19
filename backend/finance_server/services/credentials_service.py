@@ -25,6 +25,18 @@ class CredentialsService:
         self._fints_service = FintsService()
 
     @staticmethod
+    def _provider_fields(bank_key: Any) -> dict[str, Any]:
+        """Logo/Name eines manuellen Anbieters (z. B. Scalable) für ein Konto."""
+        key = normalize_text(bank_key)
+        if not key:
+            return {}
+        try:
+            definition = get_bank_definition(key)
+        except KeyError:
+            return {}
+        return {"bank_name": definition.name, "bank_logo": definition.bank_logo, "bank_logo_dark": definition.bank_logo_dark}
+
+    @staticmethod
     def _has_active_accounts(scope: str) -> bool:
         return any(
             account.get("iban") and not account.get("archived", False)
@@ -41,14 +53,21 @@ class CredentialsService:
             return {"configured": False}
 
         bank_key = credentials.get("bank_key", "")
+        # Manuelle Anbieter (Scalable, Trade Republic, ...) tragen ihren
+        # Anbieter-Schlüssel separat, damit bank_key intern "manual" bleibt.
+        lookup_key = normalize_text(credentials.get("provider_key")).lower() or bank_key
         bank = None
-        if bank_key:
+        if lookup_key:
             try:
-                bank = get_bank_definition(bank_key)
+                bank = get_bank_definition(lookup_key)
             except KeyError:
                 bank = None
 
         accounts = credentials.get("accounts", []) or []
+        accounts = [
+            {**account, **self._provider_fields(account.get("bank_key"))}
+            for account in accounts
+        ]
         if bank:
             accounts = [
                 {
@@ -65,9 +84,11 @@ class CredentialsService:
             "account_name": credentials.get("account_name", ""),
             "bank_key": bank.key if bank else bank_key,
             "bank_name": bank.name if bank else bank_key,
-            "manual": bank_key.strip().lower() == "manual",
+            "manual": bank.is_manual if bank else bank_key.strip().lower() == "manual",
             "blz": bank.blz if bank else "",
             "bank_logo": bank.bank_logo if bank else "",
+            "bank_logo_dark": bank.bank_logo_dark if bank else "",
+            "logo_padding": bank.logo_padding if bank else 0,
             "username": credentials.get("username", ""),
             "tan_medium": credentials.get("tan_medium"),
             "auto_sync": credentials.get("auto_sync", True),
@@ -129,69 +150,87 @@ class CredentialsService:
     ) -> str | None:
         existing = self._manual_credentials()
 
-        # Nichts hinzuzufügen und kein manueller Zugang vorhanden -> nichts tun.
-        if not new_accounts and not existing:
-            return None
-        # Bereits in den einen "manual"-Scope konsolidiert und nichts Neues -> nichts tun.
-        if not new_accounts and len(existing) == 1 and existing[0].get("scope") == "manual":
-            if existing[0].get("accounts"):
-                return "manual"
-            delete_bank_credentials("manual")
-            return None
+        # Nichts hinzuzufügen -> bestehenden manuellen Zugang unverändert lassen.
+        if not new_accounts:
+            return existing[0].get("scope") if existing else None
 
-        merged: list[dict[str, Any]] = []
-        seen: set[str] = set()
-        for cred in existing:
-            for account in cred.get("accounts") or []:
-                iban = "".join(str(account.get("iban", "")).split())
-                if not iban or iban.upper() in seen:
-                    continue
-                seen.add(iban.upper())
-                merged.append(
-                    {
-                        "iban": account.get("iban"),
-                        "account_name": account.get("account_name"),
-                        "holder_name": account.get("holder_name"),
-                        "can_transfer": False,
-                    }
-                )
+        # Neue Konten nach Anbieter gruppieren. Jeder Anbieter bekommt einen
+        # eigenen Scope ("manual:<provider>"), damit die Liste pro Anbieter eine
+        # eigene Karte zeigt.
+        grouped: dict[str, list[dict[str, Any]]] = {}
         for account in new_accounts:
             iban = "".join(str(account.get("iban", "")).split())
-            if not iban or iban.upper() in seen:
+            if not iban:
                 continue
-            seen.add(iban.upper())
-            merged.append(
-                {
+            provider = normalize_text(account.get("bank_key")).lower() or "manual"
+            grouped.setdefault(provider, []).append(account)
+
+        last_scope = existing[0].get("scope") if existing else None
+
+        for provider, accounts in grouped.items():
+            scope = "manual" if provider == "manual" else f"manual:{provider}"
+
+            # Eine IBAN darf nur in einem manuellen Scope liegen, sonst wäre die
+            # Kontozuordnung mehrdeutig. Bei Anbieterwechsel aus dem alten Scope
+            # entfernen.
+            for account in accounts:
+                iban = "".join(str(account.get("iban", "")).split())
+                for cred in existing:
+                    other_scope = cred.get("scope")
+                    if other_scope == scope:
+                        continue
+                    if any(
+                        "".join(str(item.get("iban", "")).split()).upper() == iban.upper()
+                        for item in cred.get("accounts") or []
+                    ):
+                        delete_bank_account_row(other_scope, iban)
+                        if not list_bank_accounts(other_scope):
+                            delete_bank_credentials(other_scope)
+
+            stored = load_bank_credentials(scope)
+            merged: dict[str, dict[str, Any]] = {}
+            for account in (stored.get("accounts") if stored else []) or []:
+                iban = "".join(str(account.get("iban", "")).split())
+                if iban:
+                    merged[iban.upper()] = dict(account)
+
+            # Sender-IBAN ist fest am Anbieter hinterlegt und nicht editierbar.
+            try:
+                payout_iban = get_bank_definition(provider).sender_iban
+            except KeyError:
+                payout_iban = ""
+
+            for account in accounts:
+                iban = "".join(str(account.get("iban", "")).split())
+                previous = merged.get(iban.upper(), {})
+                merged[iban.upper()] = {
                     "iban": iban,
                     "account_name": normalize_text(account.get("account_name"))
                     or fallback_name
+                    or previous.get("account_name")
                     or None,
-                    "holder_name": normalize_text(account.get("holder_name")) or None,
+                    "holder_name": normalize_text(account.get("holder_name"))
+                    or previous.get("holder_name")
+                    or None,
+                    "bank_key": provider if provider != "manual" else previous.get("bank_key"),
+                    "sender_iban": payout_iban or previous.get("sender_iban") or None,
                     "can_transfer": False,
                 }
+
+            last_scope = save_bank_credentials(
+                {
+                    "bank_key": "manual",
+                    "provider_key": provider,
+                    "account_name": "Manuell",
+                    "username": "",
+                    "pin": "",
+                    "auto_sync": False,
+                    "accounts": list(merged.values()),
+                },
+                scope=scope,
             )
 
-        # Keine Konten (mehr) vorhanden -> leeren manuellen Zugang entfernen.
-        if not merged:
-            for cred in existing:
-                delete_bank_credentials(cred.get("scope"))
-            return None
-
-        scope = save_bank_credentials(
-            {
-                "bank_key": "manual",
-                "account_name": "Manuell",
-                "username": "",
-                "pin": "",
-                "auto_sync": False,
-                "accounts": merged,
-            },
-            scope="manual",
-        )
-        for cred in existing:
-            if cred.get("scope") != scope:
-                delete_bank_credentials(cred.get("scope"))
-        return scope
+        return last_scope
 
     def list_all(self) -> dict[str, Any]:
         self._upsert_manual_accounts([])
@@ -240,6 +279,7 @@ class CredentialsService:
             account_name=payload.get("account_name"),
             account_iban=payload.get("account_iban"),
             holder_name=payload.get("holder_name"),
+            sender_iban=payload.get("sender_iban"),
             archived=payload.get("archived") if "archived" in payload else None,
             **(
                 {"can_transfer_override": payload["can_transfer_override"]}
@@ -313,7 +353,11 @@ class CredentialsService:
                     "blz": bank.blz,
                     "fints_url": bank.fints_url,
                     "bank_logo": bank.bank_logo,
+                    "bank_logo_dark": bank.bank_logo_dark,
+                    "logo_padding": bank.logo_padding,
                     "can_transfer": bank.can_transfer,
+                    "sender_iban": bank.sender_iban,
+                    "manual": bank.is_manual,
                     "needs_tan_medium_name": bank.needs_tan_medium_name,
                     "username_hint": bank.username_hint,
                 }

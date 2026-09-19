@@ -10,6 +10,7 @@ const euroFormatter = new Intl.NumberFormat("de-DE", {
 
 export type AccountBalance = {
   bankLogo?: string;
+  bankLogoDark?: string;
   accountIban: string;
   accountName: string;
   bankName: string;
@@ -40,6 +41,7 @@ export function AccountCards({
             <div className="flex items-center gap-2">
               <BankLogo
                 src={acc.bankLogo || undefined}
+                srcDark={acc.bankLogoDark || undefined}
                 alt={acc.accountName || acc.bankName || "Bank"}
                 sizeClassName="size-10 shrink-0 p-1 rounded border-0 bg-muted"
                 kind="company"

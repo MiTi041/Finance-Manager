@@ -95,6 +95,9 @@ function getAccounts(credential: StoredBankCredentials, bankCanTransfer: boolean
       iban: account.iban ?? credential.account_iban ?? "",
       account_name: account.account_name ?? credential.account_name ?? "",
       holder_name: account.holder_name ?? "",
+      sender_iban: account.sender_iban ?? "",
+      bank_name: account.bank_name ?? null,
+      bank_logo: account.bank_logo ?? null,
       can_transfer: account.can_transfer ?? bankCanTransfer ?? null,
       can_transfer_detected: account.can_transfer_detected ?? null,
       can_transfer_override: account.can_transfer_override ?? null,
@@ -108,6 +111,9 @@ function getAccounts(credential: StoredBankCredentials, bankCanTransfer: boolean
       iban: credential.account_iban ?? "",
       account_name: credential.account_name ?? "",
       holder_name: "",
+      sender_iban: "",
+      bank_name: null,
+      bank_logo: null,
       can_transfer: bankCanTransfer ?? null,
       can_transfer_detected: null,
       can_transfer_override: null,
@@ -333,18 +339,14 @@ export function Banks({
             {/* ── Bank header ── */}
             <CardHeader className="flex flex-row items-center gap-4 px-5">
               {/* Logo / Initials */}
-              {bank.bank_logo ? (
-                <BankLogo
-                  src={bank.bank_logo || undefined}
-                  alt={bank.account_name || bank.bank_name || "Bank"}
-                  sizeClassName="size-12 shrink-0 p-1"
-                  backgroundClassName="bg-muted/70"
-                />
-              ) : (
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border bg-muted text-xs font-bold tracking-wide">
-                  {bank.bank_name?.slice(0, 2)?.toUpperCase() ?? "BK"}
-                </div>
-              )}
+              <BankLogo
+                src={bank.bank_logo || undefined}
+                srcDark={bank.bank_logo_dark || undefined}
+                alt={bank.account_name || bank.bank_name || "Bank"}
+                sizeClassName="size-12 shrink-0 p-1"
+                imgPadding={bank.logo_padding || undefined}
+                backgroundClassName="bg-muted/70"
+              />
 
               {/* Name + meta */}
               <div className="min-w-0 flex-1">
@@ -358,6 +360,14 @@ export function Banks({
                   >
                     Aktiv
                   </Badge>
+                  {bank.manual ? (
+                    <Badge
+                      variant="secondary"
+                      className="bg-muted text-muted-foreground text-[11px] px-1.5 py-0"
+                    >
+                      Manuell
+                    </Badge>
+                  ) : null}
                   {canTransferByBankKey?.has(bank.bank_key) ? (
                     <Badge
                       variant="secondary"
@@ -438,13 +448,19 @@ export function Banks({
 
                       <div className="flex flex-col gap-4">
                         {/* Account info */}
-                        <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 flex-1 items-center gap-3">
+                          <div className="min-w-0">
                           <p className="text-sm font-medium leading-tight truncate">
                             {account.account_name || "Unbenanntes Konto"}
                           </p>
                           <p className="mt-0.5 text-xs text-muted-foreground font-mono tracking-wide">
                             {formatIban(account.iban)}
                           </p>
+                          {account.sender_iban ? (
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">
+                              Sender: {formatIban(account.sender_iban)}
+                            </p>
+                          ) : null}
                           {account.archived || account.migrated_to_iban ? (
                             <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
                               {account.archived ? (
@@ -490,6 +506,7 @@ export function Banks({
                               }
                             />
                           )}
+                          </div>
                         </div>
 
                         {/* Actions */}
@@ -542,7 +559,9 @@ export function Banks({
                         onOpenChange={(open) => {
                           if (open) return;
 
-                          if (isDirty(account.account_name || "", account.holder_name || "")) {
+                          if (
+                            isDirty(account.account_name || "", account.holder_name || "")
+                          ) {
                             setDiscardChangesOpen(true);
                             return;
                           }

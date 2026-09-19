@@ -3,20 +3,39 @@ import { CircleDashed, CircleX, Loader2 } from "lucide-react";
 
 import DateFilter from "@/components/date-filter";
 import { EmptyState } from "@/components/empty-state";
-import { useFinanceData } from "@/hooks/use-finance-data";
+import { filterTransactionsByDate, useFinanceData } from "@/hooks/use-finance-data";
 import { useGlobalDateFilter } from "@/hooks/use-global-date-filter";
 
 import { AccountFlowGraph } from "@/pages/account-flow/account-flow-graph";
-import { buildAccountFlowGraph } from "./account-flow-data";
+import { buildAccountFlowGraph, type AccountFlowGraph as AccountFlowGraphData } from "./account-flow-data";
+
+const ALL_TIME = {};
 
 export default function AccountFlowPage() {
   const { dateFilter, setDateFilter } = useGlobalDateFilter();
   const { loading, refreshing, error, transactions, linkedAccounts, accountBalances } =
-    useFinanceData(dateFilter, { ignoreActiveAccountFilter: true });
+    useFinanceData(ALL_TIME, { ignoreActiveAccountFilter: true });
 
-  const graph = useMemo(
+  // Card numbers (balance + external flow) are all-time; the date filter only
+  // narrows which edges are drawn.
+  const allTimeGraph = useMemo(
     () => buildAccountFlowGraph(linkedAccounts, transactions, accountBalances),
     [linkedAccounts, transactions, accountBalances],
+  );
+
+  const periodGraph = useMemo(
+    () =>
+      buildAccountFlowGraph(
+        linkedAccounts,
+        filterTransactionsByDate(transactions, dateFilter),
+        accountBalances,
+      ),
+    [linkedAccounts, transactions, accountBalances, dateFilter],
+  );
+
+  const graph = useMemo<AccountFlowGraphData>(
+    () => ({ nodes: allTimeGraph.nodes, edges: periodGraph.edges }),
+    [allTimeGraph, periodGraph],
   );
 
   if (error) {
@@ -30,7 +49,7 @@ export default function AccountFlowPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 py-6">
+    <div className="flex h-[calc(100svh-4rem)] w-full flex-col gap-6 overflow-hidden py-6">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <DateFilter value={dateFilter} onChange={setDateFilter} />
@@ -44,7 +63,7 @@ export default function AccountFlowPage() {
       </div>
 
       {loading ? (
-        <div className="flex min-h-[610px] items-center justify-center rounded-panel border border-border bg-card">
+        <div className="flex min-h-0 flex-1 items-center justify-center rounded-panel border border-border bg-card">
           <Loader2 className="size-6 animate-spin text-muted-foreground" />
         </div>
       ) : graph.edges.length === 0 ? (

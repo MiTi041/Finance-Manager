@@ -7,13 +7,25 @@ from dataclasses import dataclass
 class BankDefinition:
     key: str
     name: str
-    blz: str
-    fints_url: str
-    bank_logo: str
-    can_transfer: bool
+    blz: str = ""
+    fints_url: str = ""
+    bank_logo: str = ""
+    # Optional logo variant shown in dark mode. Falls back to bank_logo.
+    bank_logo_dark: str = ""
+    # Extra padding around the logo in pixels. 0 keeps the default spacing.
+    logo_padding: int = 0
+    can_transfer: bool = False
+    # Fixed IBAN the provider pays out from / sends with (e.g. Scalable's
+    # Verrechnungskonto). Only set for manual providers.
+    sender_iban: str | None = None
     needs_tan_medium_name: bool = False
     decoupled_login: bool = False
     username_hint: str | None = None
+
+    @property
+    def is_manual(self) -> bool:
+        """Banks without a FinTS endpoint are maintained manually."""
+        return not self.fints_url
 
 BANKS: tuple[BankDefinition, ...] = (
     BankDefinition(
@@ -66,20 +78,47 @@ BANKS: tuple[BankDefinition, ...] = (
         fints_url="https://brokerage-hbci.consorsbank.de/hbci",
         bank_logo="images/bank-logos/consorsbank.png",
         can_transfer=True,
-username_hint=(
-    "Der Anmeldename setzt sich aus Ihrer Kontonummer und der "
-    "dreistelligen Berechtigungsnummer zusammen.\n\n"
-    "Die Berechtigungsnummer wird direkt an die Kontonummer angehängt. "
-    "Bei alleiniger Kontoinhaberschaft lautet sie in der Regel 001."
-),
+        username_hint=(
+            "Der Anmeldename setzt sich aus Ihrer Kontonummer und der "
+            "dreistelligen Berechtigungsnummer zusammen.\n\n"
+            "Die Berechtigungsnummer wird direkt an die Kontonummer angehängt. "
+            "Bei alleiniger Kontoinhaberschaft lautet sie in der Regel 001."
+        ),
+    ),
+    BankDefinition(
+        key="trade-republic",
+        name="Trade Republic",
+        bank_logo="images/bank-logos/trade-republic.png",
+        bank_logo_dark="images/bank-logos/trade-republic_dark.png",
+        logo_padding=8
+    ),
+    BankDefinition(
+        key="scalable",
+        name="Scalable Capital",
+        bank_logo="images/bank-logos/scalable-capital.png",
+        sender_iban="DE86700700100922050000",
+    ),
+    BankDefinition(
+        key="revolut",
+        name="Revolut",
+        bank_logo="images/bank-logos/revolut.png",
+        bank_logo_dark="images/bank-logos/revolut_dark.png",
+        logo_padding=8
+    ),
+    BankDefinition(
+        key="chase",
+        name="Chase",
+        bank_logo="images/bank-logos/chase.png",
+    ),
+    BankDefinition(
+        key="fnz",
+        name="FNZ",
+        bank_logo="images/bank-logos/fnz.png",
+        bank_logo_dark="images/bank-logos/fnz_dark.png",
     ),
     BankDefinition(
         key="manual",
-        name="Manuell",
-        blz="",
-        fints_url="",
-        bank_logo="",
-        can_transfer=False,
+        name="Manuelle Bankzugänge",
     ),
 )
 

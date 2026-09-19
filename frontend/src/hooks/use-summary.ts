@@ -9,7 +9,7 @@ export interface SummaryData {
   transaction_count: number;
 }
 
-export function useSummary(queryString: string, refreshVersion: number) {
+export function useSummary(queryString: string, refreshVersion: number, enabled = true) {
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,8 +41,13 @@ export function useSummary(queryString: string, refreshVersion: number) {
   }, [apiBaseUrl, queryString]);
 
   useEffect(() => {
+    if (!enabled) {
+      setSummary(null);
+      setLoading(false);
+      return;
+    }
     void load();
-  }, [load, refreshVersion]);
+  }, [load, refreshVersion, enabled]);
 
   useEffect(() => {
     return () => abortRef.current?.abort();

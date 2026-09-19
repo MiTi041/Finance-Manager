@@ -8,8 +8,6 @@ import {
   type WheelEvent as ReactWheelEvent,
 } from "react";
 import {
-  Eye,
-  EyeOff,
   FolderPlus,
   LocateFixed,
   Minus,
@@ -27,7 +25,13 @@ import { cn } from "@/lib/utils";
 import { fetchAccountFlowLayout, saveAccountFlowLayout } from "@/lib/account-flow";
 import type { AccountFlowZone } from "@/lib/account-flow";
 
-import type { AccountFlowEdge, AccountFlowGraph, AccountFlowNode } from "./account-flow-data";
+import {
+  flowArrow,
+  netFlowAmount,
+  type AccountFlowEdge,
+  type AccountFlowGraph,
+  type AccountFlowNode,
+} from "./account-flow-data";
 
 const WIDTH = 1200;
 const HEIGHT = 680;
@@ -42,6 +46,7 @@ const ZOOM_STEP = 0.2;
 const TRANSITION_MS = 220;
 const FIT_PADDING = 56;
 const CONNECTION_LANE_SPACING = 10;
+const CONNECTION_KNOB_RADIUS = 3.5;
 const MIN_ZONE_WIDTH = 180;
 const MIN_ZONE_HEIGHT = 120;
 
@@ -58,11 +63,7 @@ const COLOR_ACTIVE = "#00d4a1";
 type Point = { x: number; y: number };
 
 function getCardHeight(note: string) {
-  if (!note.trim()) return CARD_MIN_HEIGHT;
-  const lineCount = note
-    .split("\n")
-    .reduce((count, line) => count + Math.max(1, Math.ceil(line.length / 34)), 0);
-  return Math.min(CARD_MAX_HEIGHT, CARD_MIN_HEIGHT + Math.max(1, lineCount) * 14);
+  return note.trim() ? CARD_MIN_HEIGHT + 14 : CARD_MIN_HEIGHT;
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -438,6 +439,7 @@ function AccountCard({
   node,
   position,
   note,
+  ports,
   active,
   dimmed,
   dragging,
@@ -454,6 +456,7 @@ function AccountCard({
   node: AccountFlowNode;
   position: Point;
   note: string;
+  ports: Point[];
   active: boolean;
   dimmed: boolean;
   dragging: boolean;
@@ -477,151 +480,164 @@ function AccountCard({
     onNoteEditingChange(false);
   };
 
+  const portOpacity = dimmed ? 0.35 : 1;
+
   return (
-    <foreignObject
-      x={position.x - CARD_WIDTH / 2}
-      y={position.y - cardHeight / 2}
-      width={CARD_WIDTH}
-      height={cardHeight}
-      style={{ overflow: "visible" }}
-    >
-      <div
-        role="button"
-        tabIndex={0}
-        aria-label={`Konto ${node.label}`}
-        className={cn(
-          "flex h-full w-full origin-center items-center gap-3 rounded-xl border bg-card px-3 shadow-sm transition-[transform,box-shadow,border-color,opacity] duration-150 ease-out will-change-transform",
-          dragging ? "cursor-grabbing shadow-xl" : "cursor-grab",
-          active ? "border-[#00d4a1] ring-2 ring-[#00d4a1]/20" : "border-border",
-          hovered && !dimmed && !dragging && "-translate-y-0.5 border-[#54a0ff]/60 shadow-md",
-          dragging && "scale-[1.03] shadow-[0_18px_38px_-8px_rgba(15,23,42,0.28)]",
-          dimmed && "opacity-35",
-          noteFocusMode && !noteEditing && "blur-[3px] opacity-60",
-        )}
-        onClick={onSelect}
-        onPointerEnter={onPointerEnter}
-        onPointerLeave={onPointerLeave}
-        onPointerDown={onDragStart}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") onSelect();
-        }}
+    <g>
+      <g className={noteFocusMode && !noteEditing ? "blur-[3px] opacity-60" : undefined}>
+        {ports.map((port, index) => (
+          <circle
+            key={index}
+            cx={port.x}
+            cy={port.y}
+            r={CONNECTION_KNOB_RADIUS}
+            fill="hsl(var(--border))"
+            opacity={portOpacity}
+            pointerEvents="none"
+          />
+        ))}
+      </g>
+      <foreignObject
+        x={position.x - CARD_WIDTH / 2}
+        y={position.y - cardHeight / 2}
+        width={CARD_WIDTH}
+        height={cardHeight}
+        style={{ overflow: "visible" }}
       >
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              className={cn(
-                "absolute right-2 top-2 z-10 flex size-6 cursor-pointer items-center justify-center rounded-control text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-                note && "text-[#0f6cbd]",
-              )}
-              aria-label={note ? "Kontonotiz bearbeiten" : "Kontonotiz hinzufügen"}
-              title={note || "Kontonotiz hinzufügen"}
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation();
-                setDraftNote(note);
-                setEditingNote((current) => !current);
-                onNoteEditingChange(!editingNote);
-              }}
-            >
-              <StickyNote className="size-3.5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top">
-            {note ? "Kontonotiz bearbeiten" : "Kontonotiz hinzufügen"}
-          </TooltipContent>
-        </Tooltip>
-        {editingNote && (
-          <div
-            className="absolute left-2 top-[calc(100%+6px)] z-30 w-[210px] rounded-lg border border-border/70 bg-popover/95 p-1 shadow-[0_8px_24px_rgba(15,23,42,0.16)] backdrop-blur"
-            onPointerDown={(event) => event.stopPropagation()}
-          >
-            <textarea
-              autoFocus
-              value={draftNote}
-              rows={3}
-              className="block w-full resize-none rounded-sm border-0 bg-muted/45 px-2.5 py-2 text-xs leading-5 text-foreground outline-none placeholder:text-muted-foreground/70 focus:bg-background focus:ring-2 focus:ring-[#0f6cbd]/25"
-              placeholder="z. B. 3,5 % Zinsen"
-              aria-label={`Notiz für ${node.label}`}
-              onChange={(event) => setDraftNote(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Escape") {
-                  setDraftNote(note);
-                  setEditingNote(false);
-                  onNoteEditingChange(false);
-                }
-                if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) commitNote();
-              }}
-              onBlur={commitNote}
-            />
-          </div>
-        )}
-        <BankLogo
-          src={node.bankLogo}
-          alt={node.bankName}
-          sizeClassName="size-11"
-          backgroundClassName="bg-muted/70"
-        />
-        <div className="min-w-0 flex-1 pr-7">
-          <p className="truncate text-sm font-semibold">{node.label}</p>
-          <p className="truncate text-[10px] text-muted-foreground">{node.bankName}</p>
-          <p className="truncate text-[10px] text-muted-foreground">{formatIban(node.iban)}</p>
-          <p className="truncate text-[10px] font-medium text-foreground">
-            Kontostand: {node.balance === undefined ? "-" : formatAmount(node.balance)}
-          </p>
-          {note && (
-            <p
-              className="mt-1 line-clamp-3 overflow-hidden text-ellipsis border-t border-border/70 pt-1 text-[10px] font-medium text-[#0f6cbd]"
-              title={note}
-            >
-              {note}
-            </p>
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label={`Konto ${node.label}`}
+          className={cn(
+            "flex h-full w-full origin-center items-center gap-3 rounded-xl border bg-card px-3 shadow-sm transition-[transform,box-shadow,border-color,opacity] duration-150 ease-out will-change-transform",
+            dragging ? "cursor-grabbing shadow-xl" : "cursor-grab",
+            active ? "border-[#00d4a1] ring-2 ring-[#00d4a1]/20" : "border-border",
+            hovered && !dimmed && !dragging && "-translate-y-0.5 border-[#54a0ff]/60 shadow-md",
+            dragging && "scale-[1.03] shadow-[0_18px_38px_-8px_rgba(15,23,42,0.28)]",
+            dimmed && "opacity-35",
+            noteFocusMode && !noteEditing && "blur-[3px] opacity-60",
           )}
+          onClick={onSelect}
+          onPointerEnter={onPointerEnter}
+          onPointerLeave={onPointerLeave}
+          onPointerDown={onDragStart}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") onSelect();
+          }}
+        >
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  "absolute right-2 top-2 z-10 flex size-6 cursor-pointer items-center justify-center rounded-control text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                  note && "text-[#0f6cbd]",
+                )}
+                aria-label={note ? "Kontonotiz bearbeiten" : "Kontonotiz hinzufügen"}
+                title={note || "Kontonotiz hinzufügen"}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setDraftNote(note);
+                  setEditingNote((current) => !current);
+                  onNoteEditingChange(!editingNote);
+                }}
+              >
+                <StickyNote className="size-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              {note ? "Kontonotiz bearbeiten" : "Kontonotiz hinzufügen"}
+            </TooltipContent>
+          </Tooltip>
+          {editingNote && (
+            <div
+              className="absolute left-2 top-[calc(100%+6px)] z-30 w-[210px] rounded-lg border border-border/70 bg-popover/95 p-1 shadow-[0_8px_24px_rgba(15,23,42,0.16)] backdrop-blur"
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              <textarea
+                autoFocus
+                value={draftNote}
+                rows={3}
+                className="block w-full resize-none rounded-sm border-0 bg-muted/45 px-2.5 py-2 text-xs leading-5 text-foreground outline-none placeholder:text-muted-foreground/70 focus:bg-background focus:ring-2 focus:ring-[#0f6cbd]/25"
+                placeholder="z. B. 3,5 % Zinsen"
+                aria-label={`Notiz für ${node.label}`}
+                onChange={(event) => setDraftNote(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    setDraftNote(note);
+                    setEditingNote(false);
+                    onNoteEditingChange(false);
+                  }
+                  if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) commitNote();
+                }}
+                onBlur={commitNote}
+              />
+            </div>
+          )}
+          <BankLogo
+            src={node.bankLogo}
+            srcDark={node.bankLogoDark}
+            alt={node.bankName}
+          sizeClassName="size-12"
+          className="p-1"
+          backgroundClassName="bg-muted/70"
+          />
+          <div className="min-w-0 flex-1 pr-7">
+            <p className="truncate text-sm font-semibold">{node.label}</p>
+            <p className="truncate text-[10px] text-muted-foreground">{node.bankName}</p>
+            <p className="truncate text-[10px] text-muted-foreground">{formatIban(node.iban)}</p>
+            <p className="truncate text-[10px] font-medium text-foreground">
+              Kontostand: {node.balance === undefined ? "-" : formatAmount(node.balance)}
+            </p>
+            {node.externalFlow !== undefined && (
+              <p className="truncate text-[10px] font-medium text-foreground">
+                {node.externalFlow > 0 ? "Kontoeinfluss" : "Kontoausfluss"}:{" "}
+                <span className={node.externalFlow > 0 ? "text-emerald-500" : "text-red-500"}>
+                  {formatAmount(Math.abs(node.externalFlow))}
+                </span>
+              </p>
+            )}
+            {note && (
+              <p
+                className="mt-1 truncate border-t border-border/70 pt-1 text-[10px] font-medium text-[#0f6cbd]"
+                title={note}
+              >
+                {note}
+              </p>
+            )}
+          </div>
         </div>
-      </div>
-    </foreignObject>
+      </foreignObject>
+    </g>
   );
 }
 
 function EdgeLabel({
   edge,
   position,
+  start,
+  end,
   color,
-  emphasized,
-  onSelect,
-  onPointerEnter,
-  onPointerLeave,
 }: {
   edge: AccountFlowEdge;
   position: Point;
+  start: Point;
+  end: Point;
   color: string;
-  emphasized: boolean;
-  onSelect: () => void;
-  onPointerEnter: () => void;
-  onPointerLeave: () => void;
 }) {
-  if (edge.amountTargetToSource === 0 && edge.amountSourceToTarget === 0) return null;
+  const net = netFlowAmount(edge);
+  if (Math.abs(net) < 0.005) return null;
 
-  const amountLabels = [
-    edge.amountTargetToSource > 0 ? `← ${formatFlowAmount(edge.amountTargetToSource)}` : null,
-    edge.amountSourceToTarget > 0 ? `→ ${formatFlowAmount(edge.amountSourceToTarget)}` : null,
-  ].filter((label): label is string => label !== null);
+  const arrow = flowArrow(net > 0 ? start : end, net > 0 ? end : start);
+  const amountLabel = `${arrow} ${formatFlowAmount(Math.abs(net))}`;
   const transactionLabel = `${edge.transactionCount} ${edge.transactionCount === 1 ? "Buchung" : "Buchungen"}`;
-  const labelWidth = Math.max(
-    116,
-    ...amountLabels.map((label) => label.length * 7 + 24),
-    transactionLabel.length * 5 + 24,
-  );
-  const labelHeight = 16 + amountLabels.length * 14 + 6;
+  const labelWidth = Math.max(116, amountLabel.length * 7 + 24, transactionLabel.length * 5 + 24);
+  const labelHeight = 36;
   const labelTop = position.y - labelHeight / 2;
 
   return (
-    <g
-      className="cursor-pointer"
-      onClick={onSelect}
-      onPointerEnter={onPointerEnter}
-      onPointerLeave={onPointerLeave}
-    >
+    <g>
       <rect
         x={position.x - labelWidth / 2}
         y={labelTop}
@@ -630,20 +646,17 @@ function EdgeLabel({
         rx={8}
         fill="hsl(var(--card))"
         stroke={color}
-        strokeWidth={emphasized ? 1.5 : 1}
-        className="transition-[stroke,stroke-width] duration-150 ease-out"
+        strokeWidth={1.5}
+        className="transition-[stroke] duration-150 ease-out"
       />
-      {amountLabels.map((label, index) => (
-        <text
-          key={label}
-          x={position.x}
-          y={labelTop + 14 + index * 14}
-          textAnchor="middle"
-          className="fill-foreground text-[11px] font-semibold"
-        >
-          {label}
-        </text>
-      ))}
+      <text
+        x={position.x}
+        y={labelTop + 14}
+        textAnchor="middle"
+        className="fill-foreground text-[11px] font-semibold"
+      >
+        {amountLabel}
+      </text>
       <text
         x={position.x}
         y={labelTop + labelHeight - 7}
@@ -674,7 +687,6 @@ export function AccountFlowGraph({
   const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
-  const [showEdgeLabels, setShowEdgeLabels] = useState(true);
   const [hoveredZoneId, setHoveredZoneId] = useState<string | null>(null);
   const [zones, setZones] = useState<AccountFlowZone[]>([]);
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -735,7 +747,6 @@ export function AccountFlowGraph({
         });
         setPositions(next);
         setZones((current) => (current.length > 0 ? current : (layout.zones ?? [])));
-        setShowEdgeLabels(layout.showEdgeLabels ?? true);
         setNotes((current) => (Object.keys(current).length > 0 ? current : (layout.notes ?? {})));
         const fitView = getFitView(graph.nodes, next);
         setScale(fitView.scale);
@@ -764,7 +775,6 @@ export function AccountFlowGraph({
       void saveAccountFlowLayout({
         positions: Object.fromEntries(positions.entries()),
         zones,
-        showEdgeLabels,
         notes,
       }).catch(() => undefined);
     }, 400);
@@ -772,7 +782,7 @@ export function AccountFlowGraph({
     return () => {
       if (layoutSaveTimeout.current) clearTimeout(layoutSaveTimeout.current);
     };
-  }, [layoutLoaded, positions, zones, showEdgeLabels, notes]);
+  }, [layoutLoaded, positions, zones, notes]);
 
   useEffect(
     () => () => {
@@ -819,7 +829,10 @@ export function AccountFlowGraph({
   }, [graph.edges, positions]);
 
   const edgeGeometry = useMemo(() => {
-    const result = new Map<string, { path: string; length: number; label: Point }>();
+    const result = new Map<
+      string,
+      { path: string; length: number; label: Point; start: Point; end: Point }
+    >();
     graph.edges.forEach((edge) => {
       const source = positions.get(edge.source);
       const target = positions.get(edge.target);
@@ -847,6 +860,8 @@ export function AccountFlowGraph({
         path: roundedPath(waypoints, CORNER_RADIUS),
         length,
         label: { x: (mid.x + midNext.x) / 2, y: (mid.y + midNext.y) / 2 },
+        start: waypoints[0],
+        end: waypoints[waypoints.length - 1],
       });
     });
     return result;
@@ -870,6 +885,22 @@ export function AccountFlowGraph({
     });
     return ids;
   }, [graph.edges, hoveredNodeId]);
+
+  const nodePorts = useMemo(() => {
+    const ports = new Map<string, Point[]>();
+    const addPort = (nodeId: string, point: Point) => {
+      ports.set(nodeId, [...(ports.get(nodeId) ?? []), point]);
+    };
+
+    graph.edges.forEach((edge) => {
+      const geometry = edgeGeometry.get(edge.id);
+      if (!geometry) return;
+      addPort(edge.source, geometry.start);
+      addPort(edge.target, geometry.end);
+    });
+
+    return ports;
+  }, [graph.edges, edgeGeometry]);
 
   const orderedNodes = useMemo(() => {
     // Render the hovered/dragged card last so it visually sits above its neighbours.
@@ -1188,11 +1219,11 @@ export function AccountFlowGraph({
 
   return (
     <div
-      className="min-h-[760px] overflow-hidden rounded-panel border border-border bg-card"
+      className="min-h-0 flex-1 overflow-hidden rounded-panel border border-border bg-card"
       onKeyDown={handleContainerKeyDown}
       tabIndex={-1}
     >
-      <div className="relative min-h-[760px] overflow-hidden bg-[#fafbfc] dark:bg-[#17191d]">
+      <div className="relative h-full overflow-hidden bg-[#fafbfc] dark:bg-[#17191d]">
         <div className="absolute left-4 top-4 z-10 flex items-center gap-2 rounded-lg border border-border bg-card/90 px-3 py-2 backdrop-blur">
           <Waypoints className="size-4 text-[#54a0ff]" />
           <span className="text-xs text-muted-foreground">
@@ -1214,24 +1245,6 @@ export function AccountFlowGraph({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top">Zone erstellen</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-8"
-                aria-label={showEdgeLabels ? "Labels ausblenden" : "Labels einblenden"}
-                aria-pressed={showEdgeLabels}
-                title={showEdgeLabels ? "Labels ausblenden" : "Labels einblenden"}
-                onClick={() => setShowEdgeLabels((visible) => !visible)}
-              >
-                {showEdgeLabels ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top">
-              {showEdgeLabels ? "Labels ausblenden" : "Labels einblenden"}
-            </TooltipContent>
           </Tooltip>
           <div className="mx-0.5 h-5 w-px bg-border" aria-hidden="true" />
           <Tooltip>
@@ -1303,7 +1316,7 @@ export function AccountFlowGraph({
           ref={svgRef}
           viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
           className={cn(
-            "h-full min-h-[760px] w-full touch-none select-none",
+            "h-full w-full touch-none select-none",
             isPanning ? "cursor-grabbing" : "cursor-grab",
           )}
           role="img"
@@ -1375,6 +1388,9 @@ export function AccountFlowGraph({
                   ? COLOR_HOVER
                   : COLOR_DEFAULT;
               const dimmedByHover = connectedEdgeIds !== null && !connected;
+              // Dashes run along the path from source to target; reverse them when
+              // the net money flow points the other way.
+              const dashValues = netFlowAmount(edge) > 0 ? "0;-12" : "0;12";
 
               return (
                 <g
@@ -1411,7 +1427,7 @@ export function AccountFlowGraph({
                     >
                       <animate
                         attributeName="stroke-dashoffset"
-                        values="0;-12"
+                        values={dashValues}
                         dur="0.5s"
                         repeatCount="indefinite"
                       />
@@ -1431,6 +1447,7 @@ export function AccountFlowGraph({
                   node={node}
                   position={position}
                   note={notes[node.id] ?? ""}
+                  ports={nodePorts.get(node.id) ?? []}
                   noteEditing={editingNoteNodeId === node.id}
                   noteFocusMode={editingNoteNodeId !== null}
                   active={activeAccountIban !== "all" && activeAccountIban === node.id}
@@ -1486,40 +1503,24 @@ export function AccountFlowGraph({
               );
             })}
             {!editingNoteNodeId &&
-              showEdgeLabels &&
+              connectedEdgeIds !== null &&
               graph.edges.map((edge) => {
+                if (!connectedEdgeIds.has(edge.id)) return null;
                 const geometry = edgeGeometry.get(edge.id);
                 if (!geometry) return null;
-                const selected = edge.id === selectedEdgeId;
-                const hovered = edge.id === hoveredEdgeId;
-                const connected = connectedEdgeIds ? connectedEdgeIds.has(edge.id) : true;
-                const emphasized = selected || hovered || (connectedEdgeIds !== null && connected);
-                const color = selected
-                  ? COLOR_ACTIVE
-                  : hovered || connected
-                    ? COLOR_HOVER
-                    : COLOR_DEFAULT;
-                const dimmedByHover = connectedEdgeIds !== null && !connected;
+                const color = edge.id === selectedEdgeId ? COLOR_ACTIVE : COLOR_HOVER;
 
                 return (
                   <g
                     key={`${edge.id}-label`}
-                    className={cn(
-                      "pointer-events-none transition-opacity duration-150 ease-out",
-                      editingNoteNodeId && "blur-[3px] opacity-60",
-                    )}
-                    style={{ opacity: dimmedByHover ? 0.25 : 1 }}
+                    className="pointer-events-none transition-opacity duration-150 ease-out"
                   >
                     <EdgeLabel
                       edge={edge}
                       position={geometry.label}
+                      start={geometry.start}
+                      end={geometry.end}
                       color={color}
-                      emphasized={emphasized}
-                      onSelect={() => setSelectedEdgeId(edge.id)}
-                      onPointerEnter={() => setHoveredEdgeId(edge.id)}
-                      onPointerLeave={() =>
-                        setHoveredEdgeId((current) => (current === edge.id ? null : current))
-                      }
                     />
                   </g>
                 );

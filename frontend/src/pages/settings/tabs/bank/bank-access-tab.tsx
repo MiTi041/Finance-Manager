@@ -13,7 +13,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { CheckCircle2, Eye, EyeOff, Loader2, Plus, ShieldCheck, Smartphone, Timer, X } from "lucide-react";
+import {
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  Loader2,
+  Plus,
+  ShieldCheck,
+  Smartphone,
+  Timer,
+  X,
+} from "lucide-react";
 import {
   deleteBankCredentials,
   fetchAvailableBanks,
@@ -33,6 +43,7 @@ type SettingsFormState = {
   tan_medium: string;
   manual_account_name: string;
   manual_iban: string;
+  manual_provider: string;
 };
 
 const INITIAL_FORM_STATE: SettingsFormState = {
@@ -42,6 +53,7 @@ const INITIAL_FORM_STATE: SettingsFormState = {
   tan_medium: "",
   manual_account_name: "",
   manual_iban: "",
+  manual_provider: "",
 };
 
 const COOLDOWN_STORAGE_KEY = "finance-bank-check-cooldowns";
@@ -237,6 +249,15 @@ export function BankAccessTab() {
     const iban = normalizeIban(form.manual_iban);
     if (!accountName || !iban) return;
 
+    const hasDuplicateIban = linkedAccounts.some((credential) =>
+      (credential.accounts ?? []).some((account) => normalizeIban(account.iban ?? "") === iban),
+    );
+    if (hasDuplicateIban) {
+      setCheckError("Diese IBAN ist bereits hinterlegt.");
+      setCheckDialogOpen(true);
+      return;
+    }
+
     setIsChecking(true);
     try {
       await saveBankCredentials({
@@ -244,13 +265,22 @@ export function BankAccessTab() {
         account_name: accountName,
         username: "",
         pin: "",
-        accounts: [{ iban, account_name: accountName, can_transfer: false }],
+        accounts: [
+          {
+            iban,
+            account_name: accountName,
+            bank_key: form.manual_provider || null,
+            can_transfer: false,
+          },
+        ],
       });
       setForm(INITIAL_FORM_STATE);
       await loadData({ forceRefresh: true });
     } catch (error) {
       setCheckError(
-        error instanceof Error ? error.message : "Manueller Bankzugang konnte nicht gespeichert werden.",
+        error instanceof Error
+          ? error.message
+          : "Manueller Bankzugang konnte nicht gespeichert werden.",
       );
       setCheckDialogOpen(true);
     } finally {
@@ -307,6 +337,21 @@ export function BankAccessTab() {
 
   const selectedBank = availableBanks.find((bank) => bank.key === form.bank_key);
   const isManual = form.bank_key === "manual";
+  const manualProviders = availableBanks.filter((bank) => bank.manual && bank.key !== "manual");
+  // Manual providers are chosen inside the "Manuell" form, not as top-level banks.
+  const selectableBanks = availableBanks.filter((bank) => !bank.manual || bank.key === "manual");
+
+  const handleProviderChange = (providerKey: string) => {
+    const provider = manualProviders.find((bank) => bank.key === providerKey);
+    setForm((current) => ({
+      ...current,
+      manual_provider: providerKey,
+      manual_account_name:
+        current.manual_account_name.trim() === "" && provider
+          ? provider.name
+          : current.manual_account_name,
+    }));
+  };
 
   const canCheck =
     form.bank_key.trim() !== "" &&
@@ -339,12 +384,23 @@ export function BankAccessTab() {
               <BankSelectionGrid
                 selectedKey={form.bank_key}
                 onSelect={(bankKey) => handleChange("bank_key", bankKey)}
-                banks={availableBanks}
+                banks={selectableBanks}
               />
             </div>
 
             {isManual ? (
               <>
+                {manualProviders.length > 0 ? (
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium">Anbieter</label>
+                    <BankSelectionGrid
+                      selectedKey={form.manual_provider}
+                      onSelect={handleProviderChange}
+                      banks={manualProviders}
+                    />
+                  </div>
+                ) : null}
+
                 <div className="grid gap-2">
                   <label className="text-sm font-medium" htmlFor="manual_account_name">
                     Kontoname
@@ -370,8 +426,9 @@ export function BankAccessTab() {
                     autoComplete="off"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Alle manuellen Konten erscheinen unter dem Bankzugang „Manuell“. Transaktionen
-                    fügst du dort selbst auf der Transaktionsseite hinzu.
+                    Konten erscheinen unter dem gewählten Anbieter. Die Sender-IBAN wird vom
+                    Anbieter übernommen. Transaktionen fügst du selbst auf der Transaktionsseite
+                    hinzu.
                   </p>
                 </div>
               </>

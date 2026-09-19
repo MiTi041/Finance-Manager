@@ -116,6 +116,7 @@ export function ZahlungspartnerSection({
             {partnerBank ? (
               <BankLogo
                 src={partnerBank.bankLogo || undefined}
+                srcDark={partnerBank.bankLogoDark || undefined}
                 alt={partnerBank.accountName || partnerBank.bankName || "Bank"}
                 sizeClassName="size-12 shrink-0 p-1"
                 kind="company"

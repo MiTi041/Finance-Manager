@@ -99,11 +99,14 @@ def _normalize_accounts(accounts: Any) -> list[dict[str, Any]]:
         if not iban:
             continue
 
+        sender_iban = "".join(normalize_text(account.get("sender_iban")).split())
         normalized_accounts.append(
             {
                 "iban": iban,
                 "account_name": normalize_text(account.get("account_name")) or None,
                 "holder_name": normalize_text(account.get("holder_name")) or None,
+                "bank_key": normalize_text(account.get("bank_key")).lower() or None,
+                "sender_iban": sender_iban or None,
                 "can_transfer": _coerce_can_transfer(account.get("can_transfer")),
             }
         )
@@ -117,12 +120,18 @@ def _sync_bank_accounts(
     accounts: list[dict[str, Any]],
 ) -> None:
     existing = connection.execute(
-        "SELECT iban, holder_name, archived, can_transfer, can_transfer_override, balance "
-        "FROM bank_accounts WHERE scope = ?",
+        "SELECT iban, holder_name, archived, can_transfer, can_transfer_override, balance, "
+        "bank_key, sender_iban FROM bank_accounts WHERE scope = ?",
         (scope,),
     ).fetchall()
     previous_holder = {
         normalize_text(row["iban"]).upper(): row["holder_name"] for row in existing
+    }
+    previous_bank_key = {
+        normalize_text(row["iban"]).upper(): row["bank_key"] for row in existing
+    }
+    previous_sender_iban = {
+        normalize_text(row["iban"]).upper(): row["sender_iban"] for row in existing
     }
     previous_can_transfer = {
         normalize_text(row["iban"]).upper(): row["can_transfer"] for row in existing
@@ -150,9 +159,9 @@ def _sync_bank_accounts(
     connection.executemany(
         """
         INSERT INTO bank_accounts
-            (scope, iban, account_name, holder_name, archived, can_transfer,
-             can_transfer_override, balance, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (scope, iban, account_name, holder_name, bank_key, sender_iban, archived,
+             can_transfer, can_transfer_override, balance, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
             (
@@ -161,6 +170,10 @@ def _sync_bank_accounts(
                 account.get("account_name"),
                 account.get("holder_name")
                 or previous_holder.get(normalize_text(account["iban"]).upper()),
+                account.get("bank_key")
+                or previous_bank_key.get(normalize_text(account["iban"]).upper()),
+                account.get("sender_iban")
+                or previous_sender_iban.get(normalize_text(account["iban"]).upper()),
                 1 if previous_archived.get(normalize_text(account["iban"]).upper(), False) else 0,
                 _to_stored_can_transfer(
                     account.get("can_transfer"),
@@ -180,6 +193,7 @@ def _load_bank_accounts(connection: sqlite3.Connection, scope: str) -> list[dict
     rows = connection.execute(
         """
         SELECT iban, account_name, holder_name, balance, archived, can_transfer, can_transfer_override,
+               bank_key, sender_iban,
                (
                    SELECT migrated.account_iban
                    FROM umsaetze AS migrated
@@ -200,6 +214,8 @@ def _load_bank_accounts(connection: sqlite3.Connection, scope: str) -> list[dict
             "iban": row["iban"],
             "account_name": row["account_name"],
             "holder_name": row["holder_name"],
+            "bank_key": row["bank_key"],
+            "sender_iban": row["sender_iban"],
             "balance": row["balance"],
             "archived": bool(row["archived"]),
             "migrated_to_iban": row["migrated_to_iban"],
@@ -420,6 +436,7 @@ def update_bank_account(
     account_name: str | None = None,
     account_iban: str | None = None,
     holder_name: str | None = None,
+    sender_iban: str | None = None,
     archived: bool | None = None,
     can_transfer: bool | None = None,
     can_transfer_override: Any = _UNSET,
@@ -431,7 +448,8 @@ def update_bank_account(
     with get_connection() as connection:
         row = connection.execute(
             """
-            SELECT iban, account_name, holder_name, archived, can_transfer, can_transfer_override
+            SELECT iban, account_name, holder_name, sender_iban, archived, can_transfer,
+                   can_transfer_override
             FROM bank_accounts
             WHERE scope = ? AND UPPER(iban) = UPPER(?)
             """,
@@ -446,6 +464,11 @@ def update_bank_account(
         new_holder = (
             normalize_text(holder_name) if holder_name is not None else row["holder_name"]
         )
+        new_sender_iban = (
+            "".join(normalize_text(sender_iban).split())
+            if sender_iban is not None
+            else row["sender_iban"]
+        ) or None
         new_archived = int(archived) if archived is not None else row["archived"]
         new_can_transfer = (
             _to_stored_can_transfer(can_transfer, row["can_transfer"])
@@ -461,14 +484,15 @@ def update_bank_account(
         connection.execute(
             """
             UPDATE bank_accounts
-            SET iban = ?, account_name = ?, holder_name = ?, archived = ?, can_transfer = ?,
-                can_transfer_override = ?, updated_at = ?
+            SET iban = ?, account_name = ?, holder_name = ?, sender_iban = ?, archived = ?,
+                can_transfer = ?, can_transfer_override = ?, updated_at = ?
             WHERE scope = ? AND UPPER(iban) = UPPER(?)
             """,
             (
                 new_iban,
                 new_name,
                 new_holder,
+                new_sender_iban,
                 new_archived,
                 new_can_transfer,
                 new_override,

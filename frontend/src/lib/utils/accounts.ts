@@ -10,6 +10,10 @@ export type BankAccountOption = {
   holderName?: string;
   bankName: string;
   bankLogo?: string;
+  bankLogoDark?: string;
+  logoPadding?: number;
+  /** Fixed payout IBAN of the provider, treated as part of this account. */
+  senderIban?: string | null;
   username?: string;
   scope: string;
   manual?: boolean;
@@ -41,8 +45,11 @@ export function buildAccountOptions(
               bank.username ||
               "Konto",
             holderName: account.holder_name || undefined,
-            bankName: bank.bank_name || bank.bank_key,
-            bankLogo: bank.bank_logo || undefined,
+            bankName: account.bank_name || bank.bank_name || bank.bank_key,
+            bankLogo: account.bank_logo || bank.bank_logo || undefined,
+            bankLogoDark: account.bank_logo_dark || bank.bank_logo_dark || undefined,
+            logoPadding: bank.logo_padding || undefined,
+            senderIban: account.sender_iban || undefined,
             username: bank.username,
             scope: bank.scope,
             manual: bank.manual === true,
@@ -61,6 +68,8 @@ export function buildAccountOptions(
         accountName: bank.account_name || bank.bank_name || bank.username || "Konto",
         bankName: bank.bank_name || bank.bank_key,
         bankLogo: bank.bank_logo || undefined,
+        bankLogoDark: bank.bank_logo_dark || undefined,
+        logoPadding: bank.logo_padding || undefined,
         username: bank.username,
         scope: bank.scope,
         manual: bank.manual === true,
@@ -98,22 +107,31 @@ export function buildLinkedAccountLookup(linkedAccounts: LinkedBankEntry[]) {
     if ("accounts" in entry && entry.accounts?.length) {
       entry.accounts.forEach((account) => {
         const iban = normalizeIban(account.iban);
-        if (iban) {
-          lookup.set(iban, {
-            accountIban: iban,
-            accountName:
-              account.account_name ||
-              entry.account_name ||
-              entry.bank_name ||
-              entry.username ||
-              "Konto",
-            bankName: entry.bank_name || entry.bank_key,
-            bankLogo: entry.bank_logo,
-            username: entry.username,
-            scope: entry.scope,
-            manual: entry.manual === true,
-            archived: account.archived === true,
-          });
+        if (!iban) return;
+
+        const option: SelectedBankOption = {
+          accountIban: iban,
+          accountName:
+            account.account_name ||
+            entry.account_name ||
+            entry.bank_name ||
+            entry.username ||
+            "Konto",
+          bankName: account.bank_name || entry.bank_name || entry.bank_key,
+          bankLogo: account.bank_logo || entry.bank_logo,
+          bankLogoDark: account.bank_logo_dark || entry.bank_logo_dark,
+          username: entry.username,
+          scope: entry.scope,
+          manual: entry.manual === true,
+          archived: account.archived === true,
+        };
+        lookup.set(iban, option);
+
+        // The provider's payout IBAN belongs to the same account, so transfers
+        // from it are recognised as internal (Kontotransfer).
+        const senderIban = normalizeIban(account.sender_iban);
+        if (senderIban && !lookup.has(senderIban)) {
+          lookup.set(senderIban, option);
         }
       });
       return;
@@ -137,6 +155,7 @@ export function buildLinkedAccountLookup(linkedAccounts: LinkedBankEntry[]) {
             accountName: entry.account_name || entry.bank_name || entry.username || "Konto",
             bankName: entry.bank_name || entry.bank_key,
             bankLogo: entry.bank_logo,
+            bankLogoDark: entry.bank_logo_dark,
             username: entry.username,
             scope: entry.scope,
             manual: entry.manual === true,
