@@ -27,6 +27,7 @@ export type StoredBankCredentials = {
     bank_logo_dark?: string | null;
     balance?: number | null;
     archived?: boolean;
+    exclude_from_totals?: boolean;
     migrated_to_iban?: string | null;
     can_transfer?: boolean | null;
     can_transfer_detected?: boolean | null;
@@ -49,6 +50,7 @@ export type BankCredentials = {
     bank_key?: string | null;
     sender_iban?: string | null;
     archived?: boolean;
+    exclude_from_totals?: boolean;
     can_transfer?: boolean | null;
     can_transfer_detected?: boolean | null;
     can_transfer_override?: boolean | null;
@@ -257,6 +259,7 @@ export async function updateBankAccount(
     holder_name?: string;
     sender_iban?: string;
     archived?: boolean;
+    exclude_from_totals?: boolean;
     can_transfer_override?: boolean | null;
   },
 ): Promise<BankCredentialsStatus> {

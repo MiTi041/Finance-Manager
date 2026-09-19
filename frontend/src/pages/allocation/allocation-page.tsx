@@ -34,8 +34,8 @@ import {
 
 function extractBankAccounts(
   banks: StoredBankCredentials[],
-): { iban: string; name: string; bankKey: string }[] {
-  const accounts: { iban: string; name: string; bankKey: string }[] = [];
+): { iban: string; name: string; bankKey: string; archived: boolean }[] {
+  const accounts: { iban: string; name: string; bankKey: string; archived: boolean }[] = [];
   for (const bank of banks) {
     for (const acc of bank.accounts ?? []) {
       if (acc.iban)
@@ -43,6 +43,7 @@ function extractBankAccounts(
           iban: acc.iban as string,
           name: (acc.account_name as string) ?? (acc.iban as string),
           bankKey: bank.bank_key,
+          archived: acc.archived === true,
         });
     }
   }
@@ -54,7 +55,7 @@ export default function AllocationPage() {
     useAllocation();
   const [recipientAccounts, setRecipientAccounts] = useState<RecipientAccountRecord[]>([]);
   const [bankAccounts, setBankAccounts] = useState<
-    { iban: string; name: string; bankKey: string }[]
+    { iban: string; name: string; bankKey: string; archived: boolean }[]
   >([]);
   const [canTransferMap, setCanTransferMap] = useState<Map<string, boolean>>(new Map());
   const runBucketIdRef = useRef<number>(0);
@@ -128,6 +129,11 @@ export default function AllocationPage() {
   const senderBankAccounts = useMemo(
     () => bankAccounts.filter((a) => canTransferMap.get(a.iban) !== false),
     [bankAccounts, canTransferMap],
+  );
+
+  const selectableBankAccounts = useMemo(
+    () => bankAccounts.filter((a) => !a.archived),
+    [bankAccounts],
   );
 
   const handleTransfer = useCallback(
@@ -394,7 +400,7 @@ export default function AllocationPage() {
                   recipient_name: r.recipient_name,
                   iban: r.iban,
                 }))}
-                bankAccounts={bankAccounts}
+                bankAccounts={selectableBankAccounts}
                 canTransferMap={canTransferMap}
                 bafoegActive={
                   status.config.some((c) => c.bucket_type === "bafoeg" && c.is_active) &&
@@ -422,7 +428,7 @@ export default function AllocationPage() {
         onRefresh={handleSavingsRefresh}
         onTransfer={handleSavingsPlanTransfer}
         recipientAccounts={recipientAccounts}
-        bankAccounts={bankAccounts}
+        bankAccounts={selectableBankAccounts}
         canTransferMap={canTransferMap}
       />
 

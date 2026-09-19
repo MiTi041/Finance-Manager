@@ -11,6 +11,7 @@ def fetch_summary(
     account_iban: str | None = None,
     from_date: str | None = None,
     to_date: str | None = None,
+    exclude_ibans: list[str] | None = None,
 ) -> dict[str, Any]:
     where_clauses: list[str] = []
     params: list[Any] = []
@@ -33,6 +34,11 @@ def fetch_summary(
     if account_iban:
         where_clauses.append("account_iban = ?")
         params.append(account_iban)
+
+    if exclude_ibans:
+        placeholders = ",".join("?" for _ in exclude_ibans)
+        where_clauses.append(f"account_iban NOT IN ({placeholders})")
+        params.extend(exclude_ibans)
 
     where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
 

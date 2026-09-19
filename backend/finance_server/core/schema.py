@@ -214,6 +214,7 @@ def create_bank_accounts_table(connection: sqlite3.Connection) -> None:
             bank_key TEXT,
             sender_iban TEXT,
             archived INTEGER NOT NULL DEFAULT 0,
+            exclude_from_totals INTEGER NOT NULL DEFAULT 0,
             can_transfer INTEGER,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -669,6 +670,7 @@ def initialize_database(connection: sqlite3.Connection) -> None:
             "holder_name": "TEXT",
             "can_transfer": "INTEGER",
             "can_transfer_override": "INTEGER",
+            "exclude_from_totals": "INTEGER NOT NULL DEFAULT 0",
         },
     )
 

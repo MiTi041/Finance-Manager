@@ -117,6 +117,7 @@ export function DateFilter({
           <PopoverContent className="w-auto p-0" align="start">
             <Calendar
               mode="range"
+              captionLayout="dropdown"
               defaultMonth={date?.from}
               selected={date}
               onSelect={handleDateSelect}

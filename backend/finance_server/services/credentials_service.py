@@ -281,6 +281,11 @@ class CredentialsService:
             holder_name=payload.get("holder_name"),
             sender_iban=payload.get("sender_iban"),
             archived=payload.get("archived") if "archived" in payload else None,
+            exclude_from_totals=(
+                payload.get("exclude_from_totals")
+                if "exclude_from_totals" in payload
+                else None
+            ),
             **(
                 {"can_transfer_override": payload["can_transfer_override"]}
                 if "can_transfer_override" in payload

@@ -20,12 +20,14 @@ def get_summary(
     from_date: str | None = Query(default=None),
     to_date: str | None = Query(default=None),
     iban: str | None = None,
+    exclude_ibans: list[str] = Query(default_factory=list),
 ) -> dict[str, Any]:
     return fetch_summary(
         days=days,
         account_iban=iban,
         from_date=from_date,
         to_date=to_date,
+        exclude_ibans=exclude_ibans,
     )
 
 

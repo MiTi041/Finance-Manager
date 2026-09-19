@@ -5,28 +5,22 @@ export interface SubscriptionBudgetSub {
   frequency: SubscriptionFrequency;
 }
 
-const FREQUENCY_MONTHLY_FACTOR: Record<SubscriptionFrequency, number> = {
-  MONTHLY: 1,
-  SEMI_ANNUAL: 1 / 6,
-  ANNUAL: 1 / 12,
-};
-
 export interface SpendingSubscriptionState {
   load: number;
   shortfall: number;
 }
 
 // The question is "does the Restliche-Ausgaben budget cover the subscriptions?",
-// so only the monthly subscription load vs the spending-bucket target matters.
-// What was already spent this month is a separate signal (spent vs target),
-// mixing it in made the shortfall conflate subscriptions with other spending.
+// so only the monthly subscriptions vs the spending-bucket target matter.
+// Semi-annual and annual subscriptions are ignored here.
 export function computeSpendingSubscriptionState(
   subscriptions: SubscriptionBudgetSub[],
   target: number,
 ): SpendingSubscriptionState {
   let load = 0;
   for (const sub of subscriptions) {
-    load += sub.effectiveAmount * FREQUENCY_MONTHLY_FACTOR[sub.frequency];
+    if (sub.frequency !== "MONTHLY") continue;
+    load += sub.effectiveAmount;
   }
   load = round2(load);
   return { load, shortfall: round2(Math.max(0, load - target)) };

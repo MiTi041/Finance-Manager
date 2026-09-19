@@ -329,29 +329,10 @@ export default function SubscriptionsPage() {
     }
   };
 
-  const monthlyTotal = useMemo(() => {
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-
-    const isDateThisMonth = (dateStr: string) => {
-      const d = new Date(dateStr);
-      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-    };
-
-    const isDueThisMonth = (s: Subscription) =>
-      isDateThisMonth(s.nextDate) || isDateThisMonth(s.lastDate);
-
-    const monthlyDue = grouped.MONTHLY.filter(isDueThisMonth);
-    const semiAnnualDue = grouped.SEMI_ANNUAL.filter(isDueThisMonth);
-    const annualDue = grouped.ANNUAL.filter(isDueThisMonth);
-
-    const monthlyTotal = monthlyDue.reduce((sum, s) => sum + s.effectiveAmount, 0);
-    const semiAnnualMonthly = semiAnnualDue.reduce((sum, s) => sum + s.effectiveAmount / 6, 0);
-    const annualMonthly = annualDue.reduce((sum, s) => sum + s.effectiveAmount / 12, 0);
-
-    return monthlyTotal + semiAnnualMonthly + annualMonthly;
-  }, [grouped]);
+  const monthlyTotal = useMemo(
+    () => grouped.MONTHLY.reduce((sum, s) => sum + s.effectiveAmount, 0),
+    [grouped],
+  );
 
   if (error) {
     return (

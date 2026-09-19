@@ -19,7 +19,7 @@ import { useFinanceData } from "@/hooks/use-finance-data";
 import { useRefresh } from "@/hooks/use-refresh";
 import { normalizeIban } from "@/lib/iban";
 import { getErrorMessage } from "@/lib/utils/error";
-import { fetchAvailableBanks } from "@/lib/bank/credentials";
+import { fetchAvailableBanks, updateBankAccount } from "@/lib/bank/credentials";
 import {
   fetchRecipientAccountsReferenceData,
   createRecipientAccount,
@@ -58,7 +58,6 @@ export default function DashboardPage() {
   const { dateFilter, setDateFilter } = useGlobalDateFilter();
   const { triggerRefresh } = useRefresh();
   const {
-    balance,
     totalBalance,
     incomes,
     expenses,
@@ -71,7 +70,7 @@ export default function DashboardPage() {
     accountBalances,
     linkedAccounts,
     linkedBanks,
-  } = useFinanceData(dateFilter);
+  } = useFinanceData(dateFilter, { excludeHiddenAccounts: true });
 
   const [canTransferMap, setCanTransferMap] = useState<Map<string, boolean>>(new Map());
   const [recipientAccounts, setRecipientAccounts] = useState<RecipientAccountRecord[]>([]);
@@ -213,6 +212,15 @@ export default function DashboardPage() {
     if (ok) setVopState(null);
   }, [vopState, runTransfer]);
 
+  const handleToggleExclude = useCallback(
+    (scope: string, iban: string, next: boolean) => {
+      void updateBankAccount(scope, iban, { exclude_from_totals: next }).then(() =>
+        triggerRefresh(),
+      );
+    },
+    [triggerRefresh],
+  );
+
   if (error) {
     return (
       <EmptyState
@@ -305,12 +313,13 @@ export default function DashboardPage() {
                 setPresetSenderIban(iban);
                 setSetupOpen(true);
               }}
+              onToggleExclude={handleToggleExclude}
             />
           )}
 
           {transactions.length > 0 && (
             <>
-              <BalanceChart transactions={transactions} currentBalance={balance} />
+              <BalanceChart transactions={transactions} currentBalance={totalBalance} />
               <MonthlyChart transactions={transactions} />
             </>
           )}

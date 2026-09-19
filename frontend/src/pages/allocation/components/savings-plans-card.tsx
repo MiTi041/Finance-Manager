@@ -361,11 +361,13 @@ function PlanFormFields({
                 label: `${r.account_name} ${r.recipient_name} ${r.iban}`,
                 _type: "empf" as const,
               })),
-              ...bankAccounts.map((a) => ({
-                value: `bank:${a.iban}`,
-                label: `${a.name} ${a.iban}`,
-                _type: "bank" as const,
-              })),
+              ...bankAccounts
+                .filter((a) => !recipientAccounts.some((r) => r.iban === a.iban))
+                .map((a) => ({
+                  value: `bank:${a.iban}`,
+                  label: `${a.name} ${a.iban}`,
+                  _type: "bank" as const,
+                })),
             ]}
             placeholder="Kein Eintrag (manuelle Eingabe)"
             searchPlaceholder="Konto suchen…"

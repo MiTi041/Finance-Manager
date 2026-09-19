@@ -661,7 +661,11 @@ export function BucketSettingsDialog(props: Props) {
                       _type: "empf" as const,
                     })),
                     ...bankAccounts
-                      .filter((a) => a.iban !== config.sender_iban)
+                      .filter(
+                        (a) =>
+                          a.iban !== config.sender_iban &&
+                          !recipientAccounts.some((r) => r.iban === a.iban),
+                      )
                       .map((a) => ({
                         value: `bank:${a.iban}`,
                         label: `${a.name} ${a.iban}`,

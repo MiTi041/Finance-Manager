@@ -4,27 +4,36 @@ import {
   type SubscriptionBudgetSub,
 } from "./subscription-budget.ts";
 
+// only MONTHLY subscriptions count; semi-annual/annual are ignored
 const subs = [
   { effectiveAmount: 10, frequency: "MONTHLY" },
   { effectiveAmount: 12, frequency: "SEMI_ANNUAL" },
   { effectiveAmount: 120, frequency: "ANNUAL" },
 ] satisfies SubscriptionBudgetSub[];
 
-// monthly load = 10 + 12/6 + 120/12 = 22
+// monthly load = 10 (semi-annual 12 and annual 120 excluded)
 const s = computeSpendingSubscriptionState(subs, 100);
-assert.equal(s.load, 22);
+assert.equal(s.load, 10);
 assert.equal(s.shortfall, 0);
 
 // budget covers subs -> no warning
-const exact = computeSpendingSubscriptionState(subs, 22);
+const exact = computeSpendingSubscriptionState(subs, 10);
 assert.equal(exact.shortfall, 0);
 
-// budget too small -> shortfall = load - budget, independent of what was spent
-const tight = computeSpendingSubscriptionState(subs, 24.33);
-assert.ok(Math.abs(tight.shortfall - 0) < 1e-9, `no shortfall expected, got ${tight.shortfall}`);
+// budget too small -> shortfall = load - budget
+const tight = computeSpendingSubscriptionState(subs, 5);
+assert.ok(Math.abs(tight.shortfall - 5) < 1e-9);
 
-const tight2 = computeSpendingSubscriptionState(subs, 20);
-assert.ok(Math.abs(tight2.shortfall - 2) < 1e-9);
+// no monthly subs -> zero load, even if semi-annual/annual exist
+const onlyRare = computeSpendingSubscriptionState(
+  [
+    { effectiveAmount: 12, frequency: "SEMI_ANNUAL" },
+    { effectiveAmount: 120, frequency: "ANNUAL" },
+  ],
+  50,
+);
+assert.equal(onlyRare.load, 0);
+assert.equal(onlyRare.shortfall, 0);
 
 // no subs -> zero load
 const none = computeSpendingSubscriptionState([], 50);

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { format, startOfDay, endOfDay } from "date-fns";
 
 import { normalizeIban } from "@/lib/iban";
@@ -72,9 +72,12 @@ export function useFinanceData(
   {
     deletedBankTransactionsIncluded = false,
     ignoreActiveAccountFilter = false,
+    excludeHiddenAccounts = false,
   }: {
     deletedBankTransactionsIncluded?: boolean;
     ignoreActiveAccountFilter?: boolean;
+    /** Dashboard: Konten mit excludeFromTotals aus Summen/Charts rausrechnen. */
+    excludeHiddenAccounts?: boolean;
   } = {},
 ) {
   const { refreshVersion } = useRefresh();
@@ -112,6 +115,35 @@ export function useFinanceData(
   }, [activeAccountIban, ignoreActiveAccountFilter]);
 
   const { banks: linkedBanks } = useBankCredentials(refreshVersion);
+
+  const excludedIbans = useMemo(() => {
+    if (!excludeHiddenAccounts || activeAccountIban !== "all") return [];
+    const hidden: string[] = [];
+    linkedBanks.forEach((bank) => {
+      (bank.accounts ?? []).forEach((account) => {
+        const iban = normalizeIban(account.iban);
+        if (iban && account.exclude_from_totals === true) hidden.push(iban);
+      });
+    });
+    return hidden;
+  }, [linkedBanks, excludeHiddenAccounts, activeAccountIban]);
+
+  const withExcludedIbans = useCallback(
+    (base: string) => {
+      if (excludedIbans.length === 0) return base;
+      const params = new URLSearchParams(base);
+      excludedIbans.forEach((iban) => params.append("exclude_ibans", iban));
+      return params.toString();
+    },
+    [excludedIbans],
+  );
+
+  const summaryQueryParams = useMemo(() => withExcludedIbans(queryParams), [withExcludedIbans, queryParams]);
+  const totalSummaryQueryParams = useMemo(
+    () => withExcludedIbans(totalQueryParams),
+    [withExcludedIbans, totalQueryParams],
+  );
+
   const { references: ibanReferences } = useIbanReferences(refreshVersion);
   const {
     transactions: rawTransactions,
@@ -121,8 +153,12 @@ export function useFinanceData(
     error: txError,
     reload: loadTransactions,
   } = useTransactions(queryParams, refreshVersion);
-  const { summary } = useSummary(queryParams, refreshVersion);
-  const { summary: totalSummary } = useSummary(totalQueryParams, refreshVersion, !needsCorrection);
+  const { summary } = useSummary(summaryQueryParams, refreshVersion);
+  const { summary: totalSummary } = useSummary(
+    totalSummaryQueryParams,
+    refreshVersion,
+    !needsCorrection,
+  );
   const { balances: accountBalancesApi } = useAccountBalances(
     useMemo(() => {
       const params = new URLSearchParams(queryParams);
@@ -215,26 +251,52 @@ export function useFinanceData(
     [cleanedTransactions, dateFilter],
   );
 
+  const visibleCleanedTransactions = useMemo(
+    () =>
+      excludedIbans.length === 0
+        ? cleanedTransactions
+        : cleanedTransactions.filter((t) => !excludedIbans.includes(normalizeIban(t.konto.iban))),
+    [cleanedTransactions, excludedIbans],
+  );
+
+  const visibleFilteredTransactions = useMemo(
+    () =>
+      excludedIbans.length === 0
+        ? filteredTransactions
+        : filteredTransactions.filter((t) => !excludedIbans.includes(normalizeIban(t.konto.iban))),
+    [filteredTransactions, excludedIbans],
+  );
+
   const totalBalance = useMemo(() => {
-    const base = (totalSummary ?? summary)?.balance ?? calculateBalance(cleanedTransactions);
+    const base = (totalSummary ?? summary)?.balance ?? calculateBalance(visibleCleanedTransactions);
     if (selectedAccountIban) {
       const c = (accountOptions ?? []).find(
         (a) => a.accountIban === selectedAccountIban,
       )?.balanceCorrection;
       return base + (c ?? 0);
     }
-    return base + (accountOptions ?? []).reduce((s, a) => s + (a.balanceCorrection ?? 0), 0);
-  }, [cleanedTransactions, accountOptions, selectedAccountIban, summary, totalSummary]);
+    return base + (accountOptions ?? []).reduce(
+      (s, a) => s + (excludedIbans.includes(a.accountIban) ? 0 : (a.balanceCorrection ?? 0)),
+      0,
+    );
+  }, [
+    visibleCleanedTransactions,
+    accountOptions,
+    selectedAccountIban,
+    summary,
+    totalSummary,
+    excludedIbans,
+  ]);
 
   const balance = useMemo(() => {
-    if (!needsCorrection) return calculateBalance(filteredTransactions);
+    if (!needsCorrection) return calculateBalance(visibleFilteredTransactions);
     return totalBalance;
-  }, [filteredTransactions, needsCorrection, totalBalance]);
+  }, [visibleFilteredTransactions, needsCorrection, totalBalance]);
 
   const balanceFormatted = useMemo(() => formatBalance(balance), [balance]);
 
   const incomes = useMemo(() => {
-    const txs = needsCorrection ? cleanedTransactions : filteredTransactions;
+    const txs = needsCorrection ? visibleCleanedTransactions : visibleFilteredTransactions;
     const base = summary ? summary.incomes : calculateIncomes(txs);
 
     if (!needsCorrection) return base;
@@ -246,21 +308,23 @@ export function useFinanceData(
     }
     let positiveCorrectionSum = 0;
     for (const account of accountOptions) {
+      if (excludedIbans.includes(account.accountIban)) continue;
       const c = account.balanceCorrection;
       if (c && c > 0) positiveCorrectionSum += c;
     }
     return base + positiveCorrectionSum;
   }, [
-    cleanedTransactions,
-    filteredTransactions,
+    visibleCleanedTransactions,
+    visibleFilteredTransactions,
     accountOptions,
     selectedAccountIban,
     needsCorrection,
     summary,
+    excludedIbans,
   ]);
 
   const expenses = useMemo(() => {
-    const txs = needsCorrection ? cleanedTransactions : filteredTransactions;
+    const txs = needsCorrection ? visibleCleanedTransactions : visibleFilteredTransactions;
     const base = summary ? summary.expenses : calculateExpenses(txs);
 
     if (!needsCorrection) return base;
@@ -272,17 +336,19 @@ export function useFinanceData(
     }
     let negativeCorrectionSum = 0;
     for (const account of accountOptions) {
+      if (excludedIbans.includes(account.accountIban)) continue;
       const c = account.balanceCorrection;
       if (c && c < 0) negativeCorrectionSum += Math.abs(c);
     }
     return base + negativeCorrectionSum;
   }, [
-    cleanedTransactions,
-    filteredTransactions,
+    visibleCleanedTransactions,
+    visibleFilteredTransactions,
     accountOptions,
     selectedAccountIban,
     needsCorrection,
     summary,
+    excludedIbans,
   ]);
 
   const incomesFormatted = useMemo(() => formatBalance(incomes), [incomes]);
@@ -306,6 +372,8 @@ export function useFinanceData(
         accountIban: account.accountIban,
         accountName: account.accountName,
         bankName: account.bankName,
+        scope: account.scope,
+        excludeFromTotals: excludedIbans.includes(account.accountIban),
         balance:
           (needsCorrection ? (account.balanceCorrection ?? 0) : 0) +
           (apiBalance?.balance ?? byIban.get(account.accountIban) ?? 0),
@@ -318,10 +386,11 @@ export function useFinanceData(
     filteredTransactions,
     needsCorrection,
     accountBalancesApi,
+    excludedIbans,
   ]);
 
   const error = txError;
-  const transactions = filteredTransactions;
+  const transactions = visibleFilteredTransactions;
   const transactionCount = transactions.length;
 
   return {

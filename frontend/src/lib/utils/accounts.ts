@@ -18,6 +18,8 @@ export type BankAccountOption = {
   scope: string;
   manual?: boolean;
   balanceCorrection?: number | null;
+  /** Konto bleibt sichtbar, fließt aber nicht in Dashboard-Summen/Charts ein. */
+  excludeFromTotals?: boolean;
 };
 
 export function buildAccountOptions(
@@ -53,6 +55,7 @@ export function buildAccountOptions(
             username: bank.username,
             scope: bank.scope,
             manual: bank.manual === true,
+            excludeFromTotals: account.exclude_from_totals === true,
           });
         }
       });
