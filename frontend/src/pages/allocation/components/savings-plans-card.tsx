@@ -33,7 +33,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PayoutSlider } from "./payout-slider";
 import { SavingsPlanDatePickerInput } from "./savings-plan-date-picker-input";
-import { SearchableSelect } from "@/components/searchable-select";
+import { PrimaryOptionBadge, SearchableSelect } from "@/components/searchable-select";
 import { BankLogo } from "@/components/bank-logo";
 import { logoBackgroundClass } from "@/lib/bank/zahlungspartner-logo";
 import {
@@ -62,7 +62,7 @@ type Props = {
   onRefresh: () => void;
   onTransfer: (plan: SavingsPlan, customAmount?: number) => void;
   recipientAccounts: RecipientAccountRecord[];
-  bankAccounts: { iban: string; name: string; bankKey: string }[];
+  bankAccounts: { iban: string; name: string; bankKey: string; isPrimary?: boolean }[];
   canTransferMap: Map<string, boolean>;
 };
 
@@ -156,7 +156,7 @@ function PlanFormFields({
   values: FormValues;
   onChange: (v: FormValues) => void;
   recipientAccounts: RecipientAccountRecord[];
-  bankAccounts: { iban: string; name: string; bankKey: string }[];
+  bankAccounts: { iban: string; name: string; bankKey: string; isPrimary?: boolean }[];
   canTransferMap: Map<string, boolean>;
   existingTotal: number;
   availableForSavings: number;
@@ -367,6 +367,7 @@ function PlanFormFields({
                   value: `bank:${a.iban}`,
                   label: `${a.name} ${a.iban}`,
                   _type: "bank" as const,
+                  isPrimary: a.isPrimary === true,
                 })),
             ]}
             placeholder="Kein Eintrag (manuelle Eingabe)"
@@ -382,7 +383,10 @@ function PlanFormFields({
                 if (!a) return <span>{option.label}</span>;
                 return (
                   <div className="flex flex-col gap-0.5 py-1">
-                    <span className="font-medium text-sm leading-tight">{a.name}</span>
+                    <span className="flex items-center gap-1.5 font-medium text-sm leading-tight">
+                      {a.name}
+                      {a.isPrimary ? <PrimaryOptionBadge /> : null}
+                    </span>
                     <span className="text-xs text-muted-foreground leading-tight">
                       Eigenes Konto
                     </span>
@@ -413,7 +417,10 @@ function PlanFormFields({
                 if (!a) return <span>{option.label}</span>;
                 return (
                   <div className="flex flex-col items-start gap-0">
-                    <span className="text-sm leading-tight">{a.name}</span>
+                    <span className="flex items-center gap-1.5 text-sm leading-tight">
+                      {a.name}
+                      {a.isPrimary ? <PrimaryOptionBadge /> : null}
+                    </span>
                     <span className="font-mono text-[11px] text-muted-foreground leading-tight">
                       {formatIban(a.iban)}
                     </span>
@@ -489,6 +496,7 @@ function PlanFormFields({
             .map((a) => ({
               value: a.iban,
               label: `${a.name} ${a.iban}`,
+              isPrimary: a.isPrimary === true,
             }))}
           placeholder="Konto auswählen"
           searchPlaceholder="Konto suchen…"
@@ -498,7 +506,10 @@ function PlanFormFields({
             if (!a) return <span>{option.label}</span>;
             return (
               <div className="flex flex-col gap-0.5 py-1">
-                <span className="font-medium text-sm leading-tight">{a.name}</span>
+                <span className="flex items-center gap-1.5 font-medium text-sm leading-tight">
+                  {a.name}
+                  {a.isPrimary ? <PrimaryOptionBadge /> : null}
+                </span>
                 <span className="font-mono text-xs text-muted-foreground/70 leading-tight">
                   {formatIban(a.iban)}
                 </span>
@@ -510,7 +521,10 @@ function PlanFormFields({
             if (!a) return <span className="text-muted-foreground">Kein Konto</span>;
             return (
               <div className="flex flex-col items-start gap-0">
-                <span className="text-sm leading-tight">{a.name}</span>
+                <span className="flex items-center gap-1.5 text-sm leading-tight">
+                  {a.name}
+                  {a.isPrimary ? <PrimaryOptionBadge /> : null}
+                </span>
                 <span className="font-mono text-[11px] text-muted-foreground leading-tight">
                   {formatIban(a.iban)}
                 </span>

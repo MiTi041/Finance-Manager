@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { SearchableSelect } from "@/components/searchable-select";
+import { PrimaryOptionBadge, SearchableSelect } from "@/components/searchable-select";
 import { ToggleRow } from "@/components/toggle-row";
 import { PayoutSlider } from "@/pages/allocation/components/payout-slider";
 import { formatAmount } from "@/lib/utils/format";
@@ -29,6 +29,7 @@ export type OwnAccount = {
   iban: string;
   name: string;
   bankName: string;
+  isPrimary?: boolean;
 };
 
 export type TransferSetupResult = {
@@ -103,6 +104,7 @@ export function TransferSetupDialog({
         .map((a) => ({
           value: `bank:${a.iban}`,
           label: `${a.name} ${a.iban}`,
+          isPrimary: a.isPrimary === true,
         })),
     ],
     [recipientAccounts, ownAccounts, sender],
@@ -206,8 +208,11 @@ export function TransferSetupDialog({
                 if (!a) return <span className="truncate">{option.label}</span>;
                 return (
                   <div className="flex w-full flex-col items-start gap-0">
-                    <span className="truncate text-sm leading-tight">
+                    <span className="flex items-center gap-1.5 truncate text-sm leading-tight">
                       {isBank ? (a as OwnAccount).name : (a as RecipientAccountRecord).account_name}
+                      {isBank && (a as OwnAccount).isPrimary ? (
+                        <PrimaryOptionBadge />
+                      ) : null}
                     </span>
                     <span className="truncate font-mono text-[11px] text-muted-foreground leading-tight">
                       {formatIban(a.iban)}
@@ -223,8 +228,11 @@ export function TransferSetupDialog({
                 if (!a) return <span>{option.label}</span>;
                 return (
                   <div className="flex flex-col gap-0.5 py-1">
-                    <span className="font-medium text-sm leading-tight">
+                    <span className="flex items-center gap-1.5 font-medium text-sm leading-tight">
                       {isBank ? (a as OwnAccount).name : (a as RecipientAccountRecord).account_name}
+                      {isBank && (a as OwnAccount).isPrimary ? (
+                        <PrimaryOptionBadge />
+                      ) : null}
                     </span>
                     <span className="text-xs text-muted-foreground leading-tight">
                       {isBank ? "Eigenes Konto" : (a as RecipientAccountRecord).recipient_name}

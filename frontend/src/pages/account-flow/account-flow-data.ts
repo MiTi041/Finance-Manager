@@ -11,6 +11,7 @@ export type AccountFlowNode = {
   bankLogoDark?: string;
   logoPadding?: number;
   balance?: number;
+  isPrimary?: boolean;
   /**
    * Balance minus the account's net internal flow: money that flowed in
    * (positive) or out (negative) of the account without an internal
@@ -167,6 +168,7 @@ export function buildAccountFlowGraph(
         bankLogoDark: account.bankLogoDark,
         logoPadding: account.logoPadding,
         balance: balanceByIban.get(iban),
+        isPrimary: account.isPrimary === true,
       };
     })
     .filter((node) => Boolean(node.id));

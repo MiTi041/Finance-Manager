@@ -41,6 +41,10 @@ import { StatCard } from "./components/stat-card";
 import { AccountCards } from "./components/account-cards";
 import { BalanceChart } from "./components/balance-chart";
 import { MonthlyChart } from "./components/monthly-chart";
+import { SavingsRateChart } from "./components/savings-rate-chart";
+import { WeekdayChart } from "./components/weekday-chart";
+import { AccountDistributionChart } from "./components/account-distribution-chart";
+import { AnalyticsCharts } from "./components/analytics-charts";
 import { DashboardSkeleton } from "./components/dashboard-skeleton";
 
 function computeDateFooter(dateFilter: DateFilterValue) {
@@ -92,7 +96,6 @@ export default function DashboardPage() {
 
   const dateFooter = useMemo(() => computeDateFooter(dateFilter), [dateFilter]);
 
-  const savingsRate = incomes > 0 ? (((incomes - expenses) / incomes) * 100).toFixed(0) : "0";
   const expensePct = ((expenses / (incomes + expenses || 1)) * 100).toFixed(0);
   const incomePct = ((incomes / (incomes + expenses || 1)) * 100).toFixed(0);
 
@@ -153,6 +156,7 @@ export default function DashboardPage() {
         iban: a.accountIban,
         name: a.accountName,
         bankName: a.bankName,
+        isPrimary: a.isPrimary === true,
       })),
     [linkedAccounts],
   );
@@ -232,15 +236,18 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 py-6">
-      <div className="flex items-center justify-between gap-4">
-        <DateFilter value={dateFilter} onChange={setDateFilter} />
-        {refreshing && (
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Loader2 size={13} className="animate-spin" />
-            Aktualisiere…
-          </div>
-        )}
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 pb-6">
+      <div className="sticky top-0 z-20 bg-background pt-6 pb-3">
+        <div className="flex items-center justify-between gap-4">
+          <DateFilter value={dateFilter} onChange={setDateFilter} />
+          {refreshing && (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 size={13} className="animate-spin" />
+              Aktualisiere…
+            </div>
+          )}
+        </div>
+        <div className="pointer-events-none absolute inset-x-0 top-full h-8 bg-gradient-to-b from-background to-transparent" />
       </div>
 
       {loading ? (
@@ -298,7 +305,6 @@ export default function DashboardPage() {
               value={transactionCount}
               valueFormat={{ style: "decimal" }}
               valueLocales="de-DE"
-              sub={`${savingsRate} % Sparquote`}
               accent="#b47bff"
               icon={Receipt}
               footer={dateFooter ?? undefined}
@@ -306,21 +312,27 @@ export default function DashboardPage() {
           </div>
 
           {activeAccountIban === "all" && accountBalances.length > 0 && (
-            <AccountCards
-              accountBalances={accountBalances}
-              transferableIbans={transferableIbanSet}
-              onAccountTransfer={(iban) => {
-                setPresetSenderIban(iban);
-                setSetupOpen(true);
-              }}
-              onToggleExclude={handleToggleExclude}
-            />
+            <>
+              <AccountCards
+                accountBalances={accountBalances}
+                transferableIbans={transferableIbanSet}
+                onAccountTransfer={(iban) => {
+                  setPresetSenderIban(iban);
+                  setSetupOpen(true);
+                }}
+                onToggleExclude={handleToggleExclude}
+              />
+              <AccountDistributionChart accountBalances={accountBalances} />
+            </>
           )}
 
           {transactions.length > 0 && (
             <>
               <BalanceChart transactions={transactions} currentBalance={totalBalance} />
               <MonthlyChart transactions={transactions} />
+              <WeekdayChart transactions={transactions} />
+              <SavingsRateChart transactions={transactions} />
+              <AnalyticsCharts transactions={transactions} dateFooter={dateFooter} />
             </>
           )}
         </>

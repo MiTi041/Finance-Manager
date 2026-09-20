@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { ChevronsUpDown, Landmark, Settings } from "lucide-react";
 
 import { BankLogo } from "@/components/bank-logo";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +24,7 @@ export type AccountOption = {
   bankLogoDark?: string;
   username?: string;
   scope: string;
+  isPrimary?: boolean;
 };
 
 type BankSelectorProps = {
@@ -161,8 +163,18 @@ export function BankSelector({
                   backgroundClassName="bg-muted/70"
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">
-                    {account.accountName}
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <span className="truncate font-medium">
+                      {account.accountName}
+                    </span>
+                    {account.isPrimary ? (
+                      <Badge
+                        variant="secondary"
+                        className="shrink-0 px-1.5 py-0 text-[10px] font-medium"
+                      >
+                        Hauptkonto
+                      </Badge>
+                    ) : null}
                   </div>
                   <div className="truncate text-xs text-muted-foreground">
                     {account.bankName} · {account.accountIban}

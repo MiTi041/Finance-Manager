@@ -671,6 +671,7 @@ def initialize_database(connection: sqlite3.Connection) -> None:
             "can_transfer": "INTEGER",
             "can_transfer_override": "INTEGER",
             "exclude_from_totals": "INTEGER NOT NULL DEFAULT 0",
+            "is_primary": "INTEGER NOT NULL DEFAULT 0",
         },
     )
 

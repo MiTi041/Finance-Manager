@@ -4,6 +4,7 @@ import * as React from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -18,6 +19,7 @@ import {
 export type SelectOption = {
   value: string;
   label: string;
+  isPrimary?: boolean;
 };
 
 type SearchableSelectProps = {
@@ -40,6 +42,17 @@ type SearchableSelectProps = {
   renderSelected?: (option: SelectOption) => React.ReactNode;
   height?: number;
 };
+
+export function PrimaryOptionBadge() {
+  return (
+    <Badge
+      variant="secondary"
+      className="shrink-0 px-1.5 py-0 text-[10px] font-medium"
+    >
+      Hauptkonto
+    </Badge>
+  );
+}
 
 export function SearchableSelect({
   options,
@@ -88,7 +101,10 @@ export function SearchableSelect({
               {renderSelected ? (
                 renderSelected(selected)
               ) : (
-                <span className="block truncate">{selected.label}</span>
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="truncate">{selected.label}</span>
+                  {selected.isPrimary ? <PrimaryOptionBadge /> : null}
+                </span>
               )}
             </span>
           ) : (
@@ -142,7 +158,10 @@ export function SearchableSelect({
                   {renderOption ? (
                     renderOption(option)
                   ) : (
-                    <span className="flex-1 truncate">{option.label}</span>
+                    <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                      <span className="truncate">{option.label}</span>
+                      {option.isPrimary ? <PrimaryOptionBadge /> : null}
+                    </span>
                   )}
                   <Check
                     className={cn(

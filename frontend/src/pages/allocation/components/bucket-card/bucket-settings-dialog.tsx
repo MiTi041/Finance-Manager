@@ -15,7 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { SearchableSelect } from "@/components/searchable-select";
+import { PrimaryOptionBadge, SearchableSelect } from "@/components/searchable-select";
 import {
   Dialog,
   DialogContent,
@@ -61,7 +61,7 @@ type Props = {
   config: AllocationBucket;
   accent: { icon: string; bar: string; badge: string; barMuted: string };
   recipientAccounts: { id: number; account_name: string; recipient_name: string; iban: string }[];
-  bankAccounts: { iban: string; name: string; bankKey: string }[];
+  bankAccounts: { iban: string; name: string; bankKey: string; isPrimary?: boolean }[];
   canTransferMap: Map<string, boolean>;
   onUpdateConfig: (bucketId: number, updates: Partial<AllocationBucket>) => Promise<void>;
   onRefresh?: () => void;
@@ -670,6 +670,7 @@ export function BucketSettingsDialog(props: Props) {
                         value: `bank:${a.iban}`,
                         label: `${a.name} ${a.iban}`,
                         _type: "bank" as const,
+                        isPrimary: a.isPrimary === true,
                       })),
                   ]}
                   placeholder="Kein Konto"
@@ -685,7 +686,10 @@ export function BucketSettingsDialog(props: Props) {
                       if (!a) return <span>{option.label}</span>;
                       return (
                         <div className="flex flex-col gap-0.5 py-1">
-                          <span className="font-medium text-sm leading-tight">{a.name}</span>
+                          <span className="flex items-center gap-1.5 font-medium text-sm leading-tight">
+                            {a.name}
+                            {a.isPrimary ? <PrimaryOptionBadge /> : null}
+                          </span>
                           <span className="text-xs text-muted-foreground leading-tight">
                             Eigenes Konto
                           </span>
@@ -716,7 +720,10 @@ export function BucketSettingsDialog(props: Props) {
                       if (!a) return <span>{option.label}</span>;
                       return (
                         <div className="flex flex-col items-start gap-0">
-                          <span className="text-sm leading-tight">{a.name}</span>
+                          <span className="flex items-center gap-1.5 text-sm leading-tight">
+                            {a.name}
+                            {a.isPrimary ? <PrimaryOptionBadge /> : null}
+                          </span>
                           <span className="font-mono text-[11px] text-muted-foreground leading-tight">
                             {formatIban(a.iban)}
                           </span>
@@ -755,6 +762,7 @@ export function BucketSettingsDialog(props: Props) {
                   .map((a) => ({
                     value: a.iban,
                     label: `${a.name} ${a.iban}`,
+                    isPrimary: a.isPrimary === true,
                   }))}
                 placeholder="Konto auswählen"
                 searchPlaceholder="Konto suchen…"
@@ -764,7 +772,10 @@ export function BucketSettingsDialog(props: Props) {
                   if (!a) return <span>{option.label}</span>;
                   return (
                     <div className="flex flex-col gap-0.5 py-1">
-                      <span className="font-medium text-sm leading-tight">{a.name}</span>
+                      <span className="flex items-center gap-1.5 font-medium text-sm leading-tight">
+                        {a.name}
+                        {a.isPrimary ? <PrimaryOptionBadge /> : null}
+                      </span>
                       <span className="font-mono text-xs text-muted-foreground/70 leading-tight">
                         {formatIban(a.iban)}
                       </span>
@@ -776,7 +787,10 @@ export function BucketSettingsDialog(props: Props) {
                   if (!a) return <span>{option.label}</span>;
                   return (
                     <div className="flex flex-col items-start gap-0">
-                      <span className="text-sm leading-tight">{a.name}</span>
+                      <span className="flex items-center gap-1.5 text-sm leading-tight">
+                        {a.name}
+                        {a.isPrimary ? <PrimaryOptionBadge /> : null}
+                      </span>
                       <span className="font-mono text-[11px] text-muted-foreground leading-tight">
                         {formatIban(a.iban)}
                       </span>

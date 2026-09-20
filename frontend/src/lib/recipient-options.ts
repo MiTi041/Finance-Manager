@@ -12,6 +12,7 @@ export type RecipientOption = {
   label: string;
   subtitle: string;
   iban: string;
+  isPrimary?: boolean;
 };
 
 export type RecipientOptionGroup = {
@@ -38,6 +39,7 @@ export function buildRecipientOptions(input: {
           ? `${account.holderName} · ${account.accountIban}`
           : account.accountIban,
         iban: account.accountIban,
+        isPrimary: account.isPrimary === true,
       })),
     },
     {

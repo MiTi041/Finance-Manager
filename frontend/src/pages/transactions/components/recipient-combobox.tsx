@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import {
   Command,
@@ -104,7 +105,17 @@ export function RecipientCombobox({
                     }}
                   >
                     <span className="flex min-w-0 flex-col">
-                      <span className="truncate">{option.label}</span>
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="truncate">{option.label}</span>
+                        {option.isPrimary ? (
+                          <Badge
+                            variant="secondary"
+                            className="shrink-0 px-1.5 py-0 text-[10px] font-medium"
+                          >
+                            Hauptkonto
+                          </Badge>
+                        ) : null}
+                      </span>
                       {option.subtitle ? (
                         <span className="text-muted-foreground truncate text-xs">
                           {option.subtitle}

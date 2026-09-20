@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { BankLogo } from "@/components/bank-logo";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -584,7 +585,17 @@ function AccountCard({
           backgroundClassName="bg-muted/70"
           />
           <div className="min-w-0 flex-1 pr-7">
-            <p className="truncate text-sm font-semibold">{node.label}</p>
+            <div className="flex min-w-0 items-center gap-1.5">
+              <span className="truncate text-sm font-semibold">{node.label}</span>
+              {node.isPrimary ? (
+                <Badge
+                  variant="secondary"
+                  className="shrink-0 px-1.5 py-0 text-[10px] font-medium"
+                >
+                  Hauptkonto
+                </Badge>
+              ) : null}
+            </div>
             <p className="truncate text-[10px] text-muted-foreground">{node.bankName}</p>
             <p className="truncate text-[10px] text-muted-foreground">{formatIban(node.iban)}</p>
             <p className="truncate text-[10px] font-medium text-foreground">

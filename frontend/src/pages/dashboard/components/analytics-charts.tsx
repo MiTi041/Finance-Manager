@@ -1,29 +1,15 @@
-import { useMemo } from "react";
-import { format } from "date-fns";
+import { useId, useMemo } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
-import {
-  Loader2,
-  CircleDashed,
-  CircleX,
-  TrendingDown,
-  TrendingUp,
-  Ellipsis,
-  User,
-  Building2,
-} from "lucide-react";
+import { CircleX, TrendingDown, TrendingUp, Ellipsis, User, Building2 } from "lucide-react";
+import NumberFlow, { type Format } from "@number-flow/react";
 
-import DateFilter from "@/components/date-filter";
 import { EmptyState } from "@/components/empty-state";
-import { Skeleton } from "@/components/ui/skeleton";
 import { BankLogo } from "@/components/bank-logo";
 import { logoBackgroundClass } from "@/lib/bank/zahlungspartner-logo";
 import type { LogoBackground } from "@/lib/zahlungspartner";
-import { useGlobalDateFilter } from "@/hooks/use-global-date-filter";
-import { useFinanceData } from "@/hooks/use-finance-data";
+import type { Transaction } from "@/types/transaction";
 import { useCategories } from "@/hooks/use-categories";
 import { usePartnerAnalytics } from "@/hooks/use-partner-analytics";
-import { getTimeSpanForRange } from "@/types/time-range";
-import type { DateFilterValue } from "@/types/date-filter";
 
 const EXPENSE_COLORS = [
   "#ff5c6c",
@@ -55,16 +41,7 @@ function fmt(value: number) {
   return new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(value);
 }
 
-function computeDateFooter(dateFilter: DateFilterValue) {
-  if (dateFilter.timeSpan) {
-    return `${format(dateFilter.timeSpan.from, "dd.MM.yy")} - ${format(dateFilter.timeSpan.until, "dd.MM.yy")}`;
-  }
-  if (dateFilter.timeRange) {
-    const span = getTimeSpanForRange(dateFilter.timeRange);
-    return `${format(span.from, "dd.MM.yy")} - ${format(span.until, "dd.MM.yy")}`;
-  }
-  return null;
-}
+const CURRENCY: Format = { style: "currency", currency: "EUR" };
 
 function groupSmallSlices(
   items: {
@@ -97,8 +74,6 @@ function groupSmallSlices(
   return big;
 }
 
-// ─── Tooltip ────────────────────────────────────────────────────────────────
-
 function ChartTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null;
   const { name, value, payload: entry } = payload[0];
@@ -123,17 +98,13 @@ function ChartTooltip({ active, payload }: any) {
   );
 }
 
-// ─── Card shell ──────────────────────────────────────────────────────────────
-
 function Card({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex flex-col rounded-panel border border-border bg-card p-[22px_22px_14px] outline-none">
+    <div className="flex flex-col rounded-panel border border-border bg-card p-[22px_22px_14px] outline-none transition-all duration-200 hover:-translate-y-0.5 hover:border-white/15">
       {children}
     </div>
   );
 }
-
-// ─── Card header ─────────────────────────────────────────────────────────────
 
 function CardHeader({
   title,
@@ -168,8 +139,6 @@ function CardHeader({
   );
 }
 
-// ─── Legend row ──────────────────────────────────────────────────────────────
-
 function LegendRow({
   name,
   value,
@@ -197,7 +166,6 @@ function LegendRow({
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-2">
-        {/* avatar */}
         {logoUrl && !isOther ? (
           <BankLogo
             src={logoUrl}
@@ -231,7 +199,6 @@ function LegendRow({
         </span>
       </div>
 
-      {/* percentage bar */}
       <div className="h-[2px] overflow-hidden rounded-full bg-muted">
         <div
           className="h-full rounded-full"
@@ -241,8 +208,6 @@ function LegendRow({
     </div>
   );
 }
-
-// ─── Chart card (donut + legend + total) ─────────────────────────────────────
 
 function ChartCard({
   title,
@@ -272,6 +237,7 @@ function ChartCard({
   outerRadius?: number;
 }) {
   const total = data.reduce((s, d) => s + d.value, 0);
+  const uid = useId().replace(/:/g, "");
 
   return (
     <Card>
@@ -286,7 +252,6 @@ function ChartCard({
         <EmptyState title="Keine Daten" illustration={<CircleX />} />
       ) : (
         <div className="flex flex-1 items-center gap-5">
-          {/* donut */}
           <div
             className="shrink-0"
             style={{ width: donutSize, height: donutSize }}
@@ -295,6 +260,17 @@ function ChartCard({
           >
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
+                <defs>
+                  {data.map((_, i) => {
+                    const c = colors[i % colors.length];
+                    return (
+                      <linearGradient key={i} id={`donut-${uid}-${i}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={c} stopOpacity={1} />
+                        <stop offset="100%" stopColor={c} stopOpacity={0.75} />
+                      </linearGradient>
+                    );
+                  })}
+                </defs>
                 <Pie
                   data={data}
                   cx="50%"
@@ -304,9 +280,11 @@ function ChartCard({
                   paddingAngle={2}
                   dataKey="value"
                   stroke="none"
+                  animationDuration={800}
+                  animationEasing="ease-out"
                 >
                   {data.map((_, i) => (
-                    <Cell key={i} fill={colors[i % colors.length]} />
+                    <Cell key={i} fill={`url(#donut-${uid}-${i})`} />
                   ))}
                 </Pie>
                 <Tooltip content={<ChartTooltip />} isAnimationActive={false} />
@@ -314,7 +292,6 @@ function ChartCard({
             </ResponsiveContainer>
           </div>
 
-          {/* legend */}
           <div className="flex min-w-0 flex-1 flex-col gap-2.5">
             {data.map((entry, i) => (
               <LegendRow
@@ -334,60 +311,31 @@ function ChartCard({
         </div>
       )}
 
-      {/* total strip */}
       <div className="flex items-baseline justify-between pt-3.5 mt-6 border-t border-border">
         <span className="text-[10.5px] uppercase tracking-wide text-muted-foreground/50">
           Gesamt
         </span>
-        <span className="text-[20px] font-bold tabular-nums tracking-tight text-foreground">
-          {fmt(total)}
-        </span>
+        <NumberFlow
+          value={total}
+          format={CURRENCY}
+          locales="de-DE"
+          className="text-[20px] font-bold tabular-nums tracking-tight text-foreground"
+        />
       </div>
     </Card>
   );
 }
 
-// ─── Skeleton ────────────────────────────────────────────────────────────────
+type AnalyticsChartsProps = {
+  transactions: Transaction[];
+  dateFooter?: string | null;
+};
 
-function AnalyticsSkeleton() {
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        {[...Array(2)].map((_, i) => (
-          <Skeleton key={i} className="h-[340px] rounded-panel" />
-        ))}
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        {[...Array(2)].map((_, i) => (
-          <Skeleton key={i} className="h-[320px] rounded-panel" />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── Page ────────────────────────────────────────────────────────────────────
-
-export default function AnalyticsPage() {
-  const { dateFilter, setDateFilter } = useGlobalDateFilter();
-  const {
-    loading: txLoading,
-    refreshing,
-    error: txError,
-    transactions,
-  } = useFinanceData(dateFilter);
-  const {
-    loading: catLoading,
-    error: catError,
-    categoryAnalytics,
-  } = useCategories({ transactions });
+export function AnalyticsCharts({ transactions, dateFooter }: AnalyticsChartsProps) {
+  const { categoryAnalytics } = useCategories({ transactions });
   const { outgoing: partnerOutgoing, incoming: partnerIncoming } = usePartnerAnalytics({
     transactions,
   });
-
-  const loading = txLoading || catLoading;
-  const error = txError || catError;
-  const dateFooter = useMemo(() => computeDateFooter(dateFilter), [dateFilter]);
 
   const expenseData = useMemo(
     () =>
@@ -457,72 +405,41 @@ export default function AnalyticsPage() {
     [partnerIncoming],
   );
 
-  if (transactions.length === 0 && !loading) {
-    return <EmptyState title="Es gibt noch keine Daten" illustration={<CircleDashed />} />;
-  }
-
-  if (error) {
-    return (
-      <EmptyState
-        title="Fehler beim Laden der Analysedaten"
-        text={`Fehler: ${error}`}
-        illustration={<CircleX />}
-      />
-    );
-  }
-
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 py-6">
-      {/* toolbar */}
-      <div className="flex items-center justify-between gap-4">
-        <DateFilter value={dateFilter} onChange={setDateFilter} />
-        {refreshing && (
-          <div className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
-            <Loader2 size={12} className="animate-spin" />
-            Aktualisiere…
-          </div>
-        )}
+    <>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <ChartCard
+          title="Ausgaben"
+          data={expenseData}
+          dateFooter={dateFooter}
+          colors={EXPENSE_COLORS}
+          accent="violet"
+        />
+        <ChartCard
+          title="Einnahmen"
+          data={incomeData}
+          dateFooter={dateFooter}
+          colors={INCOME_COLORS}
+          accent="teal"
+        />
       </div>
 
-      {loading ? (
-        <AnalyticsSkeleton />
-      ) : (
-        <>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <ChartCard
-              title="Ausgaben"
-              data={expenseData}
-              dateFooter={dateFooter}
-              colors={EXPENSE_COLORS}
-              accent="violet"
-            />
-            <ChartCard
-              title="Einnahmen"
-              data={incomeData}
-              dateFooter={dateFooter}
-              colors={INCOME_COLORS}
-              accent="teal"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <ChartCard
-              title="Zahlungspartner Ausgaben"
-              data={partnerExpenseData}
-              dateFooter={dateFooter}
-              colors={EXPENSE_COLORS}
-              accent="violet"
-            />
-            <ChartCard
-              title="Zahlungspartner Einnahmen"
-              data={partnerIncomeData}
-              dateFooter={dateFooter}
-              colors={INCOME_COLORS}
-              accent="teal"
-            />
-          </div>
-        </>
-      )}
-    </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <ChartCard
+          title="Zahlungspartner Ausgaben"
+          data={partnerExpenseData}
+          dateFooter={dateFooter}
+          colors={EXPENSE_COLORS}
+          accent="violet"
+        />
+        <ChartCard
+          title="Zahlungspartner Einnahmen"
+          data={partnerIncomeData}
+          dateFooter={dateFooter}
+          colors={INCOME_COLORS}
+          accent="teal"
+        />
+      </div>
+    </>
   );
 }

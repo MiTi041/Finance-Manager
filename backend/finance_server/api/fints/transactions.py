@@ -1,7 +1,7 @@
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from fints.exceptions import FinTSClientError, FinTSError
+from fints.exceptions import FinTSClientError, FinTSClientPINError, FinTSError
 
 from finance_server.models.fints import TransactionsRequest
 from finance_server.fints.client import resolve_bank_credentials
@@ -33,6 +33,15 @@ def get_transactions(request: TransactionsRequest) -> dict[str, Any]:
         raise HTTPException(status_code=408, detail=str(err))
     except BankLoginRejected as err:
         raise HTTPException(status_code=401, detail=err.to_detail())
+    except FinTSClientPINError as err:
+        # 9xxx-Fehler vor Dialog-Öffnung (z. B. ING 9942) sind kein
+        # zuverlässiges "PIN falsch": 90-Tage-Browser-Login abgelaufen,
+        # Zugangsdaten-Migration, temporäre Sperre. Als Login-Fehler melden,
+        # damit das Frontend nicht weiter alle 5 Minuten erneut anklopft.
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "FINTS_LOGIN_FAILED", "message": str(err)},
+        )
     except FinTSClientError as err:
         raise HTTPException(status_code=502, detail=f"FinTS-Initialisierung fehlgeschlagen. Originalfehler: {err}")
     except FinTSError as err:

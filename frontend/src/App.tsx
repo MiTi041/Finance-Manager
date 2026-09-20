@@ -12,7 +12,6 @@ const DashboardPage = lazy(() => import("@/pages/dashboard/dashboard-page"));
 const TransactionsPage = lazy(() => import("@/pages/transactions/transactions-page"));
 const SettingsPage = lazy(() => import("@/pages/settings/settings-page"));
 const SubscriptionsPage = lazy(() => import("@/pages/subscriptions/subscriptions-page"));
-const AnalyticsPage = lazy(() => import("@/pages/analytics/analytics-page"));
 const AccountFlowPage = lazy(() => import("@/pages/account-flow/account-flow-page"));
 const AllocationPage = lazy(() => import("@/pages/allocation/allocation-page"));
 const BudgetsPage = lazy(() => import("@/pages/budgets/budgets-page"));
@@ -94,14 +93,6 @@ export default function App() {
                 element={
                   <ErrorBoundary pageName="Abonnements">
                     <SubscriptionsPage />
-                  </ErrorBoundary>
-                }
-              />
-              <Route
-                path="/analytics"
-                element={
-                  <ErrorBoundary pageName="Analysen">
-                    <AnalyticsPage />
                   </ErrorBoundary>
                 }
               />

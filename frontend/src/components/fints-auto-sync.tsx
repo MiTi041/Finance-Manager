@@ -12,14 +12,34 @@ import { fetchLatestDbTransaction } from "@/lib/transactions";
 import { fetchBankCredentials } from "@/lib/bank/credentials";
 import { readActiveAccountIban } from "@/lib/bank/active-storage";
 import { normalizeIban } from "@/lib/iban";
-import { importFromFintsServer, RateLimitError } from "@/lib/upload-helper";
+import { importFromFintsServer, LoginFailedError, RateLimitError } from "@/lib/upload-helper";
 import { getErrorMessage } from "@/lib/utils/error";
 import { dispatchRefresh } from "@/lib/refresh-store";
-import { readFintsSyncCache, rememberSyncRun } from "@/lib/sync-cache";
+import {
+  readFintsSyncCache,
+  readSyncCooldown,
+  rememberSyncRun,
+  setSyncCooldown,
+} from "@/lib/sync-cache";
 
 const FALLBACK_SYNC_DAYS = Number(import.meta.env.VITE_FINTS_DAYS ?? "730");
 const MAX_SYNC_DAYS = Number(import.meta.env.VITE_FINTS_MAX_DAYS ?? "36500");
-const AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+const AUTO_SYNC_INTERVAL_MS = Number(
+  import.meta.env.VITE_FINTS_AUTO_SYNC_MS ?? 30 * 60 * 1000,
+);
+// Nach einem Login-Fehler (z. B. ING 9942) nicht weiter anklopfen: jeder
+// Versuch zählt bei der Bank als Fehlversuch und kann den Zugang sperren.
+const LOGIN_FAILURE_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+const ERROR_TOAST_THROTTLE_MS = 30 * 60 * 1000;
+
+const lastErrorToastAt = new Map<string, number>();
+
+function toastErrorThrottled(scope: string, message: string) {
+  const now = Date.now();
+  if (now - (lastErrorToastAt.get(scope) ?? 0) < ERROR_TOAST_THROTTLE_MS) return;
+  lastErrorToastAt.set(scope, now);
+  toast.error(message);
+}
 
 declare global {
   interface Window {
@@ -81,6 +101,11 @@ export default function FintsAutoSync() {
             }
           }
           for (const bank of eligibleBanks) {
+            const bankLabel =
+              bank.bank_name || bank.account_name || bank.username || bank.scope;
+            if (source === "auto" && readSyncCooldown(bank.scope) > 0) {
+              continue;
+            }
             try {
               const accountIbans =
                 bank.accounts
@@ -116,16 +141,14 @@ export default function FintsAutoSync() {
               );
               rememberSyncRun(daysToSync, bank.scope);
             } catch (error) {
-              console.error(
-                `Sync fehlgeschlagen für ${bank.bank_name || bank.account_name || bank.username || bank.scope}`,
-                error,
-              );
+              console.error(`Sync fehlgeschlagen für ${bankLabel}`, error);
               if (error instanceof RateLimitError) {
                 toast.error(error.message);
+              } else if (error instanceof LoginFailedError) {
+                setSyncCooldown(bank.scope, LOGIN_FAILURE_COOLDOWN_MS);
+                toast.error(`Sync fehlgeschlagen für ${bankLabel}: ${error.message}`);
               } else {
-                toast.error(
-                  `Sync fehlgeschlagen für ${bank.bank_name || bank.account_name || bank.username || bank.scope}`,
-                );
+                toastErrorThrottled(bank.scope, `Sync fehlgeschlagen für ${bankLabel}`);
               }
             }
           }

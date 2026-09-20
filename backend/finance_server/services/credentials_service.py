@@ -286,6 +286,7 @@ class CredentialsService:
                 if "exclude_from_totals" in payload
                 else None
             ),
+            is_primary=payload.get("is_primary") if "is_primary" in payload else None,
             **(
                 {"can_transfer_override": payload["can_transfer_override"]}
                 if "can_transfer_override" in payload

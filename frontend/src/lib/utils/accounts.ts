@@ -20,6 +20,8 @@ export type BankAccountOption = {
   balanceCorrection?: number | null;
   /** Konto bleibt sichtbar, fließt aber nicht in Dashboard-Summen/Charts ein. */
   excludeFromTotals?: boolean;
+  /** Hauptkonto (z. B. Gehaltseingang): wird überall zuerst angezeigt. */
+  isPrimary?: boolean;
 };
 
 export function buildAccountOptions(
@@ -56,6 +58,7 @@ export function buildAccountOptions(
             scope: bank.scope,
             manual: bank.manual === true,
             excludeFromTotals: account.exclude_from_totals === true,
+            isPrimary: account.is_primary === true,
           });
         }
       });
@@ -80,7 +83,8 @@ export function buildAccountOptions(
     }
   });
 
-  return items;
+  // ponytail: Hauptkonto zuerst, stabil – deckt Sidebar und Sender-Dropdowns ab.
+  return items.sort((a, b) => Number(b.isPrimary === true) - Number(a.isPrimary === true));
 }
 
 export function resolveAccountSelection(

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { FileText, Gauge, Repeat, ScanSearch, Target, Wallet, Waypoints } from "lucide-react";
+import { FileText, Gauge, Repeat, Target, Wallet, Waypoints } from "lucide-react";
 
 import { buildAccountOptions, resolveAccountSelection } from "@/lib/utils/accounts";
 import { NavMain } from "@/components/nav-main";
@@ -60,7 +60,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       { title: "Dashboard", url: "/dashboard", icon: Gauge },
       { title: "Transaktionen", url: "/transactions", icon: FileText },
       { title: "Abonnements", url: "/subscriptions", icon: Repeat },
-      { title: "Analyse", url: "/analytics", icon: ScanSearch },
       { title: "Kontenfluss", url: "/account-flow", icon: Waypoints },
       { title: "Finanzplan", url: "/finance-plan", icon: Wallet },
       { title: "Budgets", url: "/budgets", icon: Target, badge: overBudgetCount },

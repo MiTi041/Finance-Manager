@@ -121,7 +121,7 @@ def _sync_bank_accounts(
 ) -> None:
     existing = connection.execute(
         "SELECT iban, holder_name, archived, exclude_from_totals, can_transfer, can_transfer_override, balance, "
-        "bank_key, sender_iban FROM bank_accounts WHERE scope = ?",
+        "bank_key, sender_iban, is_primary FROM bank_accounts WHERE scope = ?",
         (scope,),
     ).fetchall()
     previous_holder = {
@@ -153,6 +153,9 @@ def _sync_bank_accounts(
     previous_balance = {
         normalize_text(row["iban"]).upper(): row["balance"] for row in existing
     }
+    previous_primary = {
+        normalize_text(row["iban"]).upper(): row["is_primary"] for row in existing
+    }
 
     connection.execute("DELETE FROM bank_accounts WHERE scope = ?", (scope,))
 
@@ -164,8 +167,9 @@ def _sync_bank_accounts(
         """
         INSERT INTO bank_accounts
             (scope, iban, account_name, holder_name, bank_key, sender_iban, archived,
-             exclude_from_totals, can_transfer, can_transfer_override, balance, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             exclude_from_totals, can_transfer, can_transfer_override, balance, is_primary,
+             created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
             (
@@ -186,6 +190,7 @@ def _sync_bank_accounts(
                 ),
                 previous_override.get(normalize_text(account["iban"]).upper()),
                 previous_balance.get(normalize_text(account["iban"]).upper()),
+                previous_primary.get(normalize_text(account["iban"]).upper(), 0),
                 now,
                 now,
             )
@@ -199,7 +204,7 @@ def _load_bank_accounts(connection: sqlite3.Connection, scope: str) -> list[dict
         """
         SELECT iban, account_name, holder_name, balance, archived, exclude_from_totals,
                can_transfer, can_transfer_override,
-               bank_key, sender_iban,
+               bank_key, sender_iban, is_primary,
                (
                    SELECT migrated.account_iban
                    FROM umsaetze AS migrated
@@ -210,7 +215,7 @@ def _load_bank_accounts(connection: sqlite3.Connection, scope: str) -> list[dict
                ) AS migrated_to_iban
         FROM bank_accounts
         WHERE scope = ?
-        ORDER BY created_at ASC, id ASC
+        ORDER BY is_primary DESC, created_at ASC, id ASC
         """,
         (scope,),
     ).fetchall()
@@ -225,6 +230,7 @@ def _load_bank_accounts(connection: sqlite3.Connection, scope: str) -> list[dict
             "balance": row["balance"],
             "archived": bool(row["archived"]),
             "exclude_from_totals": bool(row["exclude_from_totals"]),
+            "is_primary": bool(row["is_primary"]),
             "migrated_to_iban": row["migrated_to_iban"],
             "can_transfer": _effective_can_transfer(
                 row["can_transfer"], row["can_transfer_override"]
@@ -448,6 +454,7 @@ def update_bank_account(
     exclude_from_totals: bool | None = None,
     can_transfer: bool | None = None,
     can_transfer_override: Any = _UNSET,
+    is_primary: bool | None = None,
 ) -> bool:
     normalized_iban = normalize_text(iban)
     if not normalized_iban:
@@ -458,7 +465,7 @@ def update_bank_account(
             """
             SELECT iban, account_name, holder_name, sender_iban, archived,
                    exclude_from_totals, can_transfer,
-                   can_transfer_override
+                   can_transfer_override, is_primary
             FROM bank_accounts
             WHERE scope = ? AND UPPER(iban) = UPPER(?)
             """,
@@ -494,12 +501,17 @@ def update_bank_account(
             if can_transfer_override is not _UNSET
             else row["can_transfer_override"]
         )
+        new_primary = int(is_primary) if is_primary is not None else row["is_primary"]
         now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+        if is_primary:
+            # ponytail: genau ein Hauptkonto global, per App-Logik statt DB-Constraint.
+            connection.execute("UPDATE bank_accounts SET is_primary = 0 WHERE is_primary = 1")
         connection.execute(
             """
             UPDATE bank_accounts
             SET iban = ?, account_name = ?, holder_name = ?, sender_iban = ?, archived = ?,
-                exclude_from_totals = ?, can_transfer = ?, can_transfer_override = ?, updated_at = ?
+                exclude_from_totals = ?, can_transfer = ?, can_transfer_override = ?,
+                is_primary = ?, updated_at = ?
             WHERE scope = ? AND UPPER(iban) = UPPER(?)
             """,
             (
@@ -511,6 +523,7 @@ def update_bank_account(
                 new_exclude,
                 new_can_transfer,
                 new_override,
+                new_primary,
                 now,
                 scope,
                 normalized_iban,

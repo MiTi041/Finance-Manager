@@ -160,11 +160,8 @@ export function useFinanceData(
     !needsCorrection,
   );
   const { balances: accountBalancesApi } = useAccountBalances(
-    useMemo(() => {
-      const params = new URLSearchParams(queryParams);
-      params.delete("iban");
-      return params.toString();
-    }, [queryParams]),
+    // ponytail: account balances are a current snapshot, so always fetch all-time (ignore the date filter)
+    "days=36500",
     refreshVersion,
   );
 
@@ -355,7 +352,7 @@ export function useFinanceData(
   const expensesFormatted = useMemo(() => formatBalance(-expenses), [expenses]);
 
   const accountBalances = useMemo(() => {
-    const source = needsCorrection ? cleanedTransactions : filteredTransactions;
+    const source = cleanedTransactions;
     const byIban = new Map<string, number>();
     for (const t of source) {
       const iban = normalizeIban(t.konto.iban);
@@ -374,8 +371,9 @@ export function useFinanceData(
         bankName: account.bankName,
         scope: account.scope,
         excludeFromTotals: excludedIbans.includes(account.accountIban),
+        isPrimary: account.isPrimary === true,
         balance:
-          (needsCorrection ? (account.balanceCorrection ?? 0) : 0) +
+          (account.balanceCorrection ?? 0) +
           (apiBalance?.balance ?? byIban.get(account.accountIban) ?? 0),
         balancePending: apiBalance?.balance_pending ?? 0,
       };
@@ -383,8 +381,6 @@ export function useFinanceData(
   }, [
     accountOptions,
     cleanedTransactions,
-    filteredTransactions,
-    needsCorrection,
     accountBalancesApi,
     excludedIbans,
   ]);

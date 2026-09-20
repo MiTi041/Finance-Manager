@@ -35,8 +35,14 @@ import {
 
 function extractBankAccounts(
   banks: StoredBankCredentials[],
-): { iban: string; name: string; bankKey: string; archived: boolean }[] {
-  const accounts: { iban: string; name: string; bankKey: string; archived: boolean }[] = [];
+): { iban: string; name: string; bankKey: string; archived: boolean; isPrimary: boolean }[] {
+  const accounts: {
+    iban: string;
+    name: string;
+    bankKey: string;
+    archived: boolean;
+    isPrimary: boolean;
+  }[] = [];
   for (const bank of banks) {
     for (const acc of bank.accounts ?? []) {
       if (acc.iban)
@@ -45,10 +51,12 @@ function extractBankAccounts(
           name: (acc.account_name as string) ?? (acc.iban as string),
           bankKey: bank.bank_key,
           archived: acc.archived === true,
+          isPrimary: acc.is_primary === true,
         });
     }
   }
-  return accounts;
+  // ponytail: Hauptkonto zuerst – gleiche Sortierung wie buildAccountOptions.
+  return accounts.sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary));
 }
 
 export default function AllocationPage() {

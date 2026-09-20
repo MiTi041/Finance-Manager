@@ -4,14 +4,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
-from fints.exceptions import FinTSConnectionError
+from fints.exceptions import FinTSClientPINError, FinTSConnectionError
 
 import finance_server.services  # noqa: F401  breaks fints circular import
 from finance_server.api.fints.accounts import get_accounts
+from finance_server.api.fints.transactions import get_transactions
 from finance_server.fints.client import bootstrap_client, with_state_retry
 from finance_server.fints.common import BankLoginRejected
 from finance_server.models.bank import BankCredentials
-from finance_server.models.fints import AccountsRequest
+from finance_server.models.fints import AccountsRequest, TransactionsRequest
 
 
 def test_bootstrap_client_translates_missing_system_id():
@@ -127,3 +128,26 @@ def test_with_state_retry_retries_once_on_connection_error():
     assert result == {"ok": True}
     assert calls == [b"state", None]
     clear_mock.assert_called_once_with(creds)
+
+
+def test_transactions_endpoint_maps_pin_error_to_login_failed():
+    creds = BankCredentials(bank_key="ing-diba", username="u", pin="p")
+    with (
+        patch("finance_server.api.fints.transactions.enforce_rate_limit"),
+        patch(
+            "finance_server.api.fints.transactions.resolve_bank_credentials",
+            return_value=creds,
+        ),
+        patch(
+            "finance_server.api.fints.transactions.fetch_and_store_transactions",
+            side_effect=FinTSClientPINError(
+                "Authentifizierung fehlgeschlagen (9942: Log-in fehlgeschlagen. "
+                "3 Fehlversuche führen zur Sperrung. Entsperren auf ING.de). Bitte PIN pruefen."
+            ),
+        ),
+    ):
+        with pytest.raises(HTTPException) as exc:
+            get_transactions(TransactionsRequest(scope="ing-diba:u", days=30))
+    assert exc.value.status_code == 401
+    assert exc.value.detail["code"] == "FINTS_LOGIN_FAILED"
+    assert "9942" in exc.value.detail["message"]

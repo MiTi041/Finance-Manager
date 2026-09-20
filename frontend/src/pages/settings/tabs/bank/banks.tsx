@@ -37,6 +37,7 @@ import {
   Pencil,
   RefreshCw,
   Trash2,
+  Wallet,
 } from "lucide-react";
 import { BankLogo } from "@/components/bank-logo";
 import { ToggleRow } from "@/components/toggle-row";
@@ -104,6 +105,7 @@ function getAccounts(credential: StoredBankCredentials, bankCanTransfer: boolean
       fallback: index === 0 && !account.iban && credential.account_iban,
       archived: account.archived === true,
       migrated_to_iban: account.migrated_to_iban ?? null,
+      is_primary: account.is_primary === true,
     }));
   }
   return [
@@ -120,6 +122,7 @@ function getAccounts(credential: StoredBankCredentials, bankCanTransfer: boolean
       fallback: true,
       archived: false,
       migrated_to_iban: null,
+      is_primary: false,
     },
   ];
 }
@@ -142,6 +145,7 @@ export function Banks({
   const [balanceError, setBalanceError] = useState<string | null>(null);
   const [autoSyncSaving, setAutoSyncSaving] = useState<string | null>(null);
   const [transferSaving, setTransferSaving] = useState<string | null>(null);
+  const [primarySaving, setPrimarySaving] = useState<string | null>(null);
   const [migrationOpen, setMigrationOpen] = useState(false);
   const [migrationSource, setMigrationSource] = useState("");
   const [migrationTarget, setMigrationTarget] = useState("");
@@ -298,6 +302,20 @@ export function Banks({
     }
   };
 
+  const handleTogglePrimary = async (
+    scope: string,
+    iban: string,
+    accountKey: string,
+    nextPrimary: boolean,
+  ) => {
+    setPrimarySaving(accountKey);
+    try {
+      await updateBankAccount(scope, iban, { is_primary: nextPrimary });
+    } finally {
+      setPrimarySaving(null);
+    }
+  };
+
   const confirmDeleteBank = async () => {
     if (!bankToDelete) return;
 
@@ -450,9 +468,19 @@ export function Banks({
                         {/* Account info */}
                         <div className="flex min-w-0 flex-1 items-center gap-3">
                           <div className="min-w-0">
-                          <p className="text-sm font-medium leading-tight truncate">
-                            {account.account_name || "Unbenanntes Konto"}
-                          </p>
+                          <div className="flex min-w-0 items-center gap-1.5">
+                            <p className="text-sm font-medium leading-tight truncate">
+                              {account.account_name || "Unbenanntes Konto"}
+                            </p>
+                            {account.is_primary ? (
+                              <Badge
+                                variant="secondary"
+                                className="shrink-0 px-1.5 py-0 text-[10px] font-medium"
+                              >
+                                Hauptkonto
+                              </Badge>
+                            ) : null}
+                          </div>
                           <p className="mt-0.5 text-xs text-muted-foreground font-mono tracking-wide">
                             {formatIban(account.iban)}
                           </p>
@@ -511,6 +539,36 @@ export function Banks({
 
                         {/* Actions */}
                         <div className="flex shrink-0 gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            title={
+                              account.is_primary
+                                ? "Hauptkonto-Markierung entfernen"
+                                : "Als Hauptkonto markieren"
+                            }
+                            disabled={primarySaving === accountKey}
+                            onClick={() =>
+                              void handleTogglePrimary(
+                                bank.scope,
+                                account.iban,
+                                accountKey,
+                                !account.is_primary,
+                              )
+                            }
+                          >
+                            {primarySaving === accountKey ? (
+                              <Loader2 className="!h-4 !w-4 animate-spin" />
+                            ) : (
+                              <Wallet
+                                className={`!h-4 !w-4 ${
+                                  account.is_primary ? "text-primary" : ""
+                                }`}
+                              />
+                            )}
+                            <span>Hauptkonto</span>
+                          </Button>
+
                           <Button
                             variant="outline"
                             size="sm"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 import { format } from "date-fns";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
@@ -75,9 +75,10 @@ type MonthlyChartProps = {
 
 export function MonthlyChart({ transactions }: MonthlyChartProps) {
   const data = useMemo(() => buildMonthlyBreakdown(transactions), [transactions]);
+  const uid = useId().replace(/:/g, "");
 
   return (
-    <div className="min-w-0 rounded-panel border border-border bg-card p-[22px_22px_14px] outline-none">
+    <div className="min-w-0 rounded-panel border border-border bg-card p-[22px_22px_14px] outline-none transition-all duration-200 hover:-translate-y-0.5 hover:border-white/15">
       <SectionHeading>Einnahmen vs. Ausgaben (letzte 12 Monate)</SectionHeading>
       <div className="mb-4 flex gap-3">
         {[
@@ -99,6 +100,16 @@ export function MonthlyChart({ transactions }: MonthlyChartProps) {
             margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
           >
             <CartesianGrid stroke={SUBTLE} strokeDasharray="3 3" vertical={false} />
+            <defs>
+              <linearGradient id={`mEinn-${uid}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={GREEN} stopOpacity={1} />
+                <stop offset="100%" stopColor={GREEN} stopOpacity={0.75} />
+              </linearGradient>
+              <linearGradient id={`mAusg-${uid}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={RED} stopOpacity={1} />
+                <stop offset="100%" stopColor={RED} stopOpacity={0.75} />
+              </linearGradient>
+            </defs>
             <XAxis
               dataKey="month"
               tick={{ fill: MUTED, fontSize: 11 }}
@@ -113,8 +124,8 @@ export function MonthlyChart({ transactions }: MonthlyChartProps) {
               width={52}
             />
             <Tooltip content={<BarTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
-            <Bar dataKey="einnahmen" fill={GREEN} radius={[2, 2, 0, 0]} fillOpacity={0.85} />
-            <Bar dataKey="ausgaben" fill={RED} radius={[2, 2, 0, 0]} fillOpacity={0.85} />
+            <Bar dataKey="einnahmen" fill={`url(#mEinn-${uid})`} radius={[2, 2, 0, 0]} fillOpacity={0.9} animationDuration={700} />
+            <Bar dataKey="ausgaben" fill={`url(#mAusg-${uid})`} radius={[2, 2, 0, 0]} fillOpacity={0.9} animationDuration={700} />
           </BarChart>
         </ResponsiveContainer>
       </div>

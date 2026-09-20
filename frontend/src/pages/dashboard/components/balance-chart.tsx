@@ -142,7 +142,7 @@ export function BalanceChart({ transactions, currentBalance }: BalanceChartProps
   const accentColor = isPositive ? GREEN : RED;
 
   return (
-    <div className="min-w-0 flex-1 rounded-panel border border-border bg-card p-[22px_22px_14px] outline-none">
+    <div className="min-w-0 flex-1 rounded-panel border border-border bg-card p-[22px_22px_14px] outline-none transition-all duration-200 hover:-translate-y-0.5 hover:border-white/15">
       <SectionHeading>{rangeLabel}</SectionHeading>
       <div className="h-[200px] [&_svg]:outline-none" role="img" aria-label="Kontostand-Entwicklung als Liniendiagramm">
         <ResponsiveContainer width="100%" height="100%">
@@ -181,6 +181,7 @@ export function BalanceChart({ transactions, currentBalance }: BalanceChartProps
               fill="url(#balGrad)"
               dot={false}
               activeDot={{ r: 4, fill: accentColor, stroke: "transparent" }}
+              animationDuration={900}
             />
           </AreaChart>
         </ResponsiveContainer>

@@ -14,6 +14,13 @@ export class RateLimitError extends Error {
   }
 }
 
+export class LoginFailedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "LoginFailedError";
+  }
+}
+
 type SyncBankContext = {
   scope?: string;
 };
@@ -48,16 +55,19 @@ export async function importFromFintsServer(
         const retryAfter = payload?.detail?.retry_after ?? payload?.retry_after ?? 30;
         throw new RateLimitError(retryAfter, code);
       }
+      const message =
+        payload?.detail?.message ??
+        payload?.detail ??
+        code ??
+        "FinTS request failed";
+      if (code === "FINTS_LOGIN_FAILED") {
+        throw new LoginFailedError(String(message));
+      }
       if (code === "TAN_REQUIRED" && !tanHintVisible) {
         tanHintVisible = true;
         onTanRequiredChange?.(true);
       }
-      throw new Error(
-        payload?.detail?.message ??
-          payload?.detail ??
-          code ??
-          "FinTS request failed",
-      );
+      throw new Error(message);
     }
 
     onProgress(100);

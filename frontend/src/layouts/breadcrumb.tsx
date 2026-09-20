@@ -102,7 +102,6 @@ function DynamicBreadcrumbs() {
     dashboard: "Dashboard",
     transactions: "Transaktionen",
     subscriptions: "Abonnements",
-    analytics: "Analyse",
     "finance-plan": "Finanzplan",
     budgets: "Budgets",
     "account-flow": "Kontenfluss",
