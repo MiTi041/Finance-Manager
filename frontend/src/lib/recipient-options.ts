@@ -13,6 +13,9 @@ export type RecipientOption = {
   subtitle: string;
   iban: string;
   isPrimary?: boolean;
+  bankLogo?: string;
+  bankLogoDark?: string;
+  logoPadding?: number;
 };
 
 export type RecipientOptionGroup = {
@@ -40,6 +43,9 @@ export function buildRecipientOptions(input: {
           : account.accountIban,
         iban: account.accountIban,
         isPrimary: account.isPrimary === true,
+        bankLogo: account.bankLogo,
+        bankLogoDark: account.bankLogoDark,
+        logoPadding: account.logoPadding,
       })),
     },
     {

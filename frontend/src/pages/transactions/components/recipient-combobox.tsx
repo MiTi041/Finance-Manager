@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { BankLogo, RecipientLogo } from "@/components/bank-logo";
+import { useRecipientAccountLogos } from "@/hooks/use-recipient-account-logos";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import {
   Command,
@@ -36,6 +38,7 @@ export function RecipientCombobox({
   emptyText = "Keine Treffer – Text wird frei übernommen",
 }: RecipientComboboxProps) {
   const [open, setOpen] = useState(false);
+  const recipientLogos = useRecipientAccountLogos();
   const filtered = useMemo(() => filterRecipientOptions(groups, value), [groups, value]);
 
   return (
@@ -104,7 +107,22 @@ export function RecipientCombobox({
                       setOpen(false);
                     }}
                   >
-                    <span className="flex min-w-0 flex-col">
+                    {option.kind === "own" ? (
+                      <BankLogo
+                        src={option.bankLogo}
+                        srcDark={option.bankLogoDark}
+                        alt={option.label}
+                        sizeClassName="size-9"
+                        backgroundClassName="bg-muted/70"
+                        imgPadding={option.logoPadding}
+                      />
+                    ) : option.kind === "recipient" ? (
+                      <RecipientLogo
+                        logo={recipientLogos.get(Number(option.id.split(":")[1]))}
+                        alt={option.label || option.name}
+                      />
+                    ) : null}
+                    <span className="flex min-w-0 flex-1 flex-col">
                       <span className="flex min-w-0 items-center gap-1.5">
                         <span className="truncate">{option.label}</span>
                         {option.isPrimary ? (

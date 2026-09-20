@@ -1,4 +1,5 @@
 import { fetchCachedResource, getApiBaseUrl, parseJsonResponse } from "./api";
+import { getServerBaseUrl } from "./bank/zahlungspartner-logo";
 import { emitReferenceChange } from "./events";
 
 export type RecipientAccountRecord = {
@@ -10,6 +11,13 @@ export type RecipientAccountRecord = {
   is_donation_account: boolean;
   local_logo_path?: string | null;
 };
+
+export function resolveRecipientAccountLogoSrc(
+  account: Pick<RecipientAccountRecord, "local_logo_path">,
+): string | undefined {
+  const path = (account.local_logo_path ?? "").trim();
+  return path ? `${getServerBaseUrl()}${path}` : undefined;
+}
 
 export async function fetchRecipientAccountsReferenceData(options?: {
   forceRefresh?: boolean;

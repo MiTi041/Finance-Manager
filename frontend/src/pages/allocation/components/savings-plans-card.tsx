@@ -34,7 +34,8 @@ import { Label } from "@/components/ui/label";
 import { PayoutSlider } from "./payout-slider";
 import { SavingsPlanDatePickerInput } from "./savings-plan-date-picker-input";
 import { PrimaryOptionBadge, SearchableSelect } from "@/components/searchable-select";
-import { BankLogo } from "@/components/bank-logo";
+import { BankLogo, RecipientLogo } from "@/components/bank-logo";
+import { useRecipientAccountLogos } from "@/hooks/use-recipient-account-logos";
 import { logoBackgroundClass } from "@/lib/bank/zahlungspartner-logo";
 import {
   createSavingsPlan,
@@ -62,7 +63,15 @@ type Props = {
   onRefresh: () => void;
   onTransfer: (plan: SavingsPlan, customAmount?: number) => void;
   recipientAccounts: RecipientAccountRecord[];
-  bankAccounts: { iban: string; name: string; bankKey: string; isPrimary?: boolean }[];
+  bankAccounts: {
+    iban: string;
+    name: string;
+    bankKey: string;
+    isPrimary?: boolean;
+    bankLogo?: string;
+    bankLogoDark?: string;
+    logoPadding?: number;
+  }[];
   canTransferMap: Map<string, boolean>;
 };
 
@@ -156,7 +165,15 @@ function PlanFormFields({
   values: FormValues;
   onChange: (v: FormValues) => void;
   recipientAccounts: RecipientAccountRecord[];
-  bankAccounts: { iban: string; name: string; bankKey: string; isPrimary?: boolean }[];
+  bankAccounts: {
+    iban: string;
+    name: string;
+    bankKey: string;
+    isPrimary?: boolean;
+    bankLogo?: string;
+    bankLogoDark?: string;
+    logoPadding?: number;
+  }[];
   canTransferMap: Map<string, boolean>;
   existingTotal: number;
   availableForSavings: number;
@@ -167,6 +184,7 @@ function PlanFormFields({
   savedAmount?: number;
   entnahmenTotal?: number;
 }) {
+  const recipientLogos = useRecipientAccountLogos();
   const [debouncing, setDebouncing] = useState(false);
   const [computedRate, setComputedRate] = useState<number | null>(null);
 
@@ -360,6 +378,12 @@ function PlanFormFields({
                 value: `empf:${r.id}`,
                 label: `${r.account_name} ${r.recipient_name} ${r.iban}`,
                 _type: "empf" as const,
+                leading: (
+                  <RecipientLogo
+                    logo={recipientLogos.get(r.id)}
+                    alt={r.account_name || r.recipient_name}
+                  />
+                ),
               })),
               ...bankAccounts
                 .filter((a) => !recipientAccounts.some((r) => r.iban === a.iban))
@@ -368,6 +392,16 @@ function PlanFormFields({
                   label: `${a.name} ${a.iban}`,
                   _type: "bank" as const,
                   isPrimary: a.isPrimary === true,
+                  leading: (
+                    <BankLogo
+                      src={a.bankLogo}
+                      srcDark={a.bankLogoDark}
+                      alt={a.name}
+                      sizeClassName="size-9"
+                      backgroundClassName="bg-muted/70"
+                      imgPadding={a.logoPadding}
+                    />
+                  ),
                 })),
             ]}
             placeholder="Kein Eintrag (manuelle Eingabe)"
@@ -497,6 +531,16 @@ function PlanFormFields({
               value: a.iban,
               label: `${a.name} ${a.iban}`,
               isPrimary: a.isPrimary === true,
+              leading: (
+                <BankLogo
+                  src={a.bankLogo}
+                  srcDark={a.bankLogoDark}
+                  alt={a.name}
+                  sizeClassName="size-9"
+                  backgroundClassName="bg-muted/70"
+                  imgPadding={a.logoPadding}
+                />
+              ),
             }))}
           placeholder="Konto auswählen"
           searchPlaceholder="Konto suchen…"

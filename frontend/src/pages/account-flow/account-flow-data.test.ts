@@ -1,6 +1,18 @@
 import { strict as assert } from "node:assert";
 
-import { buildAccountFlowGraph, flowArrow, netFlowAmount } from "./account-flow-data.ts";
+import {
+  buildAccountFlowGraph,
+  flowArrow,
+  netFlowAmount,
+  type AccountFlowGraph,
+} from "./account-flow-data.ts";
+
+function accountNode(graph: AccountFlowGraph, iban: string) {
+  return graph.nodes.find(
+    (node): node is Extract<AccountFlowGraph["nodes"][number], { kind: "account" }> =>
+      node.kind === "account" && node.id === iban,
+  );
+}
 
 assert.equal(flowArrow({ x: 0, y: 0 }, { x: 10, y: 0 }), "→");
 assert.equal(flowArrow({ x: 0, y: 0 }, { x: -10, y: 0 }), "←");
@@ -107,10 +119,10 @@ const externalGraph = buildAccountFlowGraph(
   ],
   [{ accountIban: CHASE, balance: 74.88 }],
 );
-const chaseNode = externalGraph.nodes.find((node) => node.id === CHASE);
+const chaseNode = accountNode(externalGraph, CHASE);
 assert.equal(chaseNode?.balance, 74.88);
 assert.equal(chaseNode?.externalFlow, -1935.08);
-const norisNode = externalGraph.nodes.find((node) => node.id === NORIS);
+const norisNode = accountNode(externalGraph, NORIS);
 assert.equal(norisNode?.externalFlow, undefined, "no balance means no external flow");
 
 // A balance that exactly matches the internal flow cancels out and is hidden.
@@ -120,8 +132,56 @@ const balancedGraph = buildAccountFlowGraph(
   [{ accountIban: CHASE, balance: 100 }],
 );
 assert.equal(
-  balancedGraph.nodes.find((node) => node.id === CHASE)?.externalFlow,
+  accountNode(balancedGraph, CHASE)?.externalFlow,
   undefined,
 );
+
+// Recurring income sources (detected like the Finanzplan) become logo chips
+// connected to the account they pay into.
+const EMPLOYER = "DE12500105170648489890";
+const incomeGraph = buildAccountFlowGraph(
+  accounts,
+  [],
+  [],
+  [
+    {
+      name: "Acme GmbH",
+      purpose: "Lohn/Gehalt",
+      amount: 2500,
+      count: 3,
+      accountIban: NORIS,
+      applicantIban: EMPLOYER,
+    },
+  ],
+  new Map([[EMPLOYER, { logo: "acme.png", isCompany: true }]]),
+);
+
+const incomeNode = incomeGraph.nodes.find((node) => node.kind === "income");
+assert.ok(incomeNode, "expected an income chip");
+assert.equal(incomeNode.label, "Acme GmbH");
+assert.equal(incomeNode.accountIban, NORIS);
+assert.equal(incomeNode.logo, "acme.png");
+assert.equal(incomeGraph.nodes.filter((node) => node.kind === "account").length, 2);
+
+const incomeEdge = incomeGraph.edges.find((edge) => edge.kind === "income");
+assert.ok(incomeEdge, "expected an income edge");
+assert.equal(incomeEdge.source, incomeNode.id);
+assert.equal(incomeEdge.target, NORIS);
+assert.equal(incomeEdge.amountSourceToTarget, 2500);
+assert.equal(incomeEdge.amountTargetToSource, 0);
+
+// An income source whose target account is not a linked account is ignored.
+const orphanIncomeGraph = buildAccountFlowGraph(accounts, [], [], [
+  {
+    name: "Unbekannt",
+    purpose: "Lohn",
+    amount: 10,
+    count: 3,
+    accountIban: "DE00000000000000000000",
+    applicantIban: EMPLOYER,
+  },
+]);
+assert.equal(orphanIncomeGraph.nodes.filter((node) => node.kind === "income").length, 0);
+assert.equal(orphanIncomeGraph.edges.filter((edge) => edge.kind === "income").length, 0);
 
 console.log("account-flow-data.test.ts ok");

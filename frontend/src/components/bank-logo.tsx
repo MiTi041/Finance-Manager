@@ -1,6 +1,8 @@
 import { Archive, Building2, Store } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { logoBackgroundClass } from "@/lib/bank/zahlungspartner-logo";
+import type { RecipientAccountLogo } from "@/hooks/use-recipient-account-logos";
 
 type IconFrameProps = {
   src?: string;
@@ -47,11 +49,23 @@ function IconFrame({
         <Archive className="size-[42cqw] text-amber-700 dark:text-amber-300" />
       ) : src && srcDark ? (
         <>
-          <img src={src} alt={alt} style={imgStyle} className={cn(imgClassName, "dark:hidden")} />
-          <img src={srcDark} alt={alt} style={imgStyle} className={cn(imgClassName, "hidden dark:block")} />
+          <img
+            src={src}
+            alt={alt}
+            draggable={false}
+            style={imgStyle}
+            className={cn(imgClassName, "dark:hidden")}
+          />
+          <img
+            src={srcDark}
+            alt={alt}
+            draggable={false}
+            style={imgStyle}
+            className={cn(imgClassName, "hidden dark:block")}
+          />
         </>
       ) : src ? (
-        <img src={src} alt={alt} style={imgStyle} className={imgClassName} />
+        <img src={src} alt={alt} draggable={false} style={imgStyle} className={imgClassName} />
       ) : kind === "person" ? (
         <span className="text-[25cqw] font-bold uppercase text-primary">
           {alt
@@ -75,4 +89,25 @@ export function BankLogo(props: IconFrameProps) {
 
 export function BrandIcon(props: IconFrameProps) {
   return <IconFrame {...props} CompanyFallback={Building2} />;
+}
+
+export function RecipientLogo({
+  logo,
+  alt,
+  sizeClassName = "size-9",
+}: {
+  logo?: RecipientAccountLogo;
+  alt: string;
+  sizeClassName?: string;
+}) {
+  return (
+    <BrandIcon
+      src={logo?.src}
+      alt={alt}
+      sizeClassName={sizeClassName}
+      backgroundClassName={logoBackgroundClass(logo?.background)}
+      kind={logo?.isCompany === false ? "person" : "company"}
+      imgNoPadding={!logo?.padding}
+    />
+  );
 }

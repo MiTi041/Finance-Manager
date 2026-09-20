@@ -366,6 +366,7 @@ export function useFinanceData(
       return {
         bankLogo: account.bankLogo,
         bankLogoDark: account.bankLogoDark,
+        logoPadding: account.logoPadding,
         accountIban: account.accountIban,
         accountName: account.accountName,
         bankName: account.bankName,
@@ -387,6 +388,7 @@ export function useFinanceData(
 
   const error = txError;
   const transactions = visibleFilteredTransactions;
+  const allTransactions = visibleCleanedTransactions;
   const transactionCount = transactions.length;
 
   return {
@@ -395,6 +397,7 @@ export function useFinanceData(
     error,
     reload: loadTransactions,
     transactions,
+    allTransactions,
     pendingTransactions,
     transactionCount,
     balance,

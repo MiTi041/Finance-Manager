@@ -20,6 +20,7 @@ export type SelectOption = {
   value: string;
   label: string;
   isPrimary?: boolean;
+  leading?: React.ReactNode;
 };
 
 type SearchableSelectProps = {
@@ -97,15 +98,20 @@ export function SearchableSelect({
           )}
         >
           {selected ? (
-            <span className="min-w-0 flex-1">
-              {renderSelected ? (
-                renderSelected(selected)
-              ) : (
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <span className="truncate">{selected.label}</span>
-                  {selected.isPrimary ? <PrimaryOptionBadge /> : null}
-                </span>
-              )}
+            <span className="flex min-w-0 flex-1 items-center gap-2">
+              {selected.leading ? (
+                <span className="shrink-0">{selected.leading}</span>
+              ) : null}
+              <span className="min-w-0 flex-1">
+                {renderSelected ? (
+                  renderSelected(selected)
+                ) : (
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span className="truncate">{selected.label}</span>
+                    {selected.isPrimary ? <PrimaryOptionBadge /> : null}
+                  </span>
+                )}
+              </span>
             </span>
           ) : (
             <span className="min-w-0 flex-1 truncate">{placeholder}</span>
@@ -115,7 +121,7 @@ export function SearchableSelect({
       </PopoverTrigger>
       <PopoverContent
         data-searchable-select-content
-        className={cn("p-0", contentClassName)}
+        className={cn("w-80 min-w-[var(--radix-popover-trigger-width)] p-0", contentClassName)}
         align="start"
         sideOffset={4}
       >
@@ -155,6 +161,9 @@ export function SearchableSelect({
                     setOpen(false);
                   }}
                 >
+                  {option.leading ? (
+                    <span className="shrink-0">{option.leading}</span>
+                  ) : null}
                   {renderOption ? (
                     renderOption(option)
                   ) : (

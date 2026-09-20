@@ -16,6 +16,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PrimaryOptionBadge, SearchableSelect } from "@/components/searchable-select";
+import { BankLogo, RecipientLogo } from "@/components/bank-logo";
+import { useRecipientAccountLogos } from "@/hooks/use-recipient-account-logos";
 import {
   Dialog,
   DialogContent,
@@ -60,8 +62,22 @@ type Props = {
   bucket: AllocationRunBucket;
   config: AllocationBucket;
   accent: { icon: string; bar: string; badge: string; barMuted: string };
-  recipientAccounts: { id: number; account_name: string; recipient_name: string; iban: string }[];
-  bankAccounts: { iban: string; name: string; bankKey: string; isPrimary?: boolean }[];
+  recipientAccounts: {
+    id: number;
+    account_name: string;
+    recipient_name: string;
+    iban: string;
+    local_logo_path?: string | null;
+  }[];
+  bankAccounts: {
+    iban: string;
+    name: string;
+    bankKey: string;
+    isPrimary?: boolean;
+    bankLogo?: string;
+    bankLogoDark?: string;
+    logoPadding?: number;
+  }[];
   canTransferMap: Map<string, boolean>;
   onUpdateConfig: (bucketId: number, updates: Partial<AllocationBucket>) => Promise<void>;
   onRefresh?: () => void;
@@ -78,6 +94,8 @@ export function BucketSettingsDialog(props: Props) {
     onUpdateConfig,
     onRefresh,
   } = props;
+
+  const recipientLogos = useRecipientAccountLogos();
 
   const [localPct, setLocalPct] = useState(String(config.percentage));
   useEffect(() => setLocalPct(String(config.percentage)), [config.percentage]);
@@ -659,6 +677,12 @@ export function BucketSettingsDialog(props: Props) {
                       value: `empf:${r.id}`,
                       label: `${r.account_name} ${r.recipient_name} ${r.iban}`,
                       _type: "empf" as const,
+                      leading: (
+                        <RecipientLogo
+                          logo={recipientLogos.get(r.id)}
+                          alt={r.account_name || r.recipient_name}
+                        />
+                      ),
                     })),
                     ...bankAccounts
                       .filter(
@@ -671,6 +695,16 @@ export function BucketSettingsDialog(props: Props) {
                         label: `${a.name} ${a.iban}`,
                         _type: "bank" as const,
                         isPrimary: a.isPrimary === true,
+                        leading: (
+                          <BankLogo
+                            src={a.bankLogo}
+                            srcDark={a.bankLogoDark}
+                            alt={a.name}
+                            sizeClassName="size-9"
+                            backgroundClassName="bg-muted/70"
+                            imgPadding={a.logoPadding}
+                          />
+                        ),
                       })),
                   ]}
                   placeholder="Kein Konto"
@@ -763,6 +797,16 @@ export function BucketSettingsDialog(props: Props) {
                     value: a.iban,
                     label: `${a.name} ${a.iban}`,
                     isPrimary: a.isPrimary === true,
+                    leading: (
+                      <BankLogo
+                        src={a.bankLogo}
+                        srcDark={a.bankLogoDark}
+                        alt={a.name}
+                        sizeClassName="size-9"
+                        backgroundClassName="bg-muted/70"
+                        imgPadding={a.logoPadding}
+                      />
+                    ),
                   }))}
                 placeholder="Konto auswählen"
                 searchPlaceholder="Konto suchen…"

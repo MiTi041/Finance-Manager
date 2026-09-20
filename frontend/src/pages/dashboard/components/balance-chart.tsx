@@ -14,6 +14,7 @@ import {
 
 import type { Transaction } from "@/types/transaction";
 import { SectionHeading } from "./section-heading";
+import { buildBalanceHistory, sliceBalanceHistory } from "./balance-history";
 
 // ─── Formatting ─────────────────────────────────────────────────────────────
 
@@ -40,61 +41,6 @@ function dateLabel(date: Date, rangeDays: number) {
   return rangeDays > 370 ? format(date, "dd.MM.yy") : format(date, "dd.MM");
 }
 
-function buildBalanceHistory(
-  transactions: Transaction[],
-  anchorBalance: number | null = null,
-) {
-  if (transactions.length === 0) return [];
-
-  let minDate = new Date();
-  let maxDate = new Date(0);
-  for (const t of transactions) {
-    if (!t.daten.buchungsdatum) continue;
-    const d = new Date(t.daten.buchungsdatum);
-    if (d < minDate) minDate = d;
-    if (d > maxDate) maxDate = d;
-  }
-
-  const rangeDays = Math.round(
-    (maxDate.getTime() - minDate.getTime()) / 86400000,
-  );
-  const bucketCount = rangeDays + 1;
-
-  const buckets: Record<string, number> = {};
-  const cursor = new Date(minDate);
-  while (cursor <= maxDate) {
-    buckets[format(cursor, "yyyy-MM-dd")] = 0;
-    cursor.setDate(cursor.getDate() + 1);
-  }
-
-  const sorted = [...transactions].sort(
-    (a, b) =>
-      new Date(a.daten.buchungsdatum ?? 0).getTime() -
-      new Date(b.daten.buchungsdatum ?? 0).getTime(),
-  );
-  for (const t of sorted) {
-    const key = t.daten.buchungsdatum
-      ? format(new Date(t.daten.buchungsdatum), "yyyy-MM-dd")
-      : null;
-    if (key && key in buckets) buckets[key] += t.betrag.wert;
-  }
-
-  const sumOfWindow = Object.values(buckets).reduce((s, v) => s + v, 0);
-  const offset = anchorBalance !== null ? anchorBalance - sumOfWindow : 0;
-
-  const keys = Object.keys(buckets).sort();
-
-  let acc = offset;
-  return keys.map((k, i) => {
-    acc += buckets[k];
-    return {
-      date: dateLabel(new Date(k), rangeDays),
-      _sortKey: k,
-      value: Math.round(acc * 100) / 100,
-    };
-  });
-}
-
 // ─── Tooltip ────────────────────────────────────────────────────────────────
 
 function AreaTooltip({ active, payload }: any) {
@@ -117,15 +63,37 @@ const SUBTLE = "#2a2a40";
 const MUTED = "#55556e";
 
 type BalanceChartProps = {
+  /** Date-filtered transactions: define the visible window. */
   transactions: Transaction[];
+  /** All-time transactions of the account: build the running balance. */
+  allTransactions: Transaction[];
   currentBalance: number;
 };
 
-export function BalanceChart({ transactions, currentBalance }: BalanceChartProps) {
-  const data = useMemo(
-    () => buildBalanceHistory(transactions, currentBalance),
-    [transactions, currentBalance],
-  );
+export function BalanceChart({
+  transactions,
+  allTransactions,
+  currentBalance,
+}: BalanceChartProps) {
+  const data = useMemo(() => {
+    const sliced = sliceBalanceHistory(
+      buildBalanceHistory(allTransactions, currentBalance),
+      transactions,
+    );
+    const rangeDays =
+      sliced.length > 0
+        ? Math.round(
+            (new Date(sliced[sliced.length - 1]._sortKey).getTime() -
+              new Date(sliced[0]._sortKey).getTime()) /
+              86400000,
+          )
+        : 0;
+    return sliced.map((p) => ({
+      date: dateLabel(new Date(p._sortKey), rangeDays),
+      _sortKey: p._sortKey,
+      value: p.value,
+    }));
+  }, [allTransactions, transactions, currentBalance]);
 
   const totalDays = data.length;
   const labelInterval = Math.max(1, Math.floor(totalDays / 15));
@@ -138,7 +106,7 @@ export function BalanceChart({ transactions, currentBalance }: BalanceChartProps
   const min = Math.min(...data.map((d) => d.value));
   const max = Math.max(...data.map((d) => d.value));
   const padding = (max - min) * 0.12;
-  const isPositive = data[data.length - 1]?.value >= data[0]?.value;
+  const isPositive = (data[data.length - 1]?.value ?? 0) >= 0;
   const accentColor = isPositive ? GREEN : RED;
 
   return (

@@ -363,6 +363,9 @@ class AllocationService:
     def _detect_income(self, month: str) -> float:
         return self._detect_income_breakdown(month)["total"]
 
+    def get_income_breakdown(self, month: str) -> dict[str, Any]:
+        return self._detect_income_breakdown(month)
+
     def _detect_income_breakdown(self, month: str) -> dict[str, Any]:
         """Recurring income detection matching finance_local (3-month lookback, group by counterparty+purpose, 3+ occurrences, ~30d cadence)."""
         start_parts = month.split("-")
@@ -376,7 +379,8 @@ class AllocationService:
 
         with get_connection() as conn:
             rows = conn.execute(
-                """SELECT applicant_name, COALESCE(purpose_edit, purpose) AS purpose, amount, date
+                """SELECT applicant_name, COALESCE(purpose_edit, purpose) AS purpose, amount, date,
+                          account_iban, applicant_iban
                    FROM umsaetze
                    WHERE amount > 0
                      AND NOT EXISTS (SELECT 1 FROM refund_links rl WHERE rl.refund_transaction_id = umsaetze.id)
@@ -386,7 +390,7 @@ class AllocationService:
                 (lookback_start, month_end),
             ).fetchall()
 
-        groups: dict[str, list[tuple[float, str, str, str]]] = {}
+        groups: dict[str, list[tuple[float, str, str, str, str, str]]] = {}
         for row in rows:
             name = (row["applicant_name"] or "").strip()
             purpose = (row["purpose"] or "").strip()
@@ -394,7 +398,14 @@ class AllocationService:
             if not name or not purpose_clean:
                 continue
             groups.setdefault(f"{name.lower()} | {purpose_clean}", []).append(
-                (row["amount"], row["date"], name, purpose)
+                (
+                    row["amount"],
+                    row["date"],
+                    name,
+                    purpose,
+                    (row["account_iban"] or "").strip(),
+                    (row["applicant_iban"] or "").strip(),
+                )
             )
 
         total = 0.0
@@ -412,12 +423,14 @@ class AllocationService:
                     break
             if recurring:
                 total += txs[-1][0]
-                _, _, name, purpose = txs[-1]
+                _, _, name, purpose, account_iban, applicant_iban = txs[-1]
                 sources.append({
                     "name": name,
                     "purpose": purpose,
                     "amount": round(txs[-1][0], 2),
                     "count": len(txs),
+                    "account_iban": account_iban,
+                    "applicant_iban": applicant_iban,
                     "transactions": [
                         {"date": t[1], "amount": round(t[0], 2)} for t in txs
                     ],

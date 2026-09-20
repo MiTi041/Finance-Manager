@@ -25,12 +25,15 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 import { fetchAccountFlowLayout, saveAccountFlowLayout } from "@/lib/account-flow";
 import type { AccountFlowZone } from "@/lib/account-flow";
+import { logoBackgroundClass } from "@/lib/bank/zahlungspartner-logo";
 
 import {
   flowArrow,
   netFlowAmount,
   type AccountFlowEdge,
   type AccountFlowGraph,
+  type AccountFlowGraphNode,
+  type AccountFlowIncomeNode,
   type AccountFlowNode,
 } from "./account-flow-data";
 
@@ -40,6 +43,8 @@ const CARD_WIDTH = 250;
 const CARD_MIN_HEIGHT = 104;
 const CARD_MAX_HEIGHT = 152;
 const CORNER_RADIUS = 16;
+const INCOME_CHIP_SIZE = 56;
+const INCOME_CHIP_GAP = 64;
 
 const MIN_SCALE = 0.4;
 const MAX_SCALE = 2.4;
@@ -60,11 +65,20 @@ const MOUSE_WHEEL_ZOOM_SENSITIVITY = 0.0022;
 const COLOR_DEFAULT = "#64748b";
 const COLOR_HOVER = "#54a0ff";
 const COLOR_ACTIVE = "#00d4a1";
+const COLOR_INCOME = "#10b981";
 
 type Point = { x: number; y: number };
 
 function getCardHeight(note: string) {
   return note.trim() ? CARD_MIN_HEIGHT + 14 : CARD_MIN_HEIGHT;
+}
+
+function nodeWidth(node: AccountFlowGraphNode) {
+  return node.kind === "income" ? INCOME_CHIP_SIZE : CARD_WIDTH;
+}
+
+function nodeHeight(node: AccountFlowGraphNode, note: string) {
+  return node.kind === "income" ? INCOME_CHIP_SIZE : getCardHeight(note);
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -102,19 +116,29 @@ function initialPosition(index: number, count: number): Point {
   };
 }
 
-function getFitView(nodes: AccountFlowNode[], positions: Map<string, Point>) {
-  const nodePositions = nodes
-    .map((node) => positions.get(node.id))
-    .filter((position): position is Point => Boolean(position));
+function getFitView(nodes: AccountFlowGraphNode[], positions: Map<string, Point>) {
+  const boxes = nodes
+    .map((node) => {
+      const position = positions.get(node.id);
+      if (!position) return null;
+      const halfWidth = nodeWidth(node) / 2;
+      return {
+        minX: position.x - halfWidth,
+        maxX: position.x + halfWidth,
+        minY: position.y - CARD_MAX_HEIGHT / 2,
+        maxY: position.y + CARD_MAX_HEIGHT / 2,
+      };
+    })
+    .filter((box): box is NonNullable<typeof box> => Boolean(box));
 
-  if (nodePositions.length === 0) {
+  if (boxes.length === 0) {
     return { scale: 1, offset: { x: 0, y: 0 } };
   }
 
-  const minX = Math.min(...nodePositions.map((position) => position.x - CARD_WIDTH / 2));
-  const maxX = Math.max(...nodePositions.map((position) => position.x + CARD_WIDTH / 2));
-  const minY = Math.min(...nodePositions.map((position) => position.y - CARD_MAX_HEIGHT / 2));
-  const maxY = Math.max(...nodePositions.map((position) => position.y + CARD_MAX_HEIGHT / 2));
+  const minX = Math.min(...boxes.map((box) => box.minX));
+  const maxX = Math.max(...boxes.map((box) => box.maxX));
+  const minY = Math.min(...boxes.map((box) => box.minY));
+  const maxY = Math.max(...boxes.map((box) => box.maxY));
   const contentWidth = maxX - minX;
   const contentHeight = maxY - minY;
   const scale = clamp(
@@ -144,6 +168,35 @@ function laneOffset(index: number, count: number) {
   return index - (count - 1) / 2;
 }
 
+/**
+ * Income chips are auto-placed left of their target account and are not part of
+ * the saved layout: they follow the account card as it is dragged.
+ */
+function computeIncomePositions(
+  nodes: AccountFlowGraphNode[],
+  accountPositions: Map<string, Point>,
+): Map<string, Point> {
+  const result = new Map(accountPositions);
+  const byAccount = new Map<string, AccountFlowIncomeNode[]>();
+  for (const node of nodes) {
+    if (node.kind !== "income") continue;
+    byAccount.set(node.accountIban, [...(byAccount.get(node.accountIban) ?? []), node]);
+  }
+
+  byAccount.forEach((incomeNodes, accountIban) => {
+    const account = accountPositions.get(accountIban);
+    if (!account) return;
+    incomeNodes.forEach((node, index) => {
+      result.set(node.id, {
+        x: account.x - CARD_WIDTH / 2 - INCOME_CHIP_GAP,
+        y: account.y + laneOffset(index, incomeNodes.length) * INCOME_CHIP_GAP,
+      });
+    });
+  });
+
+  return result;
+}
+
 /** Orthogonal (Manhattan) waypoints between two card edges, offset into a lane to avoid overlap. */
 type ConnectionSide = "left" | "right" | "top" | "bottom";
 
@@ -168,14 +221,16 @@ function connectionWaypoints(
   targetPort: number,
   sourceHeight: number,
   targetHeight: number,
+  sourceWidth: number,
+  targetWidth: number,
 ): Point[] {
   const dx = target.x - source.x;
   const dy = target.y - source.y;
   const horizontal = Math.abs(dx) >= Math.abs(dy);
 
   if (horizontal) {
-    const sourceX = source.x + (dx >= 0 ? CARD_WIDTH / 2 : -CARD_WIDTH / 2);
-    const targetX = target.x - (dx >= 0 ? CARD_WIDTH / 2 : -CARD_WIDTH / 2);
+    const sourceX = source.x + (dx >= 0 ? sourceWidth / 2 : -sourceWidth / 2);
+    const targetX = target.x - (dx >= 0 ? targetWidth / 2 : -targetWidth / 2);
     const sourceY = source.y + sourcePort * CONNECTION_LANE_SPACING;
     const targetY = target.y + targetPort * CONNECTION_LANE_SPACING;
     const bendX = (sourceX + targetX) / 2 + lane * 32;
@@ -513,8 +568,8 @@ function AccountCard({
             "flex h-full w-full origin-center items-center gap-3 rounded-xl border bg-card px-3 shadow-sm transition-[transform,box-shadow,border-color,opacity] duration-150 ease-out will-change-transform",
             dragging ? "cursor-grabbing shadow-xl" : "cursor-grab",
             active ? "border-[#00d4a1] ring-2 ring-[#00d4a1]/20" : "border-border",
-            hovered && !dimmed && !dragging && "-translate-y-0.5 border-[#54a0ff]/60 shadow-md",
-            dragging && "scale-[1.03] shadow-[0_18px_38px_-8px_rgba(15,23,42,0.28)]",
+            hovered && !dimmed && !dragging && "-translate-y-px border-[#54a0ff]/60 shadow-md",
+            dragging && "shadow-[0_18px_38px_-8px_rgba(15,23,42,0.28)]",
             dimmed && "opacity-35",
             noteFocusMode && !noteEditing && "blur-[3px] opacity-60",
           )}
@@ -624,6 +679,75 @@ function AccountCard({
   );
 }
 
+function IncomeChip({
+  node,
+  position,
+  dimmed,
+  hovered,
+  onPointerEnter,
+  onPointerLeave,
+}: {
+  node: AccountFlowIncomeNode;
+  position: Point;
+  dimmed: boolean;
+  hovered: boolean;
+  onPointerEnter: () => void;
+  onPointerLeave: () => void;
+}) {
+  return (
+    <g>
+      <foreignObject
+        x={position.x - INCOME_CHIP_SIZE / 2}
+        y={position.y - INCOME_CHIP_SIZE / 2}
+        width={INCOME_CHIP_SIZE}
+        height={INCOME_CHIP_SIZE}
+        style={{ overflow: "visible" }}
+      >
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div
+              role="img"
+              aria-label={`Einkommen ${node.label}`}
+              className={cn(
+                "flex h-full w-full items-center justify-center rounded-full border bg-card shadow-sm transition-[transform,box-shadow,border-color,opacity] duration-150 ease-out",
+                hovered && !dimmed ? "-translate-y-px border-[#10b981]/60 shadow-md" : "border-border",
+                dimmed && "opacity-35",
+              )}
+              onPointerEnter={onPointerEnter}
+              onPointerLeave={onPointerLeave}
+            >
+              <BankLogo
+                src={node.logo}
+                srcDark={node.logoDark}
+                alt={node.label}
+                sizeClassName="size-12"
+                className="rounded-full"
+                backgroundClassName={logoBackgroundClass(node.logoBackground)}
+                imgNoPadding={!node.logoPadding}
+                kind={node.isCompany === false ? "person" : "company"}
+              />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="left">
+            <span className="block font-medium">{node.label}</span>
+            {node.purpose ? <span className="block text-xs opacity-80">{node.purpose}</span> : null}
+            <span className="block text-xs opacity-80">{formatAmount(node.amount)} / Monat</span>
+          </TooltipContent>
+        </Tooltip>
+      </foreignObject>
+      <text
+        x={position.x}
+        y={position.y + INCOME_CHIP_SIZE / 2 + 12}
+        textAnchor="middle"
+        pointerEvents="none"
+        className="fill-emerald-600 text-[10px] font-semibold"
+      >
+        {formatAmount(node.amount)}
+      </text>
+    </g>
+  );
+}
+
 function EdgeLabel({
   edge,
   position,
@@ -707,11 +831,17 @@ export function AccountFlowGraph({
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [layoutLoaded, setLayoutLoaded] = useState(false);
-  const [positions, setPositions] = useState<Map<string, Point>>(
-    () =>
-      new Map(
-        graph.nodes.map((node, index) => [node.id, initialPosition(index, graph.nodes.length)]),
-      ),
+  const [positions, setPositions] = useState<Map<string, Point>>(() => {
+    const accountNodes = graph.nodes.filter((node) => node.kind === "account");
+    return new Map(
+      accountNodes.map((node, index) => [node.id, initialPosition(index, accountNodes.length)]),
+    );
+  });
+
+  // Income chips follow their target account and are never saved to the layout.
+  const allPositions = useMemo(
+    () => computeIncomePositions(graph.nodes, positions),
+    [graph.nodes, positions],
   );
 
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -736,10 +866,11 @@ export function AccountFlowGraph({
     let cancelled = false;
 
     setLayoutLoaded(false);
+    const accountNodes = graph.nodes.filter((node) => node.kind === "account");
     setPositions((current) => {
       const next = new Map<string, Point>();
-      graph.nodes.forEach((node, index) => {
-        next.set(node.id, current.get(node.id) ?? initialPosition(index, graph.nodes.length));
+      accountNodes.forEach((node, index) => {
+        next.set(node.id, current.get(node.id) ?? initialPosition(index, accountNodes.length));
       });
       return next;
     });
@@ -748,24 +879,27 @@ export function AccountFlowGraph({
       .then((layout) => {
         if (cancelled) return;
         const next = new Map<string, Point>();
-        graph.nodes.forEach((node, index) => {
+        accountNodes.forEach((node, index) => {
           next.set(
             node.id,
             layout.positions[node.id] ??
               positions.get(node.id) ??
-              initialPosition(index, graph.nodes.length),
+              initialPosition(index, accountNodes.length),
           );
         });
         setPositions(next);
         setZones((current) => (current.length > 0 ? current : (layout.zones ?? [])));
         setNotes((current) => (Object.keys(current).length > 0 ? current : (layout.notes ?? {})));
-        const fitView = getFitView(graph.nodes, next);
+        const fitView = getFitView(graph.nodes, computeIncomePositions(graph.nodes, next));
         setScale(fitView.scale);
         setOffset(fitView.offset);
       })
       .catch(() => {
         if (cancelled) return;
-        const fitView = getFitView(graph.nodes, positions);
+        const fitView = getFitView(
+          graph.nodes,
+          computeIncomePositions(graph.nodes, positions),
+        );
         setScale(fitView.scale);
         setOffset(fitView.offset);
       })
@@ -817,11 +951,16 @@ export function AccountFlowGraph({
     return lanes;
   }, [graph.edges]);
 
+  const nodeById = useMemo(
+    () => new Map(graph.nodes.map((node) => [node.id, node])),
+    [graph.nodes],
+  );
+
   const edgePorts = useMemo(() => {
     const groups = new Map<string, string[]>();
     graph.edges.forEach((edge) => {
-      const source = positions.get(edge.source);
-      const target = positions.get(edge.target);
+      const source = allPositions.get(edge.source);
+      const target = allPositions.get(edge.target);
       if (!source || !target) return;
 
       const sourceKey = `${edge.source}|${connectionSide(source, target, true)}`;
@@ -837,7 +976,7 @@ export function AccountFlowGraph({
       });
     });
     return ports;
-  }, [graph.edges, positions]);
+  }, [graph.edges, allPositions]);
 
   const edgeGeometry = useMemo(() => {
     const result = new Map<
@@ -845,9 +984,11 @@ export function AccountFlowGraph({
       { path: string; length: number; label: Point; start: Point; end: Point }
     >();
     graph.edges.forEach((edge) => {
-      const source = positions.get(edge.source);
-      const target = positions.get(edge.target);
-      if (!source || !target) return;
+      const source = allPositions.get(edge.source);
+      const target = allPositions.get(edge.target);
+      const sourceNode = nodeById.get(edge.source);
+      const targetNode = nodeById.get(edge.target);
+      if (!source || !target || !sourceNode || !targetNode) return;
       const lane = edgeLanes.get(edge.id) ?? 0;
       const waypoints = connectionWaypoints(
         source,
@@ -855,8 +996,10 @@ export function AccountFlowGraph({
         lane,
         edgePorts.get(`${edge.id}:source`) ?? 0,
         edgePorts.get(`${edge.id}:target`) ?? 0,
-        getCardHeight(notes[edge.source] ?? ""),
-        getCardHeight(notes[edge.target] ?? ""),
+        nodeHeight(sourceNode, notes[edge.source] ?? ""),
+        nodeHeight(targetNode, notes[edge.target] ?? ""),
+        nodeWidth(sourceNode),
+        nodeWidth(targetNode),
       );
       const mid = waypoints[Math.floor(waypoints.length / 2) - 1];
       const midNext = waypoints[Math.floor(waypoints.length / 2)];
@@ -876,7 +1019,7 @@ export function AccountFlowGraph({
       });
     });
     return result;
-  }, [graph.edges, positions, edgeLanes, edgePorts, notes]);
+  }, [graph.edges, allPositions, edgeLanes, edgePorts, notes, nodeById]);
 
   const connectedEdgeIds = useMemo(() => {
     if (!hoveredNodeId) return null;
@@ -956,10 +1099,11 @@ export function AccountFlowGraph({
   );
 
   const resetView = useCallback(() => {
+    const accountNodes = graph.nodes.filter((node) => node.kind === "account");
     const nextPositions = new Map(
-      graph.nodes.map((node, index) => [node.id, initialPosition(index, graph.nodes.length)]),
+      accountNodes.map((node, index) => [node.id, initialPosition(index, accountNodes.length)]),
     );
-    const fitView = getFitView(graph.nodes, nextPositions);
+    const fitView = getFitView(graph.nodes, computeIncomePositions(graph.nodes, nextPositions));
     applyWithTransition(() => {
       setScale(fitView.scale);
       setOffset(fitView.offset);
@@ -969,12 +1113,12 @@ export function AccountFlowGraph({
   }, [applyWithTransition, graph.nodes]);
 
   const centerView = useCallback(() => {
-    const fitView = getFitView(graph.nodes, positions);
+    const fitView = getFitView(graph.nodes, allPositions);
     applyWithTransition(() => {
       setScale(fitView.scale);
       setOffset(fitView.offset);
     });
-  }, [applyWithTransition, graph.nodes, positions]);
+  }, [applyWithTransition, graph.nodes, allPositions]);
 
   const addZone = useCallback(() => {
     let title = "Neue Zone";
@@ -1227,6 +1371,8 @@ export function AccountFlowGraph({
   };
 
   const zoomPercent = Math.round(scale * 100);
+  const accountCount = graph.nodes.filter((node) => node.kind === "account").length;
+  const incomeCount = graph.nodes.length - accountCount;
 
   return (
     <div
@@ -1238,7 +1384,9 @@ export function AccountFlowGraph({
         <div className="absolute left-4 top-4 z-10 flex items-center gap-2 rounded-lg border border-border bg-card/90 px-3 py-2 backdrop-blur">
           <Waypoints className="size-4 text-[#54a0ff]" />
           <span className="text-xs text-muted-foreground">
-            {graph.nodes.length} Konten · {graph.edges.length} Geldflüsse
+            {accountCount} Konten
+            {incomeCount > 0 ? ` · ${incomeCount} Einkommen` : ""} · {graph.edges.length}{" "}
+            Geldflüsse
           </span>
         </div>
         <div className="absolute bottom-4 right-4 z-10 flex items-center gap-1 rounded-lg border border-border bg-card/90 p-1 backdrop-blur">
@@ -1395,9 +1543,11 @@ export function AccountFlowGraph({
               const emphasized = selected || hovered || (connectedEdgeIds !== null && connected);
               const color = selected
                 ? COLOR_ACTIVE
-                : hovered || connected
-                  ? COLOR_HOVER
-                  : COLOR_DEFAULT;
+                : edge.kind === "income"
+                  ? COLOR_INCOME
+                  : hovered || connected
+                    ? COLOR_HOVER
+                    : COLOR_DEFAULT;
               const dimmedByHover = connectedEdgeIds !== null && !connected;
               // Dashes run along the path from source to target; reverse them when
               // the net money flow points the other way.
@@ -1448,10 +1598,39 @@ export function AccountFlowGraph({
               );
             })}
             {orderedNodes.map((node) => {
-              const position = positions.get(node.id);
+              const position = allPositions.get(node.id);
               if (!position) return null;
-              const dimmedByAccount = activeAccountIban !== "all" && activeAccountIban !== node.id;
+              const dimmedByAccount =
+                node.kind === "account" &&
+                activeAccountIban !== "all" &&
+                activeAccountIban !== node.id;
               const dimmedByHover = connectedNodeIds !== null && !connectedNodeIds.has(node.id);
+              const dimmed = dimmedByAccount || dimmedByHover;
+
+              if (node.kind === "income") {
+                return (
+                  <g
+                    key={node.id}
+                    className={editingNoteNodeId ? "blur-[3px] opacity-60" : undefined}
+                  >
+                    <IncomeChip
+                      node={node}
+                      position={position}
+                      dimmed={dimmed}
+                      hovered={hoveredNodeId === node.id}
+                      onPointerEnter={() => {
+                        if (!editingNoteNodeId) setHoveredNodeId(node.id);
+                      }}
+                      onPointerLeave={() => {
+                        if (!editingNoteNodeId) {
+                          setHoveredNodeId((current) => (current === node.id ? null : current));
+                        }
+                      }}
+                    />
+                  </g>
+                );
+              }
+
               return (
                 <AccountCard
                   key={node.id}
@@ -1462,7 +1641,7 @@ export function AccountFlowGraph({
                   noteEditing={editingNoteNodeId === node.id}
                   noteFocusMode={editingNoteNodeId !== null}
                   active={activeAccountIban !== "all" && activeAccountIban === node.id}
-                  dimmed={dimmedByAccount || dimmedByHover}
+                  dimmed={dimmed}
                   dragging={draggingNodeId === node.id}
                   hovered={hoveredNodeId === node.id}
                   onSelect={() => setSelectedEdgeId(null)}
@@ -1517,6 +1696,7 @@ export function AccountFlowGraph({
               connectedEdgeIds !== null &&
               graph.edges.map((edge) => {
                 if (!connectedEdgeIds.has(edge.id)) return null;
+                if (edge.kind === "income") return null;
                 const geometry = edgeGeometry.get(edge.id);
                 if (!geometry) return null;
                 const color = edge.id === selectedEdgeId ? COLOR_ACTIVE : COLOR_HOVER;

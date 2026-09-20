@@ -12,6 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PrimaryOptionBadge, SearchableSelect } from "@/components/searchable-select";
+import { BankLogo, RecipientLogo } from "@/components/bank-logo";
+import { useRecipientAccountLogos } from "@/hooks/use-recipient-account-logos";
 import { ToggleRow } from "@/components/toggle-row";
 import { PayoutSlider } from "@/pages/allocation/components/payout-slider";
 import { formatAmount } from "@/lib/utils/format";
@@ -22,6 +24,9 @@ export type SenderAccount = {
   iban: string;
   name: string;
   bankName: string;
+  bankLogo?: string;
+  bankLogoDark?: string;
+  logoPadding?: number;
   balance: number;
 };
 
@@ -29,6 +34,9 @@ export type OwnAccount = {
   iban: string;
   name: string;
   bankName: string;
+  bankLogo?: string;
+  bankLogoDark?: string;
+  logoPadding?: number;
   isPrimary?: boolean;
 };
 
@@ -92,12 +100,19 @@ export function TransferSetupDialog({
 
   const sender = senderAccount;
   const maxAmount = Math.max(0, sender?.balance ?? 0);
+  const recipientLogos = useRecipientAccountLogos();
 
   const recipientOptions = useMemo(
     () => [
       ...recipientAccounts.map((r) => ({
         value: `empf:${r.id}`,
         label: `${r.account_name} ${r.recipient_name} ${r.iban}`,
+        leading: (
+          <RecipientLogo
+            logo={recipientLogos.get(r.id)}
+            alt={r.account_name || r.recipient_name}
+          />
+        ),
       })),
       ...ownAccounts
         .filter((a) => a.iban !== sender?.iban)
@@ -105,9 +120,19 @@ export function TransferSetupDialog({
           value: `bank:${a.iban}`,
           label: `${a.name} ${a.iban}`,
           isPrimary: a.isPrimary === true,
+          leading: (
+            <BankLogo
+              src={a.bankLogo}
+              srcDark={a.bankLogoDark}
+              alt={a.bankName || a.name}
+              sizeClassName="size-9"
+              backgroundClassName="bg-muted/70"
+              imgPadding={a.logoPadding}
+            />
+          ),
         })),
     ],
-    [recipientAccounts, ownAccounts, sender],
+    [recipientAccounts, ownAccounts, sender, recipientLogos],
   );
 
   const selectedRecipient = useMemo(() => {
@@ -180,6 +205,14 @@ export function TransferSetupDialog({
             <div className="space-y-1.5">
               <Label>Absenderkonto</Label>
               <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2">
+                <BankLogo
+                  src={sender.bankLogo}
+                  srcDark={sender.bankLogoDark}
+                  alt={sender.bankName || sender.name}
+                  sizeClassName="size-9"
+                  backgroundClassName="bg-muted/70"
+                  imgPadding={sender.logoPadding}
+                />
                 <div className="flex min-w-0 flex-col items-start gap-0">
                   <span className="truncate text-sm leading-tight">{sender.name}</span>
                   <span className="truncate font-mono text-[11px] text-muted-foreground leading-tight">

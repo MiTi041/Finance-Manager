@@ -70,6 +70,7 @@ export default function DashboardPage() {
     refreshing,
     error,
     transactions,
+    allTransactions,
     activeAccountIban,
     accountBalances,
     linkedAccounts,
@@ -127,6 +128,9 @@ export default function DashboardPage() {
           iban: a.accountIban,
           name: a.accountName,
           bankName: a.bankName,
+          bankLogo: a.bankLogo,
+          bankLogoDark: a.bankLogoDark,
+          logoPadding: a.logoPadding,
           balance: a.balance,
         })),
     [accountBalances, canTransferByIban, activeAccountIban],
@@ -156,6 +160,9 @@ export default function DashboardPage() {
         iban: a.accountIban,
         name: a.accountName,
         bankName: a.bankName,
+        bankLogo: a.bankLogo,
+        bankLogoDark: a.bankLogoDark,
+        logoPadding: a.logoPadding,
         isPrimary: a.isPrimary === true,
       })),
     [linkedAccounts],
@@ -328,7 +335,11 @@ export default function DashboardPage() {
 
           {transactions.length > 0 && (
             <>
-              <BalanceChart transactions={transactions} currentBalance={totalBalance} />
+              <BalanceChart
+                transactions={transactions}
+                allTransactions={allTransactions}
+                currentBalance={totalBalance}
+              />
               <MonthlyChart transactions={transactions} />
               <WeekdayChart transactions={transactions} />
               <SavingsRateChart transactions={transactions} />

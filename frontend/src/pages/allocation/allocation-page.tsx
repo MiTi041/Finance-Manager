@@ -33,15 +33,25 @@ import {
   type SpendingSubscriptionState,
 } from "@/lib/subscription-budget";
 
-function extractBankAccounts(
-  banks: StoredBankCredentials[],
-): { iban: string; name: string; bankKey: string; archived: boolean; isPrimary: boolean }[] {
+function extractBankAccounts(banks: StoredBankCredentials[]): {
+  iban: string;
+  name: string;
+  bankKey: string;
+  archived: boolean;
+  isPrimary: boolean;
+  bankLogo?: string;
+  bankLogoDark?: string;
+  logoPadding?: number;
+}[] {
   const accounts: {
     iban: string;
     name: string;
     bankKey: string;
     archived: boolean;
     isPrimary: boolean;
+    bankLogo?: string;
+    bankLogoDark?: string;
+    logoPadding?: number;
   }[] = [];
   for (const bank of banks) {
     for (const acc of bank.accounts ?? []) {
@@ -52,6 +62,9 @@ function extractBankAccounts(
           bankKey: bank.bank_key,
           archived: acc.archived === true,
           isPrimary: acc.is_primary === true,
+          bankLogo: (acc.bank_logo as string) || bank.bank_logo || undefined,
+          bankLogoDark: (acc.bank_logo_dark as string) || bank.bank_logo_dark || undefined,
+          logoPadding: bank.logo_padding || undefined,
         });
     }
   }

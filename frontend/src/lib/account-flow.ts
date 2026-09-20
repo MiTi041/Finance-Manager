@@ -20,6 +20,40 @@ export type AccountFlowLayout = {
   notes: Record<string, string>;
 };
 
+export type AccountFlowIncomeSource = {
+  name: string;
+  purpose: string;
+  amount: number;
+  count: number;
+  accountIban: string;
+  applicantIban: string;
+};
+
+export async function fetchAccountFlowIncomeSources(
+  month?: string,
+): Promise<AccountFlowIncomeSource[]> {
+  const params = month ? `?month=${month}` : "";
+  const response = await fetch(`${getApiBaseUrl()}/account-flow/income-sources${params}`);
+  const data = await parseJsonResponse(response);
+  return (data.sources ?? []).map(
+    (source: {
+      name: string;
+      purpose: string;
+      amount: number;
+      count: number;
+      account_iban?: string;
+      applicant_iban?: string;
+    }) => ({
+      name: source.name,
+      purpose: source.purpose,
+      amount: source.amount,
+      count: source.count,
+      accountIban: source.account_iban ?? "",
+      applicantIban: source.applicant_iban ?? "",
+    }),
+  );
+}
+
 export async function fetchAccountFlowLayout(): Promise<AccountFlowLayout> {
   const response = await fetch(`${getApiBaseUrl()}/account-flow/layout`);
   return parseJsonResponse(response);

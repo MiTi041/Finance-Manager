@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
+from typing import Any
 
-from fastapi import APIRouter, Body
+from fastapi import APIRouter, Body, Depends
 from pydantic import BaseModel, Field
 
+from finance_server.api.deps import get_allocation_service
 from finance_server.db.settings import get_setting, set_setting
+from finance_server.services.allocation_service import AllocationService
 
 router = APIRouter()
 _ACCOUNT_FLOW_LAYOUT_KEY = "account_flow_layout"
@@ -29,6 +33,15 @@ class AccountFlowLayout(BaseModel):
     positions: dict[str, AccountFlowPoint] = Field(default_factory=dict)
     zones: list[AccountFlowZone] = Field(default_factory=list)
     notes: dict[str, str] = Field(default_factory=dict)
+
+
+@router.get("/account-flow/income-sources")
+def get_account_flow_income_sources(
+    month: str | None = None,
+    service: AllocationService = Depends(get_allocation_service),
+) -> dict[str, Any]:
+    target_month = month or datetime.now().strftime("%Y-%m")
+    return service.get_income_breakdown(target_month)
 
 
 @router.get("/account-flow/layout", response_model=AccountFlowLayout)

@@ -1,8 +1,19 @@
 import { normalizeIban } from "@/lib/iban";
+import type { AccountFlowIncomeSource } from "@/lib/account-flow";
+import type { LogoBackground } from "@/lib/zahlungspartner";
 import type { BankAccountOption } from "@/lib/utils/accounts";
 import type { Transaction } from "@/types/transaction";
 
+export type AccountFlowLogo = {
+  logo?: string;
+  logoDark?: string;
+  logoBackground?: LogoBackground;
+  logoPadding?: boolean;
+  isCompany?: boolean;
+};
+
 export type AccountFlowNode = {
+  kind: "account";
   id: string;
   label: string;
   bankName: string;
@@ -20,7 +31,25 @@ export type AccountFlowNode = {
   externalFlow?: number;
 };
 
+/**
+ * A recurring external income (salary, BAföG, …) detected exactly like the
+ * Finanzplan does. Rendered as a logo chip, not an account card.
+ */
+export type AccountFlowIncomeNode = {
+  kind: "income";
+  id: string;
+  label: string;
+  purpose: string;
+  amount: number;
+  accountIban: string;
+  applicantIban: string;
+  transactionCount: number;
+} & AccountFlowLogo;
+
+export type AccountFlowGraphNode = AccountFlowNode | AccountFlowIncomeNode;
+
 export type AccountFlowEdge = {
+  kind: "account" | "income";
   id: string;
   source: string;
   target: string;
@@ -31,9 +60,15 @@ export type AccountFlowEdge = {
 };
 
 export type AccountFlowGraph = {
-  nodes: AccountFlowNode[];
+  nodes: AccountFlowGraphNode[];
   edges: AccountFlowEdge[];
 };
+
+/** Stable node id for an income source, namespaced so it can't clash with an IBAN. */
+export function incomeNodeId(source: Pick<AccountFlowIncomeSource, "applicantIban" | "name" | "purpose">): string {
+  const key = normalizeIban(source.applicantIban) || source.name.trim().toLowerCase();
+  return `income:${key}::${source.purpose.trim().toLowerCase()}`;
+}
 
 /** Net flow from `source` to `target`; negative means the money flows the other way. */
 export function netFlowAmount(
@@ -124,6 +159,8 @@ export function buildAccountFlowGraph(
   accounts: BankAccountOption[],
   transactions: Transaction[],
   balances: AccountBalance[] = [],
+  incomeSources: AccountFlowIncomeSource[] = [],
+  incomeLogos: Map<string, AccountFlowLogo> = new Map(),
 ): AccountFlowGraph {
   const balanceByIban = new Map(
     balances.map((account) => [normalizeIban(account.accountIban), account.balance]),
@@ -160,6 +197,7 @@ export function buildAccountFlowGraph(
     .map((account) => {
       const iban = normalizeIban(account.accountIban);
       return {
+        kind: "account" as const,
         id: iban,
         label: account.accountName,
         bankName: account.bankName,
@@ -218,6 +256,7 @@ export function buildAccountFlowGraph(
       existing.transactions.push(leg.transaction);
     } else {
       edgesByPair.set(id, {
+        kind: "account",
         id,
         source: firstAccount,
         target: secondAccount,
@@ -240,12 +279,47 @@ export function buildAccountFlowGraph(
     internalNetByAccount.set(edge.target, (internalNetByAccount.get(edge.target) ?? 0) + net);
   }
 
+  const accountNodes: AccountFlowNode[] = nodes.map((node) => {
+    if (node.balance === undefined) return node;
+    const externalFlow = node.balance - (internalNetByAccount.get(node.id) ?? 0);
+    return Math.abs(externalFlow) < NET_FLOW_EPSILON ? node : { ...node, externalFlow };
+  });
+
+  const incomeNodes: AccountFlowIncomeNode[] = [];
+  const incomeEdges: AccountFlowEdge[] = [];
+  const seenIncomeIds = new Set<string>();
+  for (const source of incomeSources) {
+    const target = resolveAccountIban(normalizeIban(source.accountIban));
+    if (!accountByIban.has(target)) continue;
+    const id = incomeNodeId(source);
+    if (seenIncomeIds.has(id)) continue;
+    seenIncomeIds.add(id);
+
+    incomeNodes.push({
+      kind: "income",
+      id,
+      label: source.name,
+      purpose: source.purpose,
+      amount: source.amount,
+      accountIban: target,
+      applicantIban: source.applicantIban,
+      transactionCount: source.count,
+      ...(incomeLogos.get(normalizeIban(source.applicantIban)) ?? {}),
+    });
+    incomeEdges.push({
+      kind: "income",
+      id: `${id}->${target}`,
+      source: id,
+      target,
+      amountSourceToTarget: source.amount,
+      amountTargetToSource: 0,
+      transactionCount: source.count,
+      transactions: [],
+    });
+  }
+
   return {
-    nodes: nodes.map((node) => {
-      if (node.balance === undefined) return node;
-      const externalFlow = node.balance - (internalNetByAccount.get(node.id) ?? 0);
-      return Math.abs(externalFlow) < NET_FLOW_EPSILON ? node : { ...node, externalFlow };
-    }),
-    edges,
+    nodes: [...accountNodes, ...incomeNodes],
+    edges: [...edges, ...incomeEdges],
   };
 }
