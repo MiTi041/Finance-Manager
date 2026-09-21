@@ -7,8 +7,17 @@ from unittest.mock import Mock, call, patch
 
 import pytest
 
-from finance_server.db.savings import _classify_group, _savings_breakdown, count_income_events_until
-from finance_server.services.allocation_service import AllocationService
+from finance_server.db.savings import (
+    _classify_group,
+    _savings_breakdown,
+    append_sender_history,
+    count_income_events_until,
+    get_bafoeg_breakdown,
+    get_bafoeg_month_einzahlungen,
+    get_saved_breakdown,
+    sender_filter,
+)
+from finance_server.services.allocation_service import AllocationService, _sender_ibans
 
 
 def _row(applicant_name: str, purpose: str, amount: float, date: str) -> dict[str, Any]:
@@ -653,8 +662,8 @@ class TestEnrichSavingsPlan:
                 )
             )
             service._enrich_savings_plan(plan, "2026-08")
-        mock_saved.assert_called_once_with("tag.test", sender_iban="DE_SPARKASSE")
-        mock_month.assert_called_once_with("tag.test", "2026-08", sender_iban="DE_SPARKASSE")
+        mock_saved.assert_called_once_with("tag.test", sender_ibans=["DE_SPARKASSE"])
+        mock_month.assert_called_once_with("tag.test", "2026-08", sender_ibans=["DE_SPARKASSE"])
 
     def test_first_month_no_bonus(self):
         result = self._enrich("2026-08-05T10:00:00+00:00", "2026-08", count=2)
@@ -876,7 +885,7 @@ class TestSavingsBreakdown:
         self._insert(
             test_db, 500.0, "Sparplan Urlaub tag.urlaub2026", account_iban="DE_NORISBANK"
         )
-        breakdown = _savings_breakdown("urlaub2026", sender_iban="DE_SPARKASSE")
+        breakdown = _savings_breakdown("urlaub2026", sender_ibans=["DE_SPARKASSE"])
         assert breakdown["einzahlungen"] == 500.0
         assert breakdown["verschuldung"] == 0.0
         assert breakdown["saldo"] == 500.0
@@ -886,7 +895,7 @@ class TestSavingsBreakdown:
         self._insert(
             test_db, -250.0, "Sparplan Urlaub tag.urlaub2026", account_iban="de_sparkasse"
         )
-        breakdown = _savings_breakdown("urlaub2026", sender_iban="DE_SPARKASSE")
+        breakdown = _savings_breakdown("urlaub2026", sender_ibans=["DE_SPARKASSE"])
         assert breakdown["einzahlungen"] == 250.0
 
     def test_sender_iban_scopes_entnahmen(self, test_db, monkeypatch):
@@ -903,7 +912,7 @@ class TestSavingsBreakdown:
             "tag.urlaub2026.entnahme Hotel",
             account_iban="DE_NORISBANK",
         )
-        breakdown = _savings_breakdown("urlaub2026", sender_iban="DE_SPARKASSE")
+        breakdown = _savings_breakdown("urlaub2026", sender_ibans=["DE_SPARKASSE"])
         assert breakdown["entnahmen"] == 300.0
 
     def test_without_sender_iban_counts_all_accounts(self, test_db, monkeypatch):
@@ -919,6 +928,109 @@ class TestSavingsBreakdown:
         assert breakdown["verschuldung"] == 500.0
         assert breakdown["saldo"] == 0.0
 
+
+class TestSenderScopedBuckets:
+    def _insert(self, conn, amount: float, purpose: str, account_iban: str = "iban"):
+        conn.execute(
+            "INSERT INTO umsaetze (amount, purpose, date, entry_date, account_iban, transaction_hash) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (amount, purpose, "2026-07-15", "2026-07-15", account_iban, f"h-{amount}-{purpose}-{account_iban}"),
+        )
+        conn.commit()
+
+    def test_bafoeg_ignores_non_sender_account(self, test_db, monkeypatch):
+        monkeypatch.setattr("finance_server.db.savings.get_connection", lambda: test_db)
+        self._insert(test_db, -100.0, "Allokation bafoeg tag.bafoegschulden", account_iban="DE_CHASE")
+        self._insert(test_db, -200.0, "Allokation bafoeg tag.bafoegschulden", account_iban="DE_GIRO")
+        breakdown = get_bafoeg_breakdown(["DE_GIRO"])
+        assert breakdown["einzahlungen"] == 200.0
+
+    def test_bafoeg_entnahme_expense_is_tilgung_not_einzahlung(self, test_db, monkeypatch):
+        monkeypatch.setattr("finance_server.db.savings.get_connection", lambda: test_db)
+        self._insert(test_db, -50.0, "Tilgung tag.bafoegschulden.entnahme", account_iban="DE_GIRO")
+        breakdown = get_bafoeg_breakdown(["DE_GIRO"])
+        assert breakdown["einzahlungen"] == 0.0
+        assert breakdown["tilgungen"] == 50.0
+        assert get_bafoeg_month_einzahlungen("2026-07", ["DE_GIRO"]) == 0.0
+
+    def test_saved_breakdown_scopes_to_sender(self, test_db, monkeypatch):
+        monkeypatch.setattr("finance_server.db.savings.get_connection", lambda: test_db)
+        self._insert(test_db, -100.0, "tag.notfallfonds", account_iban="DE_CHASE")
+        self._insert(test_db, -300.0, "tag.notfallfonds", account_iban="DE_GIRO")
+        assert get_saved_breakdown("tag.notfallfonds", ["DE_GIRO"])["einzahlungen"] == 300.0
+        assert get_saved_breakdown("tag.notfallfonds")["einzahlungen"] == 400.0
+
+    def test_sender_history_keeps_old_account_counted(self, test_db, monkeypatch):
+        monkeypatch.setattr("finance_server.db.savings.get_connection", lambda: test_db)
+        self._insert(test_db, -300.0, "tag.notfallfonds", account_iban="DE_OLD")
+        self._insert(test_db, -100.0, "tag.notfallfonds", account_iban="DE_NEW")
+        breakdown = get_saved_breakdown("tag.notfallfonds", ["DE_NEW", "DE_OLD"])
+        assert breakdown["einzahlungen"] == 400.0
+
+    def test_sender_filter_empty_counts_all(self):
+        assert sender_filter(None) == ("", [])
+        assert sender_filter([]) == ("", [])
+        sql, params = sender_filter(["de_giro"])
+        assert "UPPER(account_iban) IN (?)" in sql
+        assert params == ["DE_GIRO"]
+
+    def test_append_sender_history_dedups(self):
+        first = append_sender_history(None, "DE_OLD")
+        assert first == '["DE_OLD"]'
+        assert append_sender_history(first, "DE_OLD") == '["DE_OLD"]'
+        assert append_sender_history(first, None) == first
+
+    def test_sender_ibans_merges_history(self):
+        assert _sender_ibans({"sender_iban": "DE_NEW", "sender_iban_history": '["DE_OLD"]'}) == ["DE_NEW", "DE_OLD"]
+        assert _sender_ibans({"sender_iban": None, "sender_iban_history": None}) is None
+        assert _sender_ibans({"sender_iban": None, "sender_iban_history": '["DE_OLD"]'}) is None
+        assert _sender_ibans({"sender_iban": "DE_NEW", "sender_iban_history": "not json"}) == ["DE_NEW"]
+
+
+class TestBuildRunResponseSenderScope:
+    def _run_bucket(self, test_db, bucket_type: str, rows: list[tuple[float, str, str]]):
+        for amount, purpose, iban in rows:
+            test_db.execute(
+                "INSERT INTO umsaetze (amount, purpose, date, entry_date, account_iban, transaction_hash) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (amount, purpose, "2026-07-15", "2026-07-15", iban, f"h-{amount}-{purpose}-{iban}"),
+            )
+        test_db.commit()
+        service = AllocationService()
+        run_buckets = [{
+            "id": 1, "run_id": 1, "bucket_id": 1, "bucket_type": bucket_type,
+            "target_amount": 1000.0, "transferred": 0.0, "is_completed": False,
+        }]
+        config = [{
+            "id": 1, "bucket_type": bucket_type, "percentage": 10.0,
+            "sender_iban": "DE_GIRO", "sender_iban_history": None,
+        }]
+        run = {"id": 1, "month": "2026-07", "net_income": 1000.0, "total_allocated": 0.0, "status": "pending"}
+        with (
+            patch("finance_server.services.allocation_service.get_connection", lambda: test_db),
+            patch("finance_server.db.savings.get_connection", lambda: test_db),
+            patch("finance_server.services.allocation_service.db.get_run_buckets", return_value=run_buckets),
+            patch("finance_server.services.allocation_service.db.list_buckets", return_value=config),
+            patch("finance_server.services.allocation_service.db.get_bafoeg_config", return_value=None),
+            patch("finance_server.services.allocation_service.list_plans", return_value=[]),
+            patch("finance_server.services.allocation_service.get_income_payout_days", return_value=[1]),
+            patch("finance_server.services.allocation_service.holiday_dates", return_value=[]),
+        ):
+            return service._build_run_response(run)["buckets"][0]
+
+    def test_transferred_ignores_non_sender_account(self, test_db):
+        bucket = self._run_bucket(test_db, "donation", [
+            (-100.0, "Spende tag.spenden", "DE_GIRO"),
+            (-50.0, "Spende tag.spenden", "DE_CHASE"),
+        ])
+        assert bucket["transferred"] == 100.0
+
+    def test_transferred_excludes_entnahme(self, test_db):
+        bucket = self._run_bucket(test_db, "bafoeg", [
+            (-200.0, "Allokation tag.bafoegschulden", "DE_GIRO"),
+            (-50.0, "Tilgung tag.bafoegschulden.entnahme", "DE_GIRO"),
+        ])
+        assert bucket["transferred"] == 200.0
 
 
 def test_bafoeg_partial_update_keeps_unsent_fields():

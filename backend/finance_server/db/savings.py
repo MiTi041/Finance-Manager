@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from calendar import monthrange
 from datetime import datetime, timezone
@@ -50,6 +51,12 @@ def update_plan(plan_id: int, payload: dict[str, Any]) -> dict[str, Any] | None:
     fields = {k: v for k, v in payload.items() if v is not None}
     if not fields:
         return get_plan(plan_id)
+    if "sender_iban" in fields:
+        existing = get_plan(plan_id)
+        if existing and fields["sender_iban"] != existing.get("sender_iban"):
+            fields["sender_iban_history"] = append_sender_history(
+                existing.get("sender_iban_history"), existing.get("sender_iban")
+            )
     fields["updated_at"] = now
     set_clause = ", ".join(f"{k} = ?" for k in fields)
     values = list(fields.values()) + [plan_id]
@@ -93,45 +100,78 @@ def _tag_balance(tag: str, rows: list[dict[str, Any]]) -> float:
     return _tag_breakdown(tag, rows)["saldo"]
 
 
-def get_saved_amount(tag: str) -> float:
-    return get_saved_breakdown(tag)["saldo"]
+def append_sender_history(history: str | None, previous: str | None) -> str | None:
+    """Add a replaced sender IBAN to the JSON history so its old bookings stay counted."""
+    if not previous:
+        return history
+    try:
+        items = json.loads(history) if history else []
+    except (ValueError, TypeError):
+        items = []
+    if not isinstance(items, list):
+        items = []
+    cleaned = [str(x) for x in items if x]
+    if previous not in cleaned:
+        cleaned.append(previous)
+    return json.dumps(cleaned)
 
 
-def get_month_amount(tag: str, month: str) -> float:
-    return get_month_breakdown(tag, month)["saldo"]
+def sender_filter(sender_ibans: list[str] | None) -> tuple[str, list[str]]:
+    """SQL fragment + params limiting rows to the given account IBANs.
+
+    Empty/None means no filter (fallback: count every account).
+    """
+    cleaned = [s.strip().upper() for s in (sender_ibans or []) if s and s.strip()]
+    if not cleaned:
+        return "", []
+    placeholders = ", ".join("?" for _ in cleaned)
+    return f" AND UPPER(account_iban) IN ({placeholders})", cleaned
 
 
-def get_bafoeg_month_einzahlungen(month: str) -> float:
+def get_saved_amount(tag: str, sender_ibans: list[str] | None = None) -> float:
+    return get_saved_breakdown(tag, sender_ibans)["saldo"]
+
+
+def get_month_amount(tag: str, month: str, sender_ibans: list[str] | None = None) -> float:
+    return get_month_breakdown(tag, month, sender_ibans)["saldo"]
+
+
+def get_bafoeg_month_einzahlungen(month: str, sender_ibans: list[str] | None = None) -> float:
+    sender_sql, sender_params = sender_filter(sender_ibans)
     with get_connection() as connection:
         rows = connection.execute(
-            """SELECT amount FROM umsaetze
+            f"""SELECT amount FROM umsaetze
                WHERE ((' ' || COALESCE(purpose_edit, purpose, '') || ' ') LIKE '% tag.bafoegschulden %'
                   OR (' ' || COALESCE(note, '') || ' ') LIKE '% tag.bafoegschulden %')
-                 AND amount < 0 AND date >= ? AND date <= ?""",
-            (f"{month}-01", f"{month}-31"),
+                 AND amount < 0 AND date >= ? AND date <= ?{sender_sql}""",
+            (f"{month}-01", f"{month}-31", *sender_params),
         ).fetchall()
     return round(sum(abs(r["amount"]) for r in rows), 2)
 
 
-def get_bafoeg_breakdown() -> dict[str, float]:
+def get_bafoeg_breakdown(sender_ibans: list[str] | None = None) -> dict[str, float]:
+    sender_sql, sender_params = sender_filter(sender_ibans)
     with get_connection() as connection:
         ein_rows = connection.execute(
-            """SELECT amount, purpose, note FROM umsaetze
+            f"""SELECT amount, purpose, note FROM umsaetze
                WHERE ((' ' || COALESCE(purpose_edit, purpose, '') || ' ') LIKE '% tag.bafoegschulden %'
                   OR (' ' || COALESCE(note, '') || ' ') LIKE '% tag.bafoegschulden %')
-                 AND amount < 0""",
+                 AND amount < 0{sender_sql}""",
+            sender_params,
         ).fetchall()
         ent_rows = connection.execute(
-            """SELECT amount, purpose, note FROM umsaetze
+            f"""SELECT amount, purpose, note FROM umsaetze
                WHERE ((' ' || COALESCE(purpose_edit, purpose, '') || ' ') LIKE '% tag.bafoegschulden.entnahme %'
                   OR (' ' || COALESCE(note, '') || ' ') LIKE '% tag.bafoegschulden.entnahme %')
-                 AND amount > 0""",
+                 AND amount > 0{sender_sql}""",
+            sender_params,
         ).fetchall()
         tilg_rows = connection.execute(
-            """SELECT amount, purpose, note FROM umsaetze
+            f"""SELECT amount, purpose, note FROM umsaetze
                WHERE ((' ' || COALESCE(purpose_edit, purpose, '') || ' ') LIKE '% tag.bafoegschulden.entnahme %'
                   OR (' ' || COALESCE(note, '') || ' ') LIKE '% tag.bafoegschulden.entnahme %')
-                 AND amount < 0""",
+                 AND amount < 0{sender_sql}""",
+            sender_params,
         ).fetchall()
     breakdown = _tag_breakdown("tag.bafoegschulden", ein_rows)
     entnahmen = sum(r["amount"] for r in ent_rows) if ent_rows else 0.0
@@ -142,24 +182,26 @@ def get_bafoeg_breakdown() -> dict[str, float]:
     return breakdown
 
 
-def get_saved_breakdown(tag: str) -> dict[str, float]:
+def get_saved_breakdown(tag: str, sender_ibans: list[str] | None = None) -> dict[str, float]:
     tag_pattern = tag if tag.startswith("tag.") else f"tag.{tag}"
+    sender_sql, sender_params = sender_filter(sender_ibans)
     with get_connection() as connection:
         rows = connection.execute(
-            "SELECT amount, purpose FROM umsaetze WHERE COALESCE(purpose_edit, purpose) LIKE ? OR note LIKE ?",
-            (f"%{tag_pattern}%", f"%{tag_pattern}%"),
+            f"SELECT amount, purpose FROM umsaetze WHERE (COALESCE(purpose_edit, purpose) LIKE ? OR note LIKE ?){sender_sql}",
+            (f"%{tag_pattern}%", f"%{tag_pattern}%", *sender_params),
         ).fetchall()
     return _tag_breakdown(tag, rows)
 
 
-def get_month_breakdown(tag: str, month: str) -> dict[str, float]:
+def get_month_breakdown(tag: str, month: str, sender_ibans: list[str] | None = None) -> dict[str, float]:
     tag_pattern = tag if tag.startswith("tag.") else f"tag.{tag}"
     month_start = f"{month}-01"
     month_end = f"{month}-31"
+    sender_sql, sender_params = sender_filter(sender_ibans)
     with get_connection() as connection:
         rows = connection.execute(
-            "SELECT amount, purpose FROM umsaetze WHERE (COALESCE(purpose_edit, purpose) LIKE ? OR note LIKE ?) AND date >= ? AND date <= ?",
-            (f"%{tag_pattern}%", f"%{tag_pattern}%", month_start, month_end),
+            f"SELECT amount, purpose FROM umsaetze WHERE (COALESCE(purpose_edit, purpose) LIKE ? OR note LIKE ?) AND date >= ? AND date <= ?{sender_sql}",
+            (f"%{tag_pattern}%", f"%{tag_pattern}%", month_start, month_end, *sender_params),
         ).fetchall()
     return _tag_breakdown(tag, rows)
 
@@ -169,7 +211,7 @@ def _tag_with_space(tag: str) -> str:
 
 
 def _savings_breakdown(
-    tag: str, month: str | None = None, sender_iban: str | None = None
+    tag: str, month: str | None = None, sender_ibans: list[str] | None = None
 ) -> dict[str, float]:
     tag_pattern = _tag_with_space(tag)
     base_like = f"%{tag_pattern}%"
@@ -183,11 +225,11 @@ def _savings_breakdown(
         params += [f"{month}-01", f"{month}-31"]
         ent_where += " AND date >= ? AND date <= ?"
         ent_params += [f"{month}-01", f"{month}-31"]
-    if sender_iban:
-        where += " AND UPPER(account_iban) = UPPER(?)"
-        params.append(sender_iban)
-        ent_where += " AND UPPER(account_iban) = UPPER(?)"
-        ent_params.append(sender_iban)
+    sender_sql, sender_params = sender_filter(sender_ibans)
+    where += sender_sql
+    params += sender_params
+    ent_where += sender_sql
+    ent_params += sender_params
     with get_connection() as connection:
         base_rows = connection.execute(f"SELECT amount FROM umsaetze WHERE {where}", params).fetchall()
         ent_rows = connection.execute(
@@ -204,14 +246,14 @@ def _savings_breakdown(
     }
 
 
-def get_savings_breakdown(tag: str, sender_iban: str | None = None) -> dict[str, float]:
-    return _savings_breakdown(tag, sender_iban=sender_iban)
+def get_savings_breakdown(tag: str, sender_ibans: list[str] | None = None) -> dict[str, float]:
+    return _savings_breakdown(tag, sender_ibans=sender_ibans)
 
 
 def get_savings_month_breakdown(
-    tag: str, month: str, sender_iban: str | None = None
+    tag: str, month: str, sender_ibans: list[str] | None = None
 ) -> dict[str, float]:
-    return _savings_breakdown(tag, month, sender_iban=sender_iban)
+    return _savings_breakdown(tag, month, sender_ibans=sender_ibans)
 
 
 def get_income_payout_days(month: str) -> list[int]:

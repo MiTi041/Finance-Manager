@@ -719,6 +719,7 @@ def initialize_database(connection: sqlite3.Connection) -> None:
             "target_amount": "REAL",
             "target_months": "REAL",
             "recipient_iban": "TEXT",
+            "sender_iban_history": "TEXT",
         },
     )
     create_savings_plans_table(connection)
@@ -731,6 +732,7 @@ def initialize_database(connection: sqlite3.Connection) -> None:
             "target_recipient_iban": "TEXT",
             "target_recipient_bic": "TEXT",
             "sender_iban": "TEXT",
+            "sender_iban_history": "TEXT",
             "auto_hidden": "INTEGER NOT NULL DEFAULT 0",
         },
     )

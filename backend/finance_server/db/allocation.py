@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from finance_server.core.database import get_connection
+from finance_server.db.savings import append_sender_history
 
 
 def list_buckets() -> list[dict[str, Any]]:
@@ -30,6 +31,12 @@ def update_bucket(bucket_id: int, payload: dict[str, Any], set_null: list[str] |
         fields[k] = None
     if not fields:
         return get_bucket(bucket_id)
+    if "sender_iban" in fields:
+        existing = get_bucket(bucket_id)
+        if existing and fields["sender_iban"] != existing.get("sender_iban"):
+            fields["sender_iban_history"] = append_sender_history(
+                existing.get("sender_iban_history"), existing.get("sender_iban")
+            )
     fields["updated_at"] = now
     set_clause = ", ".join(f"{k} = ?" for k in fields)
     values = list(fields.values()) + [bucket_id]

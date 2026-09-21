@@ -20,6 +20,7 @@ from finance_server.db.savings import (
     get_savings_breakdown, get_savings_month_breakdown,
     get_income_payout_days, count_income_events_until,
     get_bafoeg_breakdown, get_bafoeg_month_einzahlungen,
+    sender_filter,
 )
 from finance_server.db.settings import get_setting, set_setting, get_holiday_state
 from finance_server.services.sync_logger import log_crud_event
@@ -31,6 +32,28 @@ BUCKET_TAGS: dict[str, str] = {
     "invest": "tag.investieren",
     "donation": "tag.spenden",
 }
+
+
+def _sender_ibans(row: dict[str, Any] | None) -> list[str] | None:
+    """Current sender plus its history so switching the payer account keeps old bookings.
+
+    No current sender means no scoping (fallback: count every account), history included.
+    """
+    if not row:
+        return None
+    current = row.get("sender_iban")
+    if not current:
+        return None
+    ibans: list[str] = [current]
+    history = row.get("sender_iban_history")
+    if history:
+        try:
+            parsed = json.loads(history)
+        except (ValueError, TypeError):
+            parsed = []
+        if isinstance(parsed, list):
+            ibans.extend(str(x) for x in parsed if x)
+    return ibans or None
 
 
 class AllocationService:
@@ -130,10 +153,11 @@ class AllocationService:
             bafoeg_config = db.get_bafoeg_config()
             bafoeg_bucket = next((b for b in all_buckets if b["bucket_type"] == "bafoeg"), None)
             if bafoeg_config and bafoeg_bucket:
-                breakdown = get_bafoeg_breakdown()
+                senders = _sender_ibans(bafoeg_bucket)
+                breakdown = get_bafoeg_breakdown(senders)
                 seed = bafoeg_config.get("current_balance", 0) or 0
                 anlagezinsen = bafoeg_config.get("anlagezinsen", 0) or 0
-                month_einz = get_bafoeg_month_einzahlungen(month)
+                month_einz = get_bafoeg_month_einzahlungen(month, senders)
                 saved_before_month = self._bafoeg_startkapital_vormonat(
                     seed, breakdown["einzahlungen"], anlagezinsen, month_einz
                 )
@@ -228,31 +252,36 @@ class AllocationService:
     def _build_run_response(self, run: dict[str, Any], auto_hidden: list[int] | None = None) -> dict[str, Any]:
         buckets = db.get_run_buckets(run["id"])
         config_buckets = db.list_buckets()
+        config_by_id = {c["id"]: c for c in config_buckets}
         start = f"{run['month']}-01"
         end = f"{run['month']}-31"
         for bucket in buckets:
             tag = BUCKET_TAGS.get(bucket["bucket_type"])
             if tag:
+                cfg = config_by_id.get(bucket["bucket_id"])
+                senders = _sender_ibans(cfg)
+                sender_sql, sender_params = sender_filter(senders)
                 with get_connection() as conn:
                     row = conn.execute(
-                        """SELECT COALESCE(SUM(
+                        f"""SELECT COALESCE(SUM(
                             CASE
                                 WHEN amount > 0 THEN amount - COALESCE((SELECT SUM(amount) FROM refund_links rl WHERE rl.refund_transaction_id = umsaetze.id), 0)
                                 WHEN amount < 0 THEN ABS(amount) - COALESCE(refund_total, 0)
                                 ELSE ABS(amount)
                             END
-                        ), 0) FROM umsaetze WHERE COALESCE(purpose_edit, purpose) LIKE ? AND date >= ? AND date <= ?""",
-                        (f"%{tag}%", start, end),
+                        ), 0) FROM umsaetze WHERE COALESCE(purpose_edit, purpose) LIKE ?
+                           AND COALESCE(purpose_edit, purpose, '') NOT LIKE '%.entnahme%'
+                           AND date >= ? AND date <= ?{sender_sql}""",
+                        (f"%{tag}%", start, end, *sender_params),
                     ).fetchone()
                 bucket["transferred"] = round(bucket["transferred"] + row[0], 2)
                 if bucket["bucket_type"] == "emergency":
-                    breakdown = get_saved_breakdown(tag)
-                    month_breakdown = get_month_breakdown(tag, run["month"])
+                    breakdown = get_saved_breakdown(tag, senders)
+                    month_breakdown = get_month_breakdown(tag, run["month"], senders)
                     bucket["saved_total"] = round(breakdown["saldo"], 2)
                     bucket["saved_einzahlungen"] = round(breakdown["einzahlungen"], 2)
                     bucket["saved_entnahmen"] = round(breakdown["entnahmen"], 2)
                     bucket["month_einzahlungen"] = round(month_breakdown["einzahlungen"], 2)
-                    cfg = next((c for c in config_buckets if c["id"] == bucket["bucket_id"]), None)
                     if cfg:
                         monthly_rate = bucket["target_amount"]
                         if cfg.get("target_months") and cfg["target_months"] > 0:
@@ -263,8 +292,8 @@ class AllocationService:
                             remaining = max(0, bucket["goal_amount"] - bucket["saved_total"])
                             bucket["months_left"] = math.ceil(remaining / monthly_rate)
                 if bucket["bucket_type"] == "bafoeg":
-                    breakdown = get_bafoeg_breakdown()
-                    month_einz = get_bafoeg_month_einzahlungen(run["month"])
+                    breakdown = get_bafoeg_breakdown(senders)
+                    month_einz = get_bafoeg_month_einzahlungen(run["month"], senders)
                     bafoeg_cfg = db.get_bafoeg_config()
                     seed = bafoeg_cfg.get("current_balance", 0) if bafoeg_cfg else 0
                     anlagezinsen = bafoeg_cfg.get("anlagezinsen", 0) if bafoeg_cfg else 0
@@ -289,7 +318,7 @@ class AllocationService:
                             bucket["required_monthly_rate"] = round(req_rate, 2)
                             bucket["months_left"] = bucket["income_events_left"]
                 if bucket["bucket_type"] == "invest":
-                    breakdown = get_saved_breakdown(tag)
+                    breakdown = get_saved_breakdown(tag, senders)
                     bucket["saved_einzahlungen"] = round(breakdown["einzahlungen"], 2)
                     bucket["saved_entnahmen"] = round(breakdown["entnahmen"], 2)
                     net = round(breakdown["saldo"], 2)
@@ -640,10 +669,10 @@ class AllocationService:
         target_amount = plan.get("target_amount")
         target_date = plan.get("target_date")
         payout_days = get_income_payout_days(month) if month else [1]
-        sender_iban = plan.get("sender_iban")
-        saved_breakdown = get_savings_breakdown(tag, sender_iban=sender_iban) if tag else {}
+        sender_ibans = _sender_ibans(plan)
+        saved_breakdown = get_savings_breakdown(tag, sender_ibans=sender_ibans) if tag else {}
         month_breakdown = (
-            get_savings_month_breakdown(tag, month, sender_iban=sender_iban)
+            get_savings_month_breakdown(tag, month, sender_ibans=sender_ibans)
             if tag and month
             else {}
         )
