@@ -9,6 +9,7 @@ from finance_server.models.fints import TransferRequest
 from fints.client import NeedRetryResponse, NeedTANResponse, NeedVOPResponse
 from fints.exceptions import FinTSClientError
 
+from .banks import get_bank_definition
 from .client import (
     _capture_tan_medium_from_challenge,
     bootstrap_client,
@@ -30,6 +31,23 @@ def _resolve_holder_name(iban: str) -> str | None:
     if account is None:
         return None
     return (account.get("holder_name") or "").strip() or None
+
+
+def _bank_supports_instant(bank_key: str | None) -> bool:
+    if not bank_key:
+        return True
+    try:
+        return get_bank_definition(bank_key).sepa_express
+    except KeyError:
+        return True
+
+
+def _recipient_bank_key(recipient_iban: str) -> str | None:
+    """Nur verknüpfte eigene Konten sind auflösbar; externe Empfänger gelten als Instant-fähig."""
+    creds = load_bank_credentials_by_iban(recipient_iban)
+    if not creds:
+        return None
+    return creds.get("bank_key")
 
 
 def _send_prepare(client, sender_iban: str):
@@ -85,6 +103,12 @@ def _record_manual_recipient_income(
 
 def send_transfer(req: TransferRequest) -> dict[str, Any]:
     creds = resolve_bank_credentials(req.credentials, sender_iban=req.sender_iban or None)
+
+    # Echtzeit nur, wenn Absender- UND (eigene) Empfängerbank SEPA-Instant können.
+    if not _bank_supports_instant(getattr(creds, "bank_key", None)) or not _bank_supports_instant(
+        _recipient_bank_key(req.recipient_iban)
+    ):
+        req.instant_payment = False
 
     def _prepare(from_data: bytes | None, tan_value: str | None):
         """Nur Login/Sync + TAN für den Login. Kein Transfer hier."""

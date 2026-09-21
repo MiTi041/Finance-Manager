@@ -62,14 +62,14 @@ export function StatCard({
         )}
         <div className="flex items-baseline gap-2">
           <NumberFlow
-            value={value}
+            value={value + (pendingValue ?? 0)}
             format={valueFormat}
             locales={valueLocales}
             className="text-[26px] font-bold tabular-nums tracking-tight text-foreground"
           />
           {pendingValue != null && pendingValue !== 0 && (
             <span className="text-sm font-medium tabular-nums text-muted-foreground/60">
-              {euroFormatter.format(value + pendingValue)}
+              {euroFormatter.format(value)}
             </span>
           )}
         </div>

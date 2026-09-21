@@ -28,6 +28,10 @@ export type SenderAccount = {
   bankLogoDark?: string;
   logoPadding?: number;
   balance: number;
+  /** Vorgemerkte Umsätze (ausgehend negativ); zählt zum verfügbaren Betrag. */
+  balancePending: number;
+  /** SEPA-Instant wird von der Bank des Kontos unterstützt. */
+  supportsInstant?: boolean;
 };
 
 export type OwnAccount = {
@@ -38,6 +42,8 @@ export type OwnAccount = {
   bankLogoDark?: string;
   logoPadding?: number;
   isPrimary?: boolean;
+  /** SEPA-Instant wird von der Bank des Kontos unterstützt. */
+  supportsInstant?: boolean;
 };
 
 export type TransferSetupResult = {
@@ -99,7 +105,7 @@ export function TransferSetupDialog({
   }, [open]);
 
   const sender = senderAccount;
-  const maxAmount = Math.max(0, sender?.balance ?? 0);
+  const maxAmount = Math.max(0, (sender?.balance ?? 0) + (sender?.balancePending ?? 0));
   const recipientLogos = useRecipientAccountLogos();
 
   const recipientOptions = useMemo(
@@ -139,11 +145,15 @@ export function TransferSetupDialog({
     if (recipientValue === MANUAL) return null;
     if (recipientValue.startsWith("empf:")) {
       const r = recipientAccounts.find((a) => a.id === Number(recipientValue.slice(5)));
-      return r ? { name: r.recipient_name, iban: r.iban, bic: r.bic ?? "" } : null;
+      return r
+        ? { name: r.recipient_name, iban: r.iban, bic: r.bic ?? "", supportsInstant: undefined }
+        : null;
     }
     if (recipientValue.startsWith("bank:")) {
       const a = ownAccounts.find((x) => x.iban === recipientValue.slice(5));
-      return a ? { name: a.name, iban: a.iban, bic: "" } : null;
+      return a
+        ? { name: a.name, iban: a.iban, bic: "", supportsInstant: a.supportsInstant }
+        : null;
     }
     return null;
   }, [recipientValue, recipientAccounts, ownAccounts]);
@@ -159,6 +169,11 @@ export function TransferSetupDialog({
   const amountValid = amount > 0 && amount <= maxAmount;
   const canSubmit = !!sender && recipientValid && amountValid;
 
+  // Echtzeit nur, wenn Absender- und (eigene) Empfängerbank SEPA-Instant können.
+  const instantAllowed =
+    sender?.supportsInstant !== false && selectedRecipient?.supportsInstant !== false;
+  const effectiveInstant = instant && instantAllowed;
+
   const handleSubmit = () => {
     if (!canSubmit || !sender) return;
     onConfirm({
@@ -170,7 +185,7 @@ export function TransferSetupDialog({
       amount,
       saveRecipient: recipientValue === MANUAL && saveRecipient,
       accountName: accountName.trim() || undefined,
-      instant,
+      instant: effectiveInstant,
     });
     onOpenChange(false);
   };
@@ -367,14 +382,16 @@ export function TransferSetupDialog({
             />
           </div>
 
-          <ToggleRow
-            title="Echtzeit (SEPA Instant)"
-            description="Geld kommt sofort an, falls deine Bank SEPA-Instant unterstützt."
-            icon={<Zap className="size-4" />}
-            size="sm"
-            checked={instant}
-            onCheckedChange={setInstant}
-          />
+          {instantAllowed && (
+            <ToggleRow
+              title="Echtzeit (SEPA Instant)"
+              description="Geld kommt sofort an, falls deine Bank SEPA-Instant unterstützt."
+              icon={<Zap className="size-4" />}
+              size="sm"
+              checked={instant}
+              onCheckedChange={setInstant}
+            />
+          )}
 
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="outline" onClick={() => onOpenChange(false)}>

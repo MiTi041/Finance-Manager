@@ -78,6 +78,7 @@ export default function DashboardPage() {
   } = useFinanceData(dateFilter, { excludeHiddenAccounts: true });
 
   const [canTransferMap, setCanTransferMap] = useState<Map<string, boolean>>(new Map());
+  const [sepaExpressMap, setSepaExpressMap] = useState<Map<string, boolean>>(new Map());
   const [recipientAccounts, setRecipientAccounts] = useState<RecipientAccountRecord[]>([]);
   const [setupOpen, setSetupOpen] = useState(false);
   const [presetSenderIban, setPresetSenderIban] = useState<string | undefined>(undefined);
@@ -87,9 +88,10 @@ export default function DashboardPage() {
   } | null>(null);
 
   useEffect(() => {
-    void fetchAvailableBanks().then((banks) =>
-      setCanTransferMap(new Map(banks.map((b) => [b.key, b.can_transfer]))),
-    );
+    void fetchAvailableBanks().then((banks) => {
+      setCanTransferMap(new Map(banks.map((b) => [b.key, b.can_transfer])));
+      setSepaExpressMap(new Map(banks.map((b) => [b.key, b.sepa_express])));
+    });
     void fetchRecipientAccountsReferenceData().then((data) =>
       setRecipientAccounts(data.recipient_accounts ?? []),
     );
@@ -116,6 +118,18 @@ export default function DashboardPage() {
     return map;
   }, [linkedBanks, canTransferMap]);
 
+  const sepaExpressByIban = useMemo(() => {
+    const map = new Map<string, boolean>();
+    for (const bank of linkedBanks) {
+      const bankSupports = sepaExpressMap.get(bank.bank_key) !== false;
+      for (const acc of bank.accounts ?? []) {
+        const iban = normalizeIban(acc.iban);
+        if (iban) map.set(iban, bankSupports);
+      }
+    }
+    return map;
+  }, [linkedBanks, sepaExpressMap]);
+
   const senderAccounts: SenderAccount[] = useMemo(
     () =>
       accountBalances
@@ -132,8 +146,10 @@ export default function DashboardPage() {
           bankLogoDark: a.bankLogoDark,
           logoPadding: a.logoPadding,
           balance: a.balance,
+          balancePending: a.balancePending,
+          supportsInstant: sepaExpressByIban.get(a.accountIban) !== false,
         })),
-    [accountBalances, canTransferByIban, activeAccountIban],
+    [accountBalances, canTransferByIban, sepaExpressByIban, activeAccountIban],
   );
 
   const transferableIbanSet = useMemo(
@@ -164,8 +180,9 @@ export default function DashboardPage() {
         bankLogoDark: a.bankLogoDark,
         logoPadding: a.logoPadding,
         isPrimary: a.isPrimary === true,
+        supportsInstant: sepaExpressByIban.get(a.accountIban) !== false,
       })),
-    [linkedAccounts],
+    [linkedAccounts, sepaExpressByIban],
   );
 
   const runTransfer = useCallback(

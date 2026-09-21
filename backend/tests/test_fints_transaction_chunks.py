@@ -10,6 +10,7 @@ from finance_server.fints.transactions import (
     _fetch_account_transactions,
     _is_out_of_range_error,
     _storage_days_from_segment,
+    _widen_start_for_pending,
 )
 from finance_server.fints import sync
 from finance_server.fints.sync import _archived_ibans
@@ -187,3 +188,17 @@ def test_sync_all_worker_stores_pending_transactions():
 
     assert stored_transactions == payload["transactions"]
     assert stored_pending == payload["pending"]
+
+
+def test_pending_lookback_widens_short_fetch_window():
+    end = datetime.date(2026, 9, 21)
+    # 1-Tage-Fenster (Tage seit letzter Buchung) wird auf den Pending-Horizont geöffnet,
+    # sonst würden ältere vorgemerkte Umsätze beim Replace gelöscht.
+    assert _widen_start_for_pending(end, end) == end - datetime.timedelta(days=30)
+    assert _widen_start_for_pending(end - datetime.timedelta(days=1), end) == (
+        end - datetime.timedelta(days=30)
+    )
+    # Ein bereits weiteres Fenster wird nicht verkleinert.
+    wide = end - datetime.timedelta(days=365)
+    assert _widen_start_for_pending(wide, end) == wide
+    assert _widen_start_for_pending(None, end) == end - datetime.timedelta(days=30)

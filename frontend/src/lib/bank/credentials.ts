@@ -116,6 +116,8 @@ export type BankDefinition = {
   bank_logo: string;
   bank_logo_dark: string;
   can_transfer: boolean;
+  /** Bank unterstützt SEPA-Instant (Echtzeit). */
+  sepa_express: boolean;
   needs_tan_medium_name?: boolean;
   username_hint?: string | null;
 };

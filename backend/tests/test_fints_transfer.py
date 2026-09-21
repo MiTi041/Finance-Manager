@@ -23,10 +23,20 @@ def _client():
     return client
 
 
-def _run(instant_payment: bool):
+def _run(
+    instant_payment: bool,
+    *,
+    sender_bank_key: str = "sparkasse-lemgo",
+    recipient_creds: dict | None = None,
+):
     client = _client()
+    creds = SimpleNamespace(bank_key=sender_bank_key)
     with (
-        patch("finance_server.fints.transfer.resolve_bank_credentials", return_value=("creds", None)),
+        patch("finance_server.fints.transfer.resolve_bank_credentials", return_value=creds),
+        patch(
+            "finance_server.fints.transfer.load_bank_credentials_by_iban",
+            return_value=recipient_creds,
+        ),
         patch("finance_server.fints.transfer.load_state", return_value=None),
         patch("finance_server.fints.transfer.make_client", return_value=client),
         patch("finance_server.fints.transfer.bootstrap_client"),
@@ -50,6 +60,14 @@ def test_send_transfer_passes_instant_payment_true():
 
 def test_send_transfer_passes_instant_payment_false():
     assert _run(False) is False
+
+
+def test_send_transfer_forces_instant_false_for_sender_bank_without_express():
+    assert _run(True, sender_bank_key="chase") is False
+
+
+def test_send_transfer_forces_instant_false_for_recipient_bank_without_express():
+    assert _run(True, recipient_creds={"bank_key": "chase"}) is False
 
 
 def test_validate_transfer_result_includes_bank_texts():

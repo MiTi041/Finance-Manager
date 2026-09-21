@@ -10,6 +10,8 @@ export type BankDefinition = {
   /** Extra padding around the logo in pixels. 0 keeps the default spacing. */
   logo_padding?: number;
   can_transfer: boolean;
+  /** Bank unterstützt SEPA-Instant (Echtzeit). */
+  sepa_express: boolean;
   /** Fixed payout IBAN of a manual provider (e.g. Scalable's Verrechnungskonto). */
   sender_iban?: string | null;
   /** True when the bank has no FinTS endpoint and is maintained manually. */

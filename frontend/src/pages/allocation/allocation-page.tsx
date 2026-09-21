@@ -80,6 +80,7 @@ export default function AllocationPage() {
     { iban: string; name: string; bankKey: string; archived: boolean }[]
   >([]);
   const [canTransferMap, setCanTransferMap] = useState<Map<string, boolean>>(new Map());
+  const [sepaExpressByIban, setSepaExpressByIban] = useState<Map<string, boolean>>(new Map());
   const runBucketIdRef = useRef<number>(0);
   const runBucketAmountRef = useRef<number>(0);
   const savingsPlanIdRef = useRef<number>(0);
@@ -93,6 +94,7 @@ export default function AllocationPage() {
     recipientIban: string;
     purpose: string;
     instant: boolean;
+    instantAvailable: boolean;
     tilgung: boolean;
   }>({
     open: false,
@@ -103,6 +105,7 @@ export default function AllocationPage() {
     recipientIban: "",
     purpose: "",
     instant: true,
+    instantAvailable: true,
     tilgung: false,
   });
   const [donationAnalysisOpen, setDonationAnalysisOpen] = useState(false);
@@ -122,23 +125,36 @@ export default function AllocationPage() {
     setBankAccounts(extractBankAccounts(banks));
     setBafoegEnabled(settings.bafoeg_enabled);
     const bankLevel = new Map(availableBanks.map((b) => [b.key, b.can_transfer]));
+    const expressLevel = new Map(availableBanks.map((b) => [b.key, b.sepa_express]));
     const transferByIban = new Map<string, boolean>();
+    const expressByIban = new Map<string, boolean>();
     for (const bank of banks) {
       const bankCanTransfer = bankLevel.get(bank.bank_key);
+      const bankSupports = expressLevel.get(bank.bank_key) !== false;
       for (const acc of bank.accounts ?? []) {
         if (!acc.iban) continue;
         transferByIban.set(
           acc.iban,
           acc.can_transfer != null ? acc.can_transfer : bankCanTransfer === true,
         );
+        expressByIban.set(acc.iban, bankSupports);
       }
     }
     setCanTransferMap(transferByIban);
+    setSepaExpressByIban(expressByIban);
   }, []);
 
   useEffect(() => {
     void loadReferenceData();
   }, [loadReferenceData]);
+
+  // Externe Empfänger sind nicht in der Map und gelten als Instant-fähig.
+  const instantAvailableFor = useCallback(
+    (senderIban?: string | null, recipientIban?: string | null) =>
+      (senderIban ? sepaExpressByIban.get(senderIban) !== false : true) &&
+      (recipientIban ? sepaExpressByIban.get(recipientIban) !== false : true),
+    [sepaExpressByIban],
+  );
 
   const handleSavingsRefresh = useCallback(async () => {
     await recalculate();
@@ -220,6 +236,7 @@ export default function AllocationPage() {
       runBucketAmountRef.current = amount ?? defaultAmount;
       savingsPlanIdRef.current = 0;
 
+      const instantAvailable = instantAvailableFor(cfg.sender_iban, recipientIban);
       setTransferState({
         open: true,
         runBucketId,
@@ -228,11 +245,12 @@ export default function AllocationPage() {
         recipientName,
         recipientIban,
         purpose,
-        instant: true,
+        instant: instantAvailable,
+        instantAvailable,
         tilgung,
       });
     },
-    [status, recipientAccounts, donationAccounts],
+    [status, recipientAccounts, donationAccounts, instantAvailableFor],
   );
 
   const confirmTransfer = useCallback(
@@ -284,6 +302,7 @@ export default function AllocationPage() {
 
       const recipientAcc = recipientAccounts.find((r) => r.iban === plan.target_recipient_iban);
       const bankAcc = bankAccounts.find((a) => a.iban === plan.target_recipient_iban);
+      const instantAvailable = instantAvailableFor(plan.sender_iban, plan.target_recipient_iban);
       setTransferState({
         open: true,
         runBucketId: 0,
@@ -292,11 +311,12 @@ export default function AllocationPage() {
         recipientName: plan.target_recipient_name,
         recipientIban: plan.target_recipient_iban,
         purpose,
-        instant: true,
+        instant: instantAvailable,
+        instantAvailable,
         tilgung: false,
       });
     },
-    [recipientAccounts, bankAccounts],
+    [recipientAccounts, bankAccounts, instantAvailableFor],
   );
 
   const handleUpdateConfig = useCallback(
@@ -473,6 +493,7 @@ export default function AllocationPage() {
         recipientIban={transferState.recipientIban}
         purpose={transferState.purpose}
         instant={transferState.instant}
+        instantAvailable={transferState.instantAvailable}
         onInstantChange={(instant) => setTransferState((s) => ({ ...s, instant }))}
         onConfirm={confirmTransfer}
       />

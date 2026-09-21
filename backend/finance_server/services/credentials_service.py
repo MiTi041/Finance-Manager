@@ -362,6 +362,7 @@ class CredentialsService:
                     "bank_logo_dark": bank.bank_logo_dark,
                     "logo_padding": bank.logo_padding,
                     "can_transfer": bank.can_transfer,
+                    "sepa_express": bank.sepa_express,
                     "sender_iban": bank.sender_iban,
                     "manual": bank.is_manual,
                     "needs_tan_medium_name": bank.needs_tan_medium_name,

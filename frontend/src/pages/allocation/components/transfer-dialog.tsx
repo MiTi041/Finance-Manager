@@ -24,6 +24,8 @@ type Props = {
   recipientIban: string;
   purpose?: string;
   instant: boolean;
+  /** SEPA-Instant ist für Absender- und Empfängerbank möglich. */
+  instantAvailable?: boolean;
   onInstantChange: (instant: boolean) => void;
   onConfirm: (tan?: string, vopToken?: string) => Promise<void>;
 };
@@ -41,6 +43,7 @@ export function TransferDialog({
   recipientIban,
   purpose,
   instant,
+  instantAvailable = true,
   onInstantChange,
   onConfirm,
 }: Props) {
@@ -144,14 +147,16 @@ export function TransferDialog({
             )}
           </div>
 
-          <ToggleRow
-            title="Echtzeit (SEPA Instant)"
-            description="Geld kommt sofort an, falls deine Bank SEPA-Instant unterstützt."
-            icon={<Zap className="size-4" />}
-            size="sm"
-            checked={instant}
-            onCheckedChange={onInstantChange}
-          />
+          {instantAvailable && (
+            <ToggleRow
+              title="Echtzeit (SEPA Instant)"
+              description="Geld kommt sofort an, falls deine Bank SEPA-Instant unterstützt."
+              icon={<Zap className="size-4" />}
+              size="sm"
+              checked={instant}
+              onCheckedChange={onInstantChange}
+            />
+          )}
 
           {vopError && (
             <div className="min-w-0 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">

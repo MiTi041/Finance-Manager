@@ -45,6 +45,21 @@ from .common import (
 )
 
 
+# ponytail: Banken liefern vorgemerkte Umsätze nur innerhalb des Abrufzeitraums.
+# Ein zu kurzes Fenster (Tage seit letzter Buchung) löscht sonst ältere, noch
+# nicht gebuchte Umsätze beim Replace. Fenster daher mindestens 30 Tage weit öffnen.
+PENDING_LOOKBACK_DAYS = 30
+
+
+def _widen_start_for_pending(
+    start_date: datetime.date | None, end_date: datetime.date, min_days: int = PENDING_LOOKBACK_DAYS
+) -> datetime.date:
+    floor = end_date - datetime.timedelta(days=min_days)
+    if start_date is None or start_date > floor:
+        return floor
+    return start_date
+
+
 def _iter_descending_date_chunks(
     start_date: datetime.date, end_date: datetime.date, chunk_days: int
 ):
@@ -280,6 +295,8 @@ def fetch_transactions(
                             start_date = datetime.date.today() - datetime.timedelta(days=INITIAL_SYNC_DAYS)
                     else:
                         start_date = datetime.date.today() - datetime.timedelta(days=INITIAL_SYNC_DAYS)
+
+                start_date = _widen_start_for_pending(start_date, end)
 
                 storage_days = _account_storage_days(client, account)
                 if storage_days is not None:

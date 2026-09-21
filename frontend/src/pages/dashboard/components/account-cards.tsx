@@ -36,6 +36,7 @@ export function AccountCards({
   onAccountTransfer,
   onToggleExclude,
 }: AccountCardsProps) {
+  const available = (acc: AccountBalance) => acc.balance + (acc.balancePending ?? 0);
   const isTransferable = (acc: AccountBalance) =>
     transferableIbans?.has(acc.accountIban) === true;
   const canTransfer = (acc: AccountBalance) =>
@@ -85,13 +86,13 @@ export function AccountCards({
                   </div>
                   <div className="flex items-baseline gap-2">
                     <span
-                      className={`font-mono text-xs tabular-nums ${acc.balance >= 0 ? "text-emerald-500" : "text-red-500"}`}
+                      className={`font-mono text-xs tabular-nums ${available(acc) >= 0 ? "text-emerald-500" : "text-red-500"}`}
                     >
-                      {euroFormatter.format(acc.balance)}
+                      {euroFormatter.format(available(acc))}
                     </span>
                     {acc.balancePending ? (
                       <span className="font-mono text-[10px] tabular-nums text-muted-foreground/60">
-                        {euroFormatter.format(acc.balance + acc.balancePending)}
+                        {euroFormatter.format(acc.balance)}
                       </span>
                     ) : null}
                   </div>

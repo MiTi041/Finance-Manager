@@ -15,6 +15,9 @@ class BankDefinition:
     # Extra padding around the logo in pixels. 0 keeps the default spacing.
     logo_padding: int = 0
     can_transfer: bool = False
+    # SEPA-Instant (Echtzeit) wird von dieser Bank unterstützt. False blendet
+    # die Echtzeit-Option bei Überweisungen von/an diese Bank aus.
+    sepa_express: bool = True
     # Fixed IBAN the provider pays out from / sends with (e.g. Scalable's
     # Verrechnungskonto). Only set for manual providers.
     sender_iban: str | None = None
@@ -109,6 +112,7 @@ BANKS: tuple[BankDefinition, ...] = (
         key="chase",
         name="Chase",
         bank_logo="images/bank-logos/chase.png",
+        sepa_express=False,
     ),
     BankDefinition(
         key="fnz",
