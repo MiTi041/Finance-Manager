@@ -1,5 +1,5 @@
 import type { ComponentType, ReactNode } from "react";
-import { ArrowUpRight, ArrowDownRight, Clock } from "lucide-react";
+import { Clock } from "lucide-react";
 import NumberFlow, { type Format } from "@number-flow/react";
 
 const euroFormatter = new Intl.NumberFormat("de-DE", {
@@ -12,8 +12,6 @@ type StatCardProps = {
   value: number;
   valueFormat?: Format;
   valueLocales?: Intl.LocalesArgument;
-  sub?: string;
-  trend?: "up" | "down";
   accent: string;
   icon: ComponentType<{ size?: number }>;
   footer?: string;
@@ -26,8 +24,6 @@ export function StatCard({
   value,
   valueFormat,
   valueLocales,
-  sub,
-  trend,
   accent,
   icon: Icon,
   footer,
@@ -48,18 +44,6 @@ export function StatCard({
         </div>
       </div>
       <div className="flex-1">
-        {sub && (
-          <div
-            className="mt-1.5 flex items-center gap-1 text-xs"
-            style={{
-              color: trend === "up" ? "#00d4a1" : trend === "down" ? "#ff5c6c" : undefined,
-            }}
-          >
-            {trend === "up" && <ArrowUpRight size={13} />}
-            {trend === "down" && <ArrowDownRight size={13} />}
-            {sub}
-          </div>
-        )}
         <div className="flex items-baseline gap-2">
           <NumberFlow
             value={value + (pendingValue ?? 0)}

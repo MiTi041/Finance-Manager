@@ -3,6 +3,7 @@ import { Check, CircleAlert, Loader2, Pencil } from "lucide-react";
 
 import { BankLogo, BrandIcon } from "@/components/bank-logo";
 import { logoBackgroundClass } from "@/lib/bank/zahlungspartner-logo";
+import { normalizeIban } from "@/lib/iban";
 import { Button } from "@/components/ui/button";
 import { HelpButton } from "@/components/ui/help-button";
 import { Input } from "@/components/ui/input";
@@ -137,7 +138,7 @@ export function ZahlungspartnerSection({
           </div>
         </div>
       </div>
-      {transaction.zahlungspartner.iban && (
+      {normalizeIban(transaction.zahlungspartner.iban) && (
         <div className="space-y-3 px-5 py-4">
           {ownerId ? (
             <>

@@ -28,6 +28,29 @@ def _insert_monthly_debits(conn, name: str, amount: float, last_offset_days: int
     conn.commit()
 
 
+def _insert_amounts(conn, name: str, amounts: list[float], last_offset_days: int):
+    last = date.today() - timedelta(days=last_offset_days)
+    for i, amount in enumerate(amounts):
+        d = last - timedelta(days=30 * i)
+        conn.execute(
+            "INSERT INTO umsaetze "
+            "(account_iban, amount, purpose, date, entry_date, applicant_name, "
+            "recipient_name, transaction_hash) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "iban",
+                -amount,
+                "SEPA Lastschrift",
+                d.isoformat(),
+                d.isoformat(),
+                name,
+                "Zahlempfaenger",
+                f"{name}-{amount}-{i}",
+            ),
+        )
+    conn.commit()
+
+
 def _flag(
     conn, counterparty_name: str, amount: float, *, dismissed: bool = False, ended: bool = False
 ):
@@ -95,3 +118,59 @@ class TestSubscriptionServiceInactiveAndDismissed:
         assert set(by_name) == {"Spotify", "Netflix", "Soundcloud"}
         assert by_name["Netflix"]["dismissed"] is True
         assert by_name["Soundcloud"]["ended"] is True
+
+
+class TestEffectiveAmountUsesNewest:
+    def test_newest_transaction_not_average(self, monkeypatch, test_db):
+        # newest 10.50, older three 10.00 -> average would be 10.125
+        _insert_amounts(test_db, "Spotify", [10.50, 10.00, 10.00, 10.00], last_offset_days=5)
+        _patch_connections(monkeypatch, test_db)
+        subs = SubscriptionService().get_subscriptions()
+        spotify = next(s for s in subs if s["name"] == "Spotify")
+        assert spotify["effectiveAmount"] == 10.50
+
+    def test_newest_amount_minus_its_own_refund(self, monkeypatch, test_db):
+        # newest 10.50 with a 3.00 refund -> 7.50; older 10.00 charges are ignored
+        _insert_amounts(test_db, "Spotify", [10.50, 10.00, 10.00, 10.00], last_offset_days=5)
+        newest_id = test_db.execute(
+            "SELECT id FROM umsaetze WHERE applicant_name = 'Spotify' "
+            "ORDER BY entry_date DESC LIMIT 1"
+        ).fetchone()["id"]
+        income_id = test_db.execute(
+            "INSERT INTO umsaetze (account_iban, amount, date, entry_date, transaction_hash) "
+            "VALUES ('iban', 3.0, ?, ?, 'refund-income')",
+            (date.today().isoformat(), date.today().isoformat()),
+        ).lastrowid
+        test_db.execute(
+            "INSERT INTO refund_links (refund_transaction_id, expense_transaction_id, amount) "
+            "VALUES (?, ?, ?)",
+            (income_id, newest_id, 3.0),
+        )
+        test_db.commit()
+        _patch_connections(monkeypatch, test_db)
+        subs = SubscriptionService().get_subscriptions()
+        spotify = next(s for s in subs if s["name"] == "Spotify")
+        assert spotify["effectiveAmount"] == 7.50
+
+    def test_newest_amount_minus_refund_linked_to_older_charge(self, monkeypatch, test_db):
+        # newest 10.50 has no refund; the most recent refund (2.49) hangs on an older charge
+        _insert_amounts(test_db, "Netflix", [10.50, 10.00, 10.00, 10.00], last_offset_days=5)
+        older_id = test_db.execute(
+            "SELECT id FROM umsaetze WHERE applicant_name = 'Netflix' "
+            "ORDER BY entry_date DESC LIMIT 1 OFFSET 1"
+        ).fetchone()["id"]
+        income_id = test_db.execute(
+            "INSERT INTO umsaetze (account_iban, amount, date, entry_date, transaction_hash) "
+            "VALUES ('iban', 2.49, ?, ?, 'refund-income')",
+            (date.today().isoformat(), date.today().isoformat()),
+        ).lastrowid
+        test_db.execute(
+            "INSERT INTO refund_links (refund_transaction_id, expense_transaction_id, amount) "
+            "VALUES (?, ?, ?)",
+            (income_id, older_id, 2.49),
+        )
+        test_db.commit()
+        _patch_connections(monkeypatch, test_db)
+        subs = SubscriptionService().get_subscriptions()
+        netflix = next(s for s in subs if s["name"] == "Netflix")
+        assert netflix["effectiveAmount"] == 8.01

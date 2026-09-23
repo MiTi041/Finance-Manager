@@ -503,17 +503,20 @@ class SubscriptionService:
 
         for r in results:
             refund_total = 0
-            net_sum = 0.0
-            last_refund = 0
-            for tx in r["transactions"]:
+            latest_refund = 0
+            for tx in r["transactions"]:  # sorted newest-first
                 tx_refund = refund_map.get(tx["id"], 0)
                 refund_total += tx_refund
-                tx_net = max(0, abs(tx["amount"]) - tx_refund)
-                net_sum += tx_net
-                last_refund = tx_refund
+                if latest_refund == 0 and tx_refund > 0:
+                    latest_refund = tx_refund
             r["refundAmount"] = refund_total
-            r["lastRefundAmount"] = last_refund
-            r["effectiveAmount"] = round(net_sum / r["transactionCount"], 2) if r["transactionCount"] > 0 else r["amount"]
+            r["lastRefundAmount"] = latest_refund
+            # ponytail: newest charge minus most recent refund, not average
+            if r["transactions"]:
+                newest_gross = abs(r["transactions"][0]["amount"])
+                r["effectiveAmount"] = round(max(0, newest_gross - latest_refund), 2)
+            else:
+                r["effectiveAmount"] = r["amount"]
 
         # ── Step 5: Filter out inactive / hidden subscriptions ──
         today = date.today()

@@ -99,9 +99,6 @@ export default function DashboardPage() {
 
   const dateFooter = useMemo(() => computeDateFooter(dateFilter), [dateFilter]);
 
-  const expensePct = ((expenses / (incomes + expenses || 1)) * 100).toFixed(0);
-  const incomePct = ((incomes / (incomes + expenses || 1)) * 100).toFixed(0);
-
   const canTransferByIban = useMemo(() => {
     const map = new Map<string, boolean>();
     for (const bank of linkedBanks) {
@@ -166,7 +163,12 @@ export default function DashboardPage() {
   );
 
   const selectedPending = useMemo(() => {
-    if (activeAccountIban === "all") return undefined;
+    if (activeAccountIban === "all") {
+      return accountBalances.reduce(
+        (sum, a) => sum + (a.excludeFromTotals ? 0 : (a.balancePending ?? 0)),
+        0,
+      );
+    }
     return accountBalances.find((a) => a.accountIban === activeAccountIban)?.balancePending;
   }, [accountBalances, activeAccountIban]);
 
@@ -307,8 +309,6 @@ export default function DashboardPage() {
               value={incomes}
               valueFormat={{ style: "currency", currency: "EUR" }}
               valueLocales="de-DE"
-              sub={`${incomePct} % der Umsätze`}
-              trend="up"
               accent="#00d4a1"
               icon={TrendingUp}
               footer={dateFooter ?? undefined}
@@ -318,8 +318,6 @@ export default function DashboardPage() {
               value={-expenses}
               valueFormat={{ style: "currency", currency: "EUR" }}
               valueLocales="de-DE"
-              sub={`${expensePct} % der Umsätze`}
-              trend="down"
               accent="#ff5c6c"
               icon={TrendingDown}
               footer={dateFooter ?? undefined}

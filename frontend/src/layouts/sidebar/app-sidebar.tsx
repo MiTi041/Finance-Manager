@@ -19,7 +19,6 @@ import { readActiveAccountIban, writeActiveAccountIban } from "@/lib/bank/active
 import { BankSelector } from "./bank-selector";
 import { SidebarFooterContent } from "./sidebar-footer-content";
 import type { SyncStatusRow } from "./sync-button";
-import { fetchBudgets } from "@/lib/budgets";
 
 function parseLatestTimestamp(value: unknown): Date | null {
   if (!value || typeof value !== "string") {
@@ -42,19 +41,6 @@ function parseLatestTimestamp(value: unknown): Date | null {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const [overBudgetCount, setOverBudgetCount] = React.useState(0);
-
-  const refreshOverBudget = React.useCallback(async () => {
-    try {
-      const d = new Date();
-      const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      const rows = await fetchBudgets(month);
-      setOverBudgetCount(rows.filter((b) => b.is_over).length);
-    } catch {
-      setOverBudgetCount(0);
-    }
-  }, []);
-
   const navData = {
     navMain: [
       { title: "Dashboard", url: "/dashboard", icon: Gauge },
@@ -62,7 +48,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       { title: "Abonnements", url: "/subscriptions", icon: Repeat },
       { title: "Kontenfluss", url: "/account-flow", icon: Waypoints },
       { title: "Finanzplan", url: "/finance-plan", icon: Wallet },
-      { title: "Budgets", url: "/budgets", icon: Target, badge: overBudgetCount },
+      { title: "Budgets", url: "/budgets", icon: Target },
     ],
   };
 
@@ -166,7 +152,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   React.useEffect(() => {
     void updateCacheAge();
-    void refreshOverBudget();
     void fetchBankCredentials()
       .then((banks) => {
         setLinkedBanks(banks);
@@ -181,7 +166,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }, 30000);
     const handleRefresh = () => {
       void updateCacheAge();
-      void refreshOverBudget();
     };
 
     const onSyncStatusChange = (event: Event) => {
@@ -221,7 +205,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       window.removeEventListener(FINTS_SYNC_STATUS_EVENT, onSyncStatusChange);
       window.removeEventListener("finance-bank-credentials-changed", onBankCredentialsChanged);
     };
-  }, [updateCacheAge, refreshOverBudget]);
+  }, [updateCacheAge]);
 
   const refreshFinanceData = () => {
     if (isSyncing) return;

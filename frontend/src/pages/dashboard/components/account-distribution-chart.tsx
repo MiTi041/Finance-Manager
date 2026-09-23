@@ -103,7 +103,7 @@ export function AccountDistributionChart({ accountBalances }: AccountDistributio
               locales="de-DE"
               className="shrink-0 tabular-nums text-foreground"
             />
-            <span className="w-9 shrink-0 text-right tabular-nums text-muted-foreground/60">
+            <span className="w-10 shrink-0 whitespace-nowrap text-right tabular-nums text-muted-foreground/60">
               {total > 0 ? `${Math.round((entry.value / total) * 100)} %` : ""}
             </span>
           </div>

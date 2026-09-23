@@ -1,6 +1,6 @@
 import React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CircleX, EyeOff, Repeat, Wallet } from "lucide-react";
+import { CalendarClock, CircleX, EyeOff, Repeat, Wallet } from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
@@ -334,6 +334,14 @@ export default function SubscriptionsPage() {
     [grouped],
   );
 
+  const normalizedMonthlyTotal = useMemo(
+    () =>
+      grouped.MONTHLY.reduce((sum, s) => sum + s.effectiveAmount, 0) +
+      grouped.SEMI_ANNUAL.reduce((sum, s) => sum + s.effectiveAmount, 0) / 6 +
+      grouped.ANNUAL.reduce((sum, s) => sum + s.effectiveAmount, 0) / 12,
+    [grouped],
+  );
+
   if (error) {
     return (
       <EmptyState
@@ -359,15 +367,27 @@ export default function SubscriptionsPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 py-6">
-      <div className="w-full max-w-xs">
-        <StatCard
-          title="Monatliche Ausgaben"
-          value={monthlyTotal}
-          valueFormat={{ style: "currency", currency: "EUR" }}
-          valueLocales="de-DE"
-          accent="#ff5c6c"
-          icon={Wallet}
-        />
+      <div className="flex w-full flex-wrap gap-6">
+        <div className="w-full max-w-xs">
+          <StatCard
+            title="Monatliche Ausgaben"
+            value={monthlyTotal}
+            valueFormat={{ style: "currency", currency: "EUR" }}
+            valueLocales="de-DE"
+            accent="#ff5c6c"
+            icon={Wallet}
+          />
+        </div>
+        <div className="w-full max-w-xs">
+          <StatCard
+            title="Ø Monatlich (alle Abos)"
+            value={normalizedMonthlyTotal}
+            valueFormat={{ style: "currency", currency: "EUR" }}
+            valueLocales="de-DE"
+            accent="#00d4a1"
+            icon={CalendarClock}
+          />
+        </div>
       </div>
       <div className="h-[750px]">
         <VirtualizedList
