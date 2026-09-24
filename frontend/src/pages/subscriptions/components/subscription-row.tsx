@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Archive, Check, FileText, Loader2, Pencil, Plus, RotateCcw, Trash2, Undo2, X } from "lucide-react";
+import { Archive, BarChart3, Check, FileText, Loader2, Pencil, Plus, RotateCcw, Trash2, Undo2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { BrandIcon } from "@/components/bank-logo";
 import { HelpButton } from "@/components/ui/help-button";
@@ -7,7 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/searchable-select";
-import { type Subscription } from "@/pages/subscriptions/hooks/use-subscriptions";
+import {
+  type Subscription,
+  type SubscriptionTransaction,
+} from "@/pages/subscriptions/hooks/use-subscriptions";
 import { getServerBaseUrl, logoBackgroundClass } from "@/lib/bank/zahlungspartner-logo";
 import { type ZahlungspartnerRecord } from "@/lib/zahlungspartner";
 import { formatAmount, formatDate } from "@/lib/utils/format";
@@ -34,6 +37,7 @@ type Props = {
   onRemoveIdentity: (counterpartyName: string, amount: number) => Promise<void>;
   onRestoreSubscription?: (identityId: number) => Promise<void>;
   onReactivateSubscription?: (identityId: number) => Promise<void>;
+  onTransactionClick?: (tx: SubscriptionTransaction) => void;
 };
 
 export function SubscriptionRow({
@@ -48,6 +52,7 @@ export function SubscriptionRow({
   onRemoveIdentity,
   onRestoreSubscription,
   onReactivateSubscription,
+  onTransactionClick,
 }: Props) {
   const hasOverride =
     subscription._counterpartyName !== undefined &&
@@ -288,7 +293,13 @@ export function SubscriptionRow({
                     <TooltipContent side="top">Rückerstattungsbetrag</TooltipContent>
                   </Tooltip>
                 )}
-                <span className="text-sm font-semibold tabular-nums text-destructive">
+                <span
+                  className={cn(
+                    "text-sm font-semibold tabular-nums",
+                    subscription.direction === "income" ? "text-green-600" : "text-destructive",
+                  )}
+                >
+                  {subscription.direction === "income" ? "+" : ""}
                   {formatAmount(subscription.effectiveAmount)}
                 </span>
               </>
@@ -549,7 +560,12 @@ export function SubscriptionRow({
                     .map((t) => (
                       <div
                         key={t.id}
-                        className="grid grid-cols-[5rem_1fr_auto] gap-2 rounded-md py-1.5"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onTransactionClick?.(t);
+                        }}
+                        title="Im Diagramm markieren"
+                        className="group grid cursor-pointer grid-cols-[5rem_1fr_auto] items-center gap-2 rounded-md border border-transparent px-2 py-1.5 transition-colors hover:border-border hover:bg-muted/50"
                       >
                         <span className="text-xs text-muted-foreground tabular-nums">
                           {formatDate(t.date)}
@@ -558,6 +574,7 @@ export function SubscriptionRow({
                           {t.purpose || "-"}
                         </span>
                         <span className="flex items-center gap-1.5">
+                          <BarChart3 className="size-3.5 shrink-0 text-muted-foreground/40 opacity-0 transition-opacity group-hover:opacity-100" />
                           {t.note ? (
                             <FileText className="size-3 shrink-0 text-muted-foreground/40" />
                           ) : null}

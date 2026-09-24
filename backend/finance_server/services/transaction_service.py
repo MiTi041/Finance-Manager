@@ -14,6 +14,7 @@ from finance_server.db import (
     insert_transactions,
     migrate_transactions_to_account,
     load_bank_credentials_by_iban,
+    update_manual_transaction,
     update_transaction_category,
     update_transaction_note,
     update_transaction_purpose,
@@ -83,6 +84,45 @@ class TransactionService:
                     },
                 }
             ]
+        )
+
+    def preview_csv_import(
+        self, content: bytes, schema_key: str, account_iban: str
+    ) -> dict[str, Any]:
+        from finance_server.services import csv_import_service
+
+        return csv_import_service.preview_csv(content, schema_key, account_iban)
+
+    def import_csv_transactions(
+        self, account_iban: str, rows: list[dict[str, Any]]
+    ) -> dict[str, int]:
+        from finance_server.services import csv_import_service
+
+        return csv_import_service.import_csv(account_iban, rows)
+
+    def update_manual_transaction(
+        self,
+        transaction_id: int,
+        date: str,
+        amount: float,
+        recipient_name: str | None = None,
+        recipient_iban: str | None = None,
+        purpose: str | None = None,
+        category: int | None = None,
+        note: str | None = None,
+    ) -> bool:
+        if abs(amount) <= 0.0001:
+            raise ValueError("INVALID_AMOUNT")
+
+        return update_manual_transaction(
+            transaction_id,
+            date=date,
+            amount=amount,
+            recipient_name=recipient_name,
+            recipient_iban=recipient_iban,
+            purpose=purpose,
+            category=category,
+            note=note,
         )
 
     def delete_transaction(self, transaction_id: int) -> bool:

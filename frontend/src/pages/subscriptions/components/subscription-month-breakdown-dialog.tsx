@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/dialog";
 import { getServerBaseUrl, logoBackgroundClass } from "@/lib/bank/zahlungspartner-logo";
 import { formatAmount, formatDate } from "@/lib/utils/format";
+import { cn } from "@/lib/utils";
 
 import type { MonthSubscriptionContribution } from "./subscription-monthly-chart";
 
@@ -16,6 +17,7 @@ type Props = {
   fullLabel: string;
   contributions: MonthSubscriptionContribution[];
   total: number;
+  totalIncome: number;
 };
 
 export function SubscriptionMonthBreakdownDialog({
@@ -24,6 +26,7 @@ export function SubscriptionMonthBreakdownDialog({
   fullLabel,
   contributions,
   total,
+  totalIncome,
 }: Props) {
   const hasProjected = contributions.some((c) => c.projectedAmount > 0);
 
@@ -31,12 +34,12 @@ export function SubscriptionMonthBreakdownDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Ausgaben · {fullLabel}</DialogTitle>
+          <DialogTitle>Abos · {fullLabel}</DialogTitle>
         </DialogHeader>
 
         {contributions.length === 0 ? (
           <p className="py-4 text-center text-sm text-muted-foreground">
-            Keine Ausgaben in diesem Monat.
+            Keine Buchungen in diesem Monat.
           </p>
         ) : (
           <div className="min-w-0 space-y-4">
@@ -75,7 +78,15 @@ export function SubscriptionMonthBreakdownDialog({
                       </div>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-sm font-semibold tabular-nums">{formatAmount(amount)}</p>
+                      <p
+                        className={cn(
+                          "text-sm font-semibold tabular-nums",
+                          sub.direction === "income" ? "text-green-600" : "text-destructive",
+                        )}
+                      >
+                        {sub.direction === "income" ? "+" : ""}
+                        {formatAmount(amount)}
+                      </p>
                       {c.projectedAmount > 0 && (
                         <p className="text-[11px] tabular-nums text-orange-400/90">
                           davon {formatAmount(c.projectedAmount)} geplant
@@ -92,11 +103,25 @@ export function SubscriptionMonthBreakdownDialog({
                 * Geplante Buchungen sind noch nicht abgebucht und wurden geschätzt.
               </p>
             )}
-            <div className="flex items-center justify-between border-t pt-3">
-              <span className="text-xs uppercase tracking-wide text-muted-foreground/50">
-                Ausgaben gesamt
-              </span>
-              <span className="text-lg font-bold tabular-nums">{formatAmount(total)}</span>
+            <div className="space-y-1 border-t pt-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs uppercase tracking-wide text-muted-foreground/50">
+                  Ausgaben gesamt
+                </span>
+                <span className="text-lg font-bold tabular-nums text-destructive">
+                  {formatAmount(total)}
+                </span>
+              </div>
+              {totalIncome > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs uppercase tracking-wide text-muted-foreground/50">
+                    Einnahmen gesamt
+                  </span>
+                  <span className="text-lg font-bold tabular-nums text-green-600">
+                    +{formatAmount(totalIncome)}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         )}

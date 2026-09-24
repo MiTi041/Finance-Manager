@@ -1,5 +1,5 @@
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
-import { AlertCircle, Trash2 } from "lucide-react";
+import { AlertCircle, Pencil, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -52,6 +52,7 @@ type TransactionRowProps = {
   onLinkIbanToZahlungspartner: (iban: string, zahlungspartnerId: number) => Promise<void>;
   onCreateZahlungspartnerForIban: (iban: string, name: string) => Promise<void>;
   onDelete: (transaction: Transaction) => void;
+  onEdit: (transaction: Transaction) => void;
   categoryTriggerRef: (node: HTMLButtonElement | null) => void;
   ownerId?: number | undefined;
   allTransactions: Transaction[];
@@ -87,6 +88,7 @@ export function TransactionRow({
   onLinkIbanToZahlungspartner,
   onCreateZahlungspartnerForIban,
   onDelete,
+  onEdit,
   categoryTriggerRef,
   ownerId,
   allTransactions,
@@ -275,7 +277,18 @@ export function TransactionRow({
               ) : null}
             </div>
 
-            <div className="flex justify-end px-4 py-2">
+            <div className="flex justify-end gap-1 px-4 py-2">
+              {transaction.technisch.isManual ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onEdit(transaction)}
+                >
+                  <Pencil className="size-3.5" />
+                  Bearbeiten
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="ghost"

@@ -4,14 +4,15 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { updateTransactionsCategoryBatch } from "@/lib/categories/category-transactions";
-import {
-  deleteTransactionsBatch,
-} from "@/lib/transactions";
+import { createManualTransaction, deleteTransactionsBatch } from "@/lib/transactions";
+import { transactionToManualInput } from "@/lib/manual-transaction";
+import { type Transaction } from "@/types/transaction";
 
 import { UNASSIGNED_CATEGORY_VALUE } from "@/lib/utils/categories";
 
 type UseBatchActionsOptions = {
   selectedTransactionIds: Set<number>;
+  selectedManualTransactions: Transaction[];
   clearSelection: () => void;
   reload: () => Promise<void>;
   expandedTransactionId: number | null;
@@ -20,6 +21,7 @@ type UseBatchActionsOptions = {
 
 export function useBatchActions({
   selectedTransactionIds,
+  selectedManualTransactions,
   clearSelection,
   reload,
   expandedTransactionId,
@@ -29,6 +31,7 @@ export function useBatchActions({
   const [deletingBatch, setDeletingBatch] = useState(false);
   const [batchCategoryId, setBatchCategoryId] = useState<string>("");
   const [applyingBatchCategory, setApplyingBatchCategory] = useState(false);
+  const [duplicatingBatch, setDuplicatingBatch] = useState(false);
 
   const handleBatchDelete = async () => {
     setDeletingBatch(true);
@@ -81,6 +84,28 @@ export function useBatchActions({
     }
   };
 
+  const handleBatchDuplicate = async () => {
+    if (selectedManualTransactions.length === 0) return;
+    setDuplicatingBatch(true);
+    try {
+      for (const transaction of selectedManualTransactions) {
+        await createManualTransaction({
+          account_iban: transaction.konto.iban,
+          ...transactionToManualInput(transaction),
+        });
+      }
+      clearSelection();
+      await reload();
+      toast.success(`${selectedManualTransactions.length} Transaktionen dupliziert`);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Transaktionen konnten nicht dupliziert werden",
+      );
+    } finally {
+      setDuplicatingBatch(false);
+    }
+  };
+
   return {
     batchDeleteOpen,
     setBatchDeleteOpen,
@@ -90,5 +115,7 @@ export function useBatchActions({
     setBatchCategoryId,
     applyingBatchCategory,
     handleBatchCategorize,
+    handleBatchDuplicate,
+    duplicatingBatch,
   };
 }

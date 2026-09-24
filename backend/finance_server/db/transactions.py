@@ -176,6 +176,23 @@ def _find_equivalent_transaction_id(
     return int(row["id"]) if row else None
 
 
+def existing_transaction_hashes(hashes: Iterable[str]) -> set[str]:
+    values = [value for value in hashes if value]
+    if not values:
+        return set()
+    found: set[str] = set()
+    with get_connection() as connection:
+        for start in range(0, len(values), 500):
+            chunk = values[start:start + 500]
+            placeholders = ",".join("?" * len(chunk))
+            rows = connection.execute(
+                f"SELECT transaction_hash FROM umsaetze WHERE transaction_hash IN ({placeholders})",
+                chunk,
+            ).fetchall()
+            found.update(row["transaction_hash"] for row in rows)
+    return found
+
+
 def _backfill_origin_transaction_hashes(connection: sqlite3.Connection) -> None:
     rows = connection.execute(
         """
@@ -841,6 +858,59 @@ def update_transaction_splits(transaction_id: int, splits: list[dict[str, Any]] 
         )
         result = cursor.rowcount > 0
         _log("umsaetze", transaction_id, "UPDATE", {"id": transaction_id, "splits": splits, "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat()}, connection=connection)
+        return result
+
+
+def update_manual_transaction(
+    transaction_id: int,
+    *,
+    date: str,
+    amount: float,
+    recipient_name: str | None = None,
+    recipient_iban: str | None = None,
+    purpose: str | None = None,
+    category: int | None = None,
+    note: str | None = None,
+) -> bool:
+    with get_connection() as connection:
+        row = connection.execute(
+            "SELECT dummy_entry FROM umsaetze WHERE id = ?", (transaction_id,)
+        ).fetchone()
+        if row is None or not row["dummy_entry"]:
+            raise ValueError("MANUAL_TRANSACTION_REQUIRED")
+
+        cursor = connection.execute(
+            """UPDATE umsaetze SET
+                date = ?, entry_date = ?, amount = ?,
+                recipient_name = ?, applicant_iban = ?,
+                purpose = ?, purpose_edit = NULL,
+                kategorie = ?, note = ?
+               WHERE id = ?""",
+            (
+                normalize_text(date),
+                normalize_text(date),
+                amount,
+                normalize_text(recipient_name) or None,
+                normalize_text(recipient_iban) or None,
+                normalize_text(purpose) or None,
+                category,
+                normalize_text(note) or None,
+                transaction_id,
+            ),
+        )
+        result = cursor.rowcount > 0
+        _log(
+            "umsaetze",
+            transaction_id,
+            "UPDATE",
+            {
+                "id": transaction_id,
+                "date": date,
+                "amount": amount,
+                "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+            },
+            connection=connection,
+        )
         return result
 
 

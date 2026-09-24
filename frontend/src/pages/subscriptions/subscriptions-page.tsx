@@ -1,6 +1,6 @@
 import React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CalendarClock, CircleX, EyeOff, Repeat, Wallet } from "lucide-react";
+import { CalendarClock, CircleX, EyeOff, Repeat, TrendingUp, Wallet } from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,12 @@ import { StatCard } from "@/pages/dashboard/components/stat-card";
 import { toast } from "sonner";
 
 import { SubscriptionRow } from "./components/subscription-row";
-import { SubscriptionMonthlyChart } from "./components/subscription-monthly-chart";
+import {
+  SubscriptionMonthlyChart,
+  buildMonthlySubscriptionSpending,
+  monthKeyOf,
+  type ChartHighlight,
+} from "./components/subscription-monthly-chart";
 
 const FREQUENCY_ORDER: SubscriptionFrequency[] = ["MONTHLY", "SEMI_ANNUAL", "ANNUAL"];
 
@@ -76,6 +81,32 @@ export default function SubscriptionsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const virtualListRef = useRef<VirtualizedListRef>(null);
   const highlightRef = useRef(false);
+  const chartRef = useRef<HTMLDivElement>(null);
+  const [chartHighlight, setChartHighlight] = useState<ChartHighlight | null>(null);
+
+  const chartData = useMemo(
+    () => buildMonthlySubscriptionSpending(chartSubscriptions),
+    [chartSubscriptions],
+  );
+
+  const handleTransactionClick = useCallback(
+    (date: string, direction: "income" | "expense") => {
+      const monthKey = monthKeyOf(date);
+      if (!chartData.some((d) => d.monthKey === monthKey)) {
+        toast("Für diesen Monat zeigt das Diagramm keine Buchung.");
+        return;
+      }
+      setChartHighlight({ monthKey, direction });
+      chartRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    },
+    [chartData],
+  );
+
+  useEffect(() => {
+    if (!chartHighlight) return;
+    const timer = setTimeout(() => setChartHighlight(null), 3000);
+    return () => clearTimeout(timer);
+  }, [chartHighlight]);
 
   const refreshChart = useCallback(() => {
     setChartLoading(true);
@@ -330,15 +361,37 @@ export default function SubscriptionsPage() {
   };
 
   const monthlyTotal = useMemo(
-    () => grouped.MONTHLY.reduce((sum, s) => sum + s.effectiveAmount, 0),
+    () =>
+      grouped.MONTHLY.reduce(
+        (sum, s) => sum + (s.direction === "income" ? 0 : s.effectiveAmount),
+        0,
+      ),
+    [grouped],
+  );
+
+  const monthlyIncome = useMemo(
+    () =>
+      grouped.MONTHLY.reduce(
+        (sum, s) => sum + (s.direction === "income" ? s.effectiveAmount : 0),
+        0,
+      ),
     [grouped],
   );
 
   const normalizedMonthlyTotal = useMemo(
     () =>
-      grouped.MONTHLY.reduce((sum, s) => sum + s.effectiveAmount, 0) +
-      grouped.SEMI_ANNUAL.reduce((sum, s) => sum + s.effectiveAmount, 0) / 6 +
-      grouped.ANNUAL.reduce((sum, s) => sum + s.effectiveAmount, 0) / 12,
+      grouped.MONTHLY.reduce(
+        (sum, s) => sum + (s.direction === "income" ? 0 : s.effectiveAmount),
+        0,
+      ) +
+      grouped.SEMI_ANNUAL.reduce(
+        (sum, s) => sum + (s.direction === "income" ? 0 : s.effectiveAmount),
+        0,
+      ) / 6 +
+      grouped.ANNUAL.reduce(
+        (sum, s) => sum + (s.direction === "income" ? 0 : s.effectiveAmount),
+        0,
+      ) / 12,
     [grouped],
   );
 
@@ -359,7 +412,7 @@ export default function SubscriptionsPage() {
     return (
       <EmptyState
         title="Keine Abonnements gefunden"
-        text="Es wurden noch keine regelmäßigen Abbuchungen erkannt."
+        text="Es wurden noch keine regelmäßigen Buchungen erkannt."
         illustration={<Repeat />}
       />
     );
@@ -376,6 +429,16 @@ export default function SubscriptionsPage() {
             valueLocales="de-DE"
             accent="#ff5c6c"
             icon={Wallet}
+          />
+        </div>
+        <div className="w-full max-w-xs">
+          <StatCard
+            title="Monatliche Einnahmen"
+            value={monthlyIncome}
+            valueFormat={{ style: "currency", currency: "EUR" }}
+            valueLocales="de-DE"
+            accent="#00d4a1"
+            icon={TrendingUp}
           />
         </div>
         <div className="w-full max-w-xs">
@@ -401,7 +464,7 @@ export default function SubscriptionsPage() {
         }
         getItemHeight={getItemHeight}
         emptyStateTitle="Keine Abonnements gefunden"
-        emptyStateText="Es wurden noch keine regelmäßigen Abbuchungen erkannt."
+        emptyStateText="Es wurden noch keine regelmäßigen Buchungen erkannt."
         emptyStateIllustration={<Repeat />}
         filterItems={
           [
@@ -472,13 +535,20 @@ export default function SubscriptionsPage() {
               onRemoveIdentity={handleRemoveIdentity}
               onRestoreSubscription={handleRestoreSubscription}
               onReactivateSubscription={handleReactivateSubscription}
+              onTransactionClick={(tx) =>
+                handleTransactionClick(tx.date, tx.amount < 0 ? "expense" : "income")
+              }
             />
           );
         }}
       />
       </div>
       {chartSubscriptions.length > 0 && (
-        <SubscriptionMonthlyChart subscriptions={chartSubscriptions} />
+        <SubscriptionMonthlyChart
+          data={chartData}
+          highlight={chartHighlight}
+          containerRef={chartRef}
+        />
       )}
     </div>
   );

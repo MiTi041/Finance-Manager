@@ -1,3 +1,7 @@
+export function formatIban(iban: string): string {
+  return iban.replace(/(.{4})(?=.)/g, "$1 ");
+}
+
 export function normalizeIban(value?: string | null): string {
   if (!value) return "";
   const normalized = value.replace(/\s+/g, "").toUpperCase();

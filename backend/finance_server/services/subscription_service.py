@@ -123,7 +123,8 @@ class SubscriptionService:
             to_date=to_date,
         )
 
-        outgoing = [t for t in transactions if t.get("amount", 0) < 0]
+        # ponytail: income and expenses both cluster; kept apart by sign in the grouping key
+        bookings = [t for t in transactions if t.get("amount", 0) != 0]
 
         # ── Preload IBAN → zahlungspartner map ──
         iban_to_zahlungspartner: dict[str, dict[str, Any]] = {}
@@ -205,8 +206,8 @@ class SubscriptionService:
                 }
 
         # ── Step 1: Enrich every transaction with zahlungspartner + normalized name ──
-        enriched_outgoing: list[dict[str, Any]] = []
-        for t in outgoing:
+        enriched_bookings: list[dict[str, Any]] = []
+        for t in bookings:
             raw_name = t.get("applicant_name") or t.get("recipient_name") or ""
             if not raw_name:
                 continue
@@ -241,18 +242,19 @@ class SubscriptionService:
 
             t["_zahlungspartner"] = zahlungspartner
             t["_enriched_name"] = enriched_name
-            enriched_outgoing.append(t)
+            t["_direction"] = "income" if t.get("amount", 0) > 0 else "expense"
+            enriched_bookings.append(t)
 
-        # ── Step 2: Group by enriched name (no amount in key) ──
-        name_groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
-        for t in enriched_outgoing:
-            name_groups[t["_enriched_name"]].append(t)
+        # ── Step 2: Group by enriched name + sign (income/expense never mix) ──
+        name_groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+        for t in enriched_bookings:
+            name_groups[(t["_enriched_name"], t["_direction"])].append(t)
 
         # ── Step 3: Within each name group, cluster by amount tolerance ──
         AMOUNT_TOLERANCE = 0.10
         results: list[dict[str, Any]] = []
 
-        for enriched_name, txs in name_groups.items():
+        for (enriched_name, direction), txs in name_groups.items():
             sorted_by_amount = sorted(txs, key=lambda t: abs(t["amount"]))
 
             clusters: list[list[dict[str, Any]]] = []
@@ -460,6 +462,7 @@ class SubscriptionService:
                         "logoPadding": sub_logo_padding,
                         "isCompany": sub_is_company,
                         "amount": sub_amount,
+                        "direction": direction,
                         "frequency": frequency,
                         "frequencyLabel": FREQUENCY_LABELS[frequency],
                         "firstDate": dates_sorted[0].isoformat(),
@@ -564,6 +567,7 @@ class SubscriptionService:
                     "logoPadding": True,
                     "isCompany": True,
                     "amount": amt,
+                    "direction": "expense",
                     "frequency": "MONTHLY",
                     "frequencyLabel": "Monatlich",
                     "firstDate": date.today().isoformat(),

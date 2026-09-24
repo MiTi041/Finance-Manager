@@ -1,13 +1,23 @@
-import { useMemo, useState } from "react";
+import { useState, type Ref } from "react";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import {
+  BarChart,
+  Bar,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 
 import type { Subscription } from "@/pages/subscriptions/hooks/use-subscriptions";
 import { SectionHeading } from "@/pages/dashboard/components/section-heading";
 import { SubscriptionMonthBreakdownDialog } from "./subscription-month-breakdown-dialog";
 
 const RED = "#ff5c6c";
+const GREEN = "#00d4a1";
 const SUBTLE = "#2a2a40";
 const MUTED = "#55556e";
 
@@ -29,16 +39,22 @@ export type MonthSubscriptionContribution = {
 
 export type DataPoint = {
   month: string;
+  monthKey: string;
   fullLabel: string;
   ausgaben: number;
+  einnahmen: number;
   contributions: MonthSubscriptionContribution[];
 };
+
+export function monthKeyOf(date: string) {
+  return format(new Date(date), "yyyy-MM");
+}
 
 function getSubKey(sub: Subscription) {
   return `${sub._counterpartyName || sub.name}|${sub.amount}`;
 }
 
-function buildMonthlySubscriptionSpending(subscriptions: Subscription[]): DataPoint[] {
+export function buildMonthlySubscriptionSpending(subscriptions: Subscription[]): DataPoint[] {
   const now = new Date();
   const currentMonth = format(now, "yyyy-MM");
 
@@ -61,16 +77,14 @@ function buildMonthlySubscriptionSpending(subscriptions: Subscription[]): DataPo
     if (!sub.transactions || sub.transactions.length === 0) continue;
 
     for (const tx of sub.transactions) {
-      const key = format(new Date(tx.date), "yyyy-MM");
+      const key = monthKeyOf(tx.date);
       ensureContribution(key, sub).paidAmount += Math.abs(tx.amount);
     }
 
-    const nextKey = format(new Date(sub.nextDate), "yyyy-MM");
+    const nextKey = monthKeyOf(sub.nextDate);
     const isActive = sub.active !== false;
     if (isActive && nextKey === currentMonth) {
-      const paidThisMonth = sub.transactions.some(
-        (tx) => format(new Date(tx.date), "yyyy-MM") === nextKey,
-      );
+      const paidThisMonth = sub.transactions.some((tx) => monthKeyOf(tx.date) === nextKey);
       const lastDate = new Date(sub.lastDate);
       const cycleDays =
         sub.frequency === "SEMI_ANNUAL" ? 182 : sub.frequency === "ANNUAL" ? 365 : 30;
@@ -97,14 +111,21 @@ function buildMonthlySubscriptionSpending(subscriptions: Subscription[]): DataPo
       const totalB = b.paidAmount + b.projectedAmount;
       return totalB - totalA || a.subscription.name.localeCompare(b.subscription.name);
     });
+    const amountOf = (c: MonthSubscriptionContribution) => c.paidAmount + c.projectedAmount;
     const ausgaben = contributions.reduce(
-      (sum, c) => sum + c.paidAmount + c.projectedAmount,
+      (sum, c) => (c.subscription.direction === "income" ? sum : sum + amountOf(c)),
+      0,
+    );
+    const einnahmen = contributions.reduce(
+      (sum, c) => (c.subscription.direction === "income" ? sum + amountOf(c) : sum),
       0,
     );
     result.push({
       month: format(d, "MMM", { locale: de }),
+      monthKey: key,
       fullLabel: format(d, "MMM yyyy", { locale: de }),
       ausgaben,
+      einnahmen,
       contributions,
     });
   }
@@ -129,29 +150,48 @@ function ChartTooltip({
         <span className="opacity-70">Ausgaben  </span>
         {data ? fmtShort(data.ausgaben) : ""}
       </p>
+      <p className="m-0 mt-0.5 text-[13px] tabular-nums" style={{ color: GREEN }}>
+        <span className="opacity-70">Einnahmen  </span>
+        {data ? fmtShort(data.einnahmen) : ""}
+      </p>
     </div>
   );
 }
 
-type Props = {
-  subscriptions: Subscription[];
+export type ChartHighlight = {
+  monthKey: string;
+  direction: "income" | "expense";
 };
 
-export function SubscriptionMonthlyChart({ subscriptions }: Props) {
-  const data = useMemo(() => buildMonthlySubscriptionSpending(subscriptions), [subscriptions]);
+type Props = {
+  data: DataPoint[];
+  highlight?: ChartHighlight | null;
+  containerRef?: Ref<HTMLDivElement>;
+};
+
+export function SubscriptionMonthlyChart({ data, highlight, containerRef }: Props) {
   const [selected, setSelected] = useState<DataPoint | null>(null);
 
   return (
-    <div className="min-w-0 flex-[0_0_320px] rounded-panel border border-border bg-card p-[22px_22px_14px] outline-none">
-      <SectionHeading>Abo-Ausgaben pro Monat (letzte 24 Monate)</SectionHeading>
-      <div className="mb-4 flex items-center gap-1.5 text-xs text-muted-foreground">
-        <div className="size-2 rounded-sm" style={{ background: RED }} />
-        Ausgaben
+    <div
+      ref={containerRef}
+      className="min-w-0 flex-[0_0_320px] rounded-panel border border-border bg-card p-[22px_22px_14px] outline-none"
+    >
+      <SectionHeading>Abo-Ausgaben &amp; -Einnahmen pro Monat (letzte 24 Monate)</SectionHeading>
+      <div className="mb-4 flex items-center gap-3 text-xs text-muted-foreground">
+        <div className="flex items-center gap-1.5">
+          <div className="size-2 rounded-sm" style={{ background: RED }} />
+          Ausgaben
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="size-2 rounded-sm" style={{ background: GREEN }} />
+          Einnahmen
+        </div>
       </div>
       <div
         className="h-[200px] [&_.recharts-bar-rectangle]:cursor-pointer [&_svg]:outline-none"
         role="img"
-        aria-label="Monatliche Abo-Ausgaben als Balkendiagramm"
+        aria-label="Monatliche Abo-Ausgaben und -Einnahmen als Balkendiagramm"
       >
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
@@ -180,9 +220,40 @@ export function SubscriptionMonthlyChart({ subscriptions }: Props) {
               dataKey="ausgaben"
               fill={RED}
               radius={[2, 2, 0, 0]}
-              fillOpacity={0.85}
               onClick={(_, index) => setSelected(data[index] ?? null)}
-            />
+            >
+              {data.map((d) => {
+                const isHit = highlight?.monthKey === d.monthKey && highlight.direction === "expense";
+                return (
+                  <Cell
+                    key={d.monthKey}
+                    fill={RED}
+                    fillOpacity={isHit ? 1 : highlight ? 0.55 : 0.85}
+                    stroke={isHit ? "#ffffff" : undefined}
+                    strokeWidth={isHit ? 2 : 0}
+                  />
+                );
+              })}
+            </Bar>
+            <Bar
+              dataKey="einnahmen"
+              fill={GREEN}
+              radius={[2, 2, 0, 0]}
+              onClick={(_, index) => setSelected(data[index] ?? null)}
+            >
+              {data.map((d) => {
+                const isHit = highlight?.monthKey === d.monthKey && highlight.direction === "income";
+                return (
+                  <Cell
+                    key={d.monthKey}
+                    fill={GREEN}
+                    fillOpacity={isHit ? 1 : highlight ? 0.55 : 0.85}
+                    stroke={isHit ? "#ffffff" : undefined}
+                    strokeWidth={isHit ? 2 : 0}
+                  />
+                );
+              })}
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -194,6 +265,7 @@ export function SubscriptionMonthlyChart({ subscriptions }: Props) {
         fullLabel={selected?.fullLabel ?? ""}
         contributions={selected?.contributions ?? []}
         total={selected?.ausgaben ?? 0}
+        totalIncome={selected?.einnahmen ?? 0}
       />
     </div>
   );

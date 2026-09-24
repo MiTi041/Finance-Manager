@@ -150,6 +150,8 @@ export function mapTransaction(dto: TransactionDto): Transaction {
       isRefund: !!dto.is_refund,
 
       isKontotransfer: false,
+
+      isManual: !!dto.dummy_entry,
     },
   };
 }

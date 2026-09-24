@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Check, CircleAlert, Loader2, Pencil } from "lucide-react";
 
 import { BankLogo, BrandIcon } from "@/components/bank-logo";
+import { CopyButton } from "@/components/copy-button";
 import { logoBackgroundClass } from "@/lib/bank/zahlungspartner-logo";
 import { normalizeIban } from "@/lib/iban";
 import { Button } from "@/components/ui/button";
@@ -125,14 +126,20 @@ export function ZahlungspartnerSection({
             ) : null}
             <div className="space-y-1">
               {transaction.zahlungspartner.iban ? (
-                <p className="font-mono text-xs text-muted-foreground">
-                  {transaction.zahlungspartner.iban}
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <p className="font-mono text-xs text-muted-foreground">
+                    {transaction.zahlungspartner.iban}
+                  </p>
+                  <CopyButton value={transaction.zahlungspartner.iban} label="IBAN kopieren" />
+                </div>
               ) : null}
               {transaction.zahlungspartner.bic ? (
-                <p className="font-mono text-xs text-muted-foreground">
-                  {transaction.zahlungspartner.bic}
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <p className="font-mono text-xs text-muted-foreground">
+                    {transaction.zahlungspartner.bic}
+                  </p>
+                  <CopyButton value={transaction.zahlungspartner.bic} label="BIC kopieren" />
+                </div>
               ) : null}
             </div>
           </div>

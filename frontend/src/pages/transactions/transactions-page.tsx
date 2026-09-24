@@ -1,5 +1,5 @@
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CircleX, Plus, TriangleAlert } from "lucide-react";
+import { CircleX, Plus, TriangleAlert, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import DateFilter from "@/components/date-filter";
@@ -51,6 +51,7 @@ import { PendingRow } from "./components/pending-row";
 import { TransactionsFilterBar } from "./components/transactions-filter-bar";
 import { BatchActionsBar } from "./components/batch-actions-bar";
 import { ManualTransactionSheet } from "./components/manual-transaction-sheet";
+import { CsvImportDialog } from "./components/csv-import-dialog";
 import { useSelection } from "./hooks/use-selection";
 import { useBatchActions } from "./hooks/use-batch-actions";
 import { buildCategoryOptions, type TransactionCategoryOption } from "@/lib/utils/categories";
@@ -98,6 +99,8 @@ export default function TransactionsPage() {
   const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
   const [deletingTransaction, setDeletingTransaction] = useState(false);
   const [manualSheetOpen, setManualSheetOpen] = useState(false);
+  const [csvImportOpen, setCsvImportOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [subscriptionTransactionIds, setSubscriptionTransactionIds] = useState<Set<number>>(
     new Set(),
   );
@@ -597,6 +600,11 @@ export default function TransactionsPage() {
     clearSelection,
   } = useSelection(selectableTransactions);
 
+  const selectedManualTransactions = useMemo(
+    () => transactions.filter((t) => selectedTransactionIds.has(t.id) && t.technisch.isManual),
+    [transactions, selectedTransactionIds],
+  );
+
   const listItems = useMemo(
     () => [...pendingTransactions, ...filteredTransactions],
     [pendingTransactions, filteredTransactions],
@@ -640,8 +648,11 @@ export default function TransactionsPage() {
     setBatchCategoryId,
     applyingBatchCategory,
     handleBatchCategorize,
+    handleBatchDuplicate,
+    duplicatingBatch,
   } = useBatchActions({
     selectedTransactionIds,
+    selectedManualTransactions,
     clearSelection,
     reload,
     expandedTransactionId,
@@ -728,6 +739,15 @@ export default function TransactionsPage() {
                   <Plus className="size-4" />
                   <span>Transaktion hinzufügen</span>
                 </Button>,
+                <Button
+                  key="import-manual-csv"
+                  type="button"
+                  variant="outline"
+                  onClick={() => setCsvImportOpen(true)}
+                >
+                  <Upload className="size-4" />
+                  <span>CSV importieren</span>
+                </Button>,
               ]
             : undefined
         }
@@ -745,6 +765,9 @@ export default function TransactionsPage() {
                   onBatchCategorize={handleBatchCategorize}
                   applyingBatchCategory={applyingBatchCategory}
                   onBatchDelete={() => setBatchDeleteOpen(true)}
+                  onBatchDuplicate={handleBatchDuplicate}
+                  duplicatingBatch={duplicatingBatch}
+                  manualSelectedCount={selectedManualTransactions.length}
                   onClearSelection={clearSelection}
                 />,
               ]
@@ -847,6 +870,10 @@ export default function TransactionsPage() {
               onLinkIbanToZahlungspartner={linkIbanToZahlungspartner}
               onCreateZahlungspartnerForIban={createZahlungspartnerForIban}
               onDelete={openDeleteTransactionDialog}
+              onEdit={(transaction) => {
+                setEditingTransaction(transaction);
+                setManualSheetOpen(true);
+              }}
               categoryTriggerRef={(node) => {
                 categoryTriggerRefs.current.set(transaction.id, node);
               }}
@@ -875,7 +902,7 @@ export default function TransactionsPage() {
         open={batchDeleteOpen}
         title={`${selectedCount} Transaktionen löschen`}
         description={`${selectedCount} ausgewählte Transaktionen wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`}
-        confirmLabel="Alle löschen"
+        confirmLabel={`${selectedCount > 1 ? "Alle löschen " : "Löschen"}`}
         loading={deletingBatch}
         onOpenChange={(open) => {
           if (!open) setBatchDeleteOpen(false);
@@ -901,17 +928,30 @@ export default function TransactionsPage() {
         }}
       />
 
-      {selectedBank?.manual ? (
+      {selectedBank?.manual || editingTransaction ? (
         <ManualTransactionSheet
           open={manualSheetOpen}
-          onOpenChange={setManualSheetOpen}
-          accountIban={selectedBank.accountIban}
-          accountName={selectedBank.accountName}
+          onOpenChange={(open) => {
+            setManualSheetOpen(open);
+            if (!open) setEditingTransaction(null);
+          }}
+          accountIban={editingTransaction?.konto.iban ?? selectedBank?.accountIban ?? ""}
+          accountName={selectedBank?.accountName ?? ""}
           categoryOptions={categoryOptions}
           ownAccounts={recipientAccountOptions}
           recipientAccounts={recipientAccounts}
           zahlungspartner={zahlungspartner}
+          transaction={editingTransaction}
           onCreated={reload}
+        />
+      ) : null}
+
+      {selectedBank?.manual ? (
+        <CsvImportDialog
+          open={csvImportOpen}
+          onOpenChange={setCsvImportOpen}
+          accountIban={selectedBank?.accountIban ?? ""}
+          onImported={reload}
         />
       ) : null}
     </div>

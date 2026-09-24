@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 
-from finance_server.models.transaction import BatchIdsRequest, ManualTransactionCreateRequest, RefundLinkCreateRequest, TransactionAccountMigrationRequest, TransactionNoteUpdateRequest, TransactionPurposeUpdateRequest, TransactionSplitUpdateRequest
+from finance_server.models.transaction import BatchIdsRequest, CsvImportRequest, ManualTransactionCreateRequest, ManualTransactionUpdateRequest, RefundLinkCreateRequest, TransactionAccountMigrationRequest, TransactionNoteUpdateRequest, TransactionPurposeUpdateRequest, TransactionSplitUpdateRequest
+from finance_server.services import csv_import_service
 from finance_server.services.transaction_service import TransactionService
 from finance_server.api._crud import crud_delete
 from finance_server.api.deps import get_transaction_service
@@ -69,6 +70,75 @@ def create_manual_transaction(
             ) from err
         if str(err) == "INVALID_AMOUNT":
             raise HTTPException(status_code=400, detail="Der Betrag darf nicht 0 sein.") from err
+        raise HTTPException(status_code=400, detail=str(err)) from err
+
+
+@router.patch("/db/transactions/{transaction_id}/manual")
+def update_manual_transaction(
+    transaction_id: int,
+    request: ManualTransactionUpdateRequest,
+    service: TransactionService = Depends(get_transaction_service),
+) -> dict[str, Any]:
+    try:
+        updated = service.update_manual_transaction(
+            transaction_id,
+            date=request.date,
+            amount=request.amount,
+            recipient_name=request.recipient_name,
+            recipient_iban=request.recipient_iban,
+            purpose=request.purpose,
+            category=request.category,
+            note=request.note,
+        )
+    except ValueError as err:
+        if str(err) == "MANUAL_TRANSACTION_REQUIRED":
+            raise HTTPException(
+                status_code=400,
+                detail="Nur manuelle Transaktionen können bearbeitet werden.",
+            ) from err
+        if str(err) == "INVALID_AMOUNT":
+            raise HTTPException(status_code=400, detail="Der Betrag darf nicht 0 sein.") from err
+        raise HTTPException(status_code=400, detail=str(err)) from err
+    if not updated:
+        raise HTTPException(status_code=404, detail="Transaktion nicht gefunden")
+    return {"transaction_id": transaction_id}
+
+
+@router.get("/db/transactions/csv-schemas")
+def get_csv_schemas() -> dict[str, Any]:
+    return {"schemas": csv_import_service.list_schemas()}
+
+
+@router.post("/db/transactions/csv-preview")
+async def preview_csv_import(
+    file: UploadFile = File(...),
+    schema_key: str = Form(...),
+    account_iban: str = Form(...),
+    service: TransactionService = Depends(get_transaction_service),
+) -> dict[str, Any]:
+    content = await file.read()
+    try:
+        return service.preview_csv_import(content, schema_key, account_iban)
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
+
+
+@router.post("/db/transactions/csv-import")
+def import_csv_transactions(
+    request: CsvImportRequest,
+    service: TransactionService = Depends(get_transaction_service),
+) -> dict[str, Any]:
+    try:
+        return service.import_csv_transactions(
+            request.account_iban,
+            [row.model_dump() for row in request.rows],
+        )
+    except ValueError as err:
+        if str(err) == "MANUAL_ACCOUNT_REQUIRED":
+            raise HTTPException(
+                status_code=400,
+                detail="CSV-Import ist nur für manuelle Konten möglich.",
+            ) from err
         raise HTTPException(status_code=400, detail=str(err)) from err
 
 

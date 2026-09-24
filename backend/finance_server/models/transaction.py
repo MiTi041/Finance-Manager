@@ -43,3 +43,30 @@ class ManualTransactionCreateRequest(BaseModel):
     purpose: str | None = None
     category: int | None = None
     note: str | None = None
+
+
+class ManualTransactionUpdateRequest(BaseModel):
+    date: str = Field(min_length=1)
+    amount: float
+    recipient_name: str | None = None
+    recipient_iban: str | None = None
+    purpose: str | None = None
+    category: int | None = None
+    note: str | None = None
+
+
+class CsvImportRow(BaseModel):
+    date: str | None = None
+    amount: float | None = None
+    recipient_name: str | None = None
+    recipient_iban: str | None = None
+    purpose: str | None = None
+    category: int | None = None
+    note: str | None = None
+    transaction_id: str | None = None
+    status: str | None = None
+
+
+class CsvImportRequest(BaseModel):
+    account_iban: str = Field(min_length=1)
+    rows: list[CsvImportRow]

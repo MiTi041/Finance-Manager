@@ -51,7 +51,7 @@ from .subscription_identities import (
     update_subscription_identity,
 )
 from finance_server.core.schema import initialize_database
-from .transactions import add_refund_link, delete_refund_link, delete_transaction, delete_transactions_batch, fetch_latest_transaction, fetch_pending_transactions, fetch_transaction_balance, fetch_transactions, insert_transactions, migrate_transactions_to_account, replace_pending_transactions, row_to_dict, to_row_payload, update_transaction_note, update_transaction_purpose, update_transaction_splits
+from .transactions import add_refund_link, delete_refund_link, delete_transaction, delete_transactions_batch, existing_transaction_hashes, fetch_latest_transaction, fetch_pending_transactions, fetch_transaction_balance, fetch_transactions, insert_transactions, migrate_transactions_to_account, replace_pending_transactions, row_to_dict, to_row_payload, update_manual_transaction, update_transaction_note, update_transaction_purpose, update_transaction_splits
 
 __all__ = [
     "add_refund_link",
@@ -77,6 +77,7 @@ __all__ = [
     "delete_refund_link",
     "delete_zahlungspartner_record",
     "find_bank_account_by_iban",
+    "existing_transaction_hashes",
     "fetch_latest_transaction",
     "fetch_pending_transactions",
     "fetch_transaction_balance",
@@ -109,6 +110,7 @@ __all__ = [
     "update_zahlungspartner_record",
     "update_transaction_category",
     "update_transactions_category_batch",
+    "update_manual_transaction",
     "update_transaction_note",
     "update_transaction_purpose",
     "update_transaction_splits",

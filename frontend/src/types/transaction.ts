@@ -105,6 +105,8 @@ export interface TransactionDto {
   note: string | null;
   splits: TransactionSplit[] | null;
 
+  dummy_entry?: boolean;
+
   created_at: Date;
   bank_deleted: boolean;
   refund_links: RefundLinkDto[];
@@ -245,5 +247,6 @@ export interface Transaction {
     isKontotransfer: boolean;
 
     isPending?: boolean;
+    isManual: boolean;
   };
 }

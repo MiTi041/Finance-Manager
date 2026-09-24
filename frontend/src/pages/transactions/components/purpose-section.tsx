@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, Loader2, Pencil, RotateCcw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { CopyButton } from "@/components/copy-button";
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/utils/format";
 import { type Transaction } from "@/types/transaction";
@@ -118,9 +119,12 @@ export function PurposeSection({ transaction, purpose }: PurposeSectionProps) {
       ) : (
         <>
           {purposeText ? (
-            <p className="whitespace-normal break-words leading-relaxed text-foreground">
-              {purposeText}
-            </p>
+            <div className="flex items-start gap-2">
+              <p className="min-w-0 flex-1 whitespace-normal break-words leading-relaxed text-foreground">
+                {purposeText}
+              </p>
+              <CopyButton value={purposeText} className="mt-0.5" />
+            </div>
           ) : null}
 
           {additionalPurpose && additionalPurpose !== purposeText ? (
@@ -132,9 +136,12 @@ export function PurposeSection({ transaction, purpose }: PurposeSectionProps) {
                   Zusatz
                 </span>
               ) : null}
-              <p className="whitespace-normal break-words leading-relaxed text-foreground">
-                {additionalPurpose}
-              </p>
+              <div className="flex items-start gap-2">
+                <p className="min-w-0 flex-1 whitespace-normal break-words leading-relaxed text-foreground">
+                  {additionalPurpose}
+                </p>
+                <CopyButton value={additionalPurpose} className="mt-0.5" />
+              </div>
             </div>
           ) : null}
 

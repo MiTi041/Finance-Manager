@@ -3,6 +3,7 @@ export type SubscriptionFrequency = "MONTHLY" | "SEMI_ANNUAL" | "ANNUAL";
 export interface SubscriptionBudgetSub {
   effectiveAmount: number;
   frequency: SubscriptionFrequency;
+  direction?: "income" | "expense";
 }
 
 export interface SpendingSubscriptionState {
@@ -20,6 +21,7 @@ export function computeSpendingSubscriptionState(
   let load = 0;
   for (const sub of subscriptions) {
     if (sub.frequency !== "MONTHLY") continue;
+    if (sub.direction === "income") continue;
     load += sub.effectiveAmount;
   }
   load = round2(load);

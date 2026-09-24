@@ -28,6 +28,10 @@ def _insert_monthly_debits(conn, name: str, amount: float, last_offset_days: int
     conn.commit()
 
 
+def _insert_monthly_credits(conn, name: str, amount: float, last_offset_days: int, count: int = 4):
+    _insert_monthly_debits(conn, name, -amount, last_offset_days, count)
+
+
 def _insert_amounts(conn, name: str, amounts: list[float], last_offset_days: int):
     last = date.today() - timedelta(days=last_offset_days)
     for i, amount in enumerate(amounts):
@@ -118,6 +122,24 @@ class TestSubscriptionServiceInactiveAndDismissed:
         assert set(by_name) == {"Spotify", "Netflix", "Soundcloud"}
         assert by_name["Netflix"]["dismissed"] is True
         assert by_name["Soundcloud"]["ended"] is True
+
+
+class TestIncomeSubscriptions:
+    def test_recurring_income_detected_with_direction(self, monkeypatch, test_db):
+        _insert_monthly_credits(test_db, "Arbeitgeber", 2500.0, last_offset_days=5)
+        _patch_connections(monkeypatch, test_db)
+        subs = SubscriptionService().get_subscriptions()
+        salary = next(s for s in subs if s["name"] == "Arbeitgeber")
+        assert salary["direction"] == "income"
+        assert salary["amount"] == 2500.0
+
+    def test_income_and_expense_same_name_do_not_merge(self, monkeypatch, test_db):
+        _insert_monthly_debits(test_db, "Bank", 50.0, last_offset_days=5)
+        _insert_monthly_credits(test_db, "Bank", 50.0, last_offset_days=5)
+        _patch_connections(monkeypatch, test_db)
+        subs = [s for s in SubscriptionService().get_subscriptions() if s["name"] == "Bank"]
+        assert len(subs) == 2
+        assert {s["direction"] for s in subs} == {"income", "expense"}
 
 
 class TestEffectiveAmountUsesNewest:

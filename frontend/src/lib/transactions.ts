@@ -39,6 +39,21 @@ export async function createManualTransaction(
   return parseJsonResponse(response);
 }
 
+export type ManualTransactionUpdateInput = Omit<ManualTransactionInput, "account_iban">;
+
+export async function updateManualTransaction(
+  transactionId: number,
+  input: ManualTransactionUpdateInput,
+): Promise<void> {
+  const response = await fetch(`${getApiBaseUrl()}/db/transactions/${transactionId}/manual`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+
+  await parseJsonResponse(response);
+}
+
 export async function deleteTransaction(transactionId: number): Promise<void> {
   const response = await fetch(`${getApiBaseUrl()}/db/transactions/${transactionId}`, {
     method: "DELETE",
@@ -158,4 +173,59 @@ export async function updateTransactionPurpose(
   });
 
   await parseJsonResponse(response);
+}
+
+export type CsvSchemaInfo = { key: string; label: string; columns: string[] };
+
+export async function fetchCsvSchemas(): Promise<CsvSchemaInfo[]> {
+  const response = await fetch(`${getApiBaseUrl()}/db/transactions/csv-schemas`);
+  const payload = await parseJsonResponse(response);
+  return payload?.schemas ?? [];
+}
+
+export type CsvPreviewRow = {
+  date: string | null;
+  amount: number | null;
+  recipient_name: string | null;
+  recipient_iban: string | null;
+  purpose: string | null;
+  category: number | null;
+  category_text: string | null;
+  note: string | null;
+  transaction_id: string | null;
+  status: "ok" | "duplicate" | "invalid";
+  error: string | null;
+};
+
+export type CsvPreviewResult = {
+  rows: CsvPreviewRow[];
+  counts: { total: number; ok: number; duplicate: number; invalid: number };
+};
+
+export async function previewCsvImport(
+  accountIban: string,
+  schemaKey: string,
+  file: File,
+): Promise<CsvPreviewResult> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("schema_key", schemaKey);
+  form.append("account_iban", accountIban);
+  const response = await fetch(`${getApiBaseUrl()}/db/transactions/csv-preview`, {
+    method: "POST",
+    body: form,
+  });
+  return parseJsonResponse(response);
+}
+
+export async function importCsvTransactions(
+  accountIban: string,
+  rows: CsvPreviewRow[],
+): Promise<{ received: number; inserted: number; ignored: number }> {
+  const response = await fetch(`${getApiBaseUrl()}/db/transactions/csv-import`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ account_iban: accountIban, rows }),
+  });
+  return parseJsonResponse(response);
 }

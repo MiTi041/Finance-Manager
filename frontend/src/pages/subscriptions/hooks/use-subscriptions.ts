@@ -25,6 +25,7 @@ export interface Subscription {
   logoPadding?: boolean;
   isCompany?: boolean;
   amount: number;
+  direction: "income" | "expense";
   refundAmount: number;
   lastRefundAmount: number;
   effectiveAmount: number;

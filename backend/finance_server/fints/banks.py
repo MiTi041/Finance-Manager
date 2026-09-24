@@ -121,6 +121,12 @@ BANKS: tuple[BankDefinition, ...] = (
         bank_logo_dark="images/bank-logos/fnz_dark.png",
     ),
     BankDefinition(
+        key="c24",
+        name="C24",
+        bank_logo="images/bank-logos/c24.png",
+        bank_logo_dark="images/bank-logos/c24_dark.png",
+    ),
+    BankDefinition(
         key="manual",
         name="Manuelle Bankzugänge",
     ),

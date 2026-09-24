@@ -40,4 +40,15 @@ const none = computeSpendingSubscriptionState([], 50);
 assert.equal(none.load, 0);
 assert.equal(none.shortfall, 0);
 
+// income subscriptions never load the spending budget
+const withIncome = computeSpendingSubscriptionState(
+  [
+    { effectiveAmount: 10, frequency: "MONTHLY" },
+    { effectiveAmount: 900, frequency: "MONTHLY", direction: "income" },
+  ],
+  100,
+);
+assert.equal(withIncome.load, 10);
+assert.equal(withIncome.shortfall, 0);
+
 console.log("subscription-budget: all assertions passed");

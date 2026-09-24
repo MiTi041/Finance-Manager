@@ -1,8 +1,10 @@
 import { ArrowUpRight, Clock, Eye, EyeOff } from "lucide-react";
 import { BankLogo } from "@/components/bank-logo";
+import { CopyButton } from "@/components/copy-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { formatIban } from "@/lib/iban";
 import { SectionHeading } from "./section-heading";
 
 const euroFormatter = new Intl.NumberFormat("de-DE", {
@@ -83,6 +85,12 @@ export function AccountCards({
                         Hauptkonto
                       </Badge>
                     ) : null}
+                  </div>
+                  <div className="flex min-w-0 max-w-full items-center gap-1.5">
+                    <span className="max-w-full truncate font-mono text-[11px] text-muted-foreground tabular-nums">
+                      {formatIban(acc.accountIban)}
+                    </span>
+                    <CopyButton value={acc.accountIban} label="IBAN kopieren" />
                   </div>
                   <div className="flex items-baseline gap-2">
                     <span

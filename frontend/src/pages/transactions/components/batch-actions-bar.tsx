@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Tags, Trash2, X } from "lucide-react";
+import { Copy, Loader2, Tags, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { CategoryCombobox } from "@/components/category-combobox";
@@ -21,6 +21,9 @@ type BatchActionsBarProps = {
   onBatchCategorize: () => void;
   applyingBatchCategory: boolean;
   onBatchDelete: () => void;
+  onBatchDuplicate: () => void;
+  duplicatingBatch: boolean;
+  manualSelectedCount: number;
   onClearSelection: () => void;
 };
 
@@ -34,6 +37,9 @@ export function BatchActionsBar({
   onBatchCategorize,
   applyingBatchCategory,
   onBatchDelete,
+  onBatchDuplicate,
+  duplicatingBatch,
+  manualSelectedCount,
   onClearSelection,
 }: BatchActionsBarProps) {
   return (
@@ -84,6 +90,28 @@ export function BatchActionsBar({
           Zuweisen
         </Button>
       </div>
+      {manualSelectedCount > 0 ? (
+        <>
+          <span className="h-5 w-px bg-border/60" />
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            disabled={duplicatingBatch}
+            onClick={() => onBatchDuplicate()}
+            height={10}
+            className="text-xs"
+            title="Ausgewählte manuelle Transaktionen duplizieren"
+          >
+            {duplicatingBatch ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Copy className="size-3.5" />
+            )}
+            Duplizieren
+          </Button>
+        </>
+      ) : null}
       <span className="h-5 w-px bg-border/60" />
       <Button
         type="button"

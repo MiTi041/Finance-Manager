@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { BankLogo } from "@/components/bank-logo";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -44,7 +45,7 @@ const CARD_MIN_HEIGHT = 104;
 const CARD_MAX_HEIGHT = 152;
 const CORNER_RADIUS = 16;
 const INCOME_CHIP_SIZE = 56;
-const INCOME_CHIP_GAP = 64;
+const INCOME_CHIP_GAP = 80;
 
 const MIN_SCALE = 0.4;
 const MAX_SCALE = 2.4;
@@ -831,6 +832,7 @@ export function AccountFlowGraph({
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [layoutLoaded, setLayoutLoaded] = useState(false);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [positions, setPositions] = useState<Map<string, Point>>(() => {
     const accountNodes = graph.nodes.filter((node) => node.kind === "account");
     return new Map(
@@ -1463,7 +1465,7 @@ export function AccountFlowGraph({
                 className="size-8"
                 aria-label="Ansicht zurücksetzen"
                 title="Ansicht zurücksetzen"
-                onClick={resetView}
+                onClick={() => setResetConfirmOpen(true)}
               >
                 <RotateCcw className="size-4" />
               </Button>
@@ -1719,6 +1721,17 @@ export function AccountFlowGraph({
           </g>
         </svg>
       </div>
+      <ConfirmDialog
+        open={resetConfirmOpen}
+        title="Ansicht zurücksetzen?"
+        description="Die gespeicherte Anordnung der Konten wird auf die Standardpositionen zurückgesetzt. Das kann nicht rückgängig gemacht werden."
+        confirmLabel="Zurücksetzen"
+        onConfirm={() => {
+          resetView();
+          setResetConfirmOpen(false);
+        }}
+        onOpenChange={setResetConfirmOpen}
+      />
     </div>
   );
 }
