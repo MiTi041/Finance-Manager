@@ -4,6 +4,7 @@ export type SelectedBankOption = {
   accountIban: string;
   accountName: string;
   bankName: string;
+  bankKey?: string;
   bankLogo?: string;
   bankLogoDark?: string;
   username?: string;

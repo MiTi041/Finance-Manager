@@ -21,19 +21,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import {
   type CsvPreviewRow,
-  type CsvSchemaInfo,
-  fetchCsvSchemas,
   importCsvTransactions,
   previewCsvImport,
 } from "@/lib/transactions";
@@ -42,6 +32,7 @@ type CsvImportDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   accountIban: string;
+  bankKey?: string;
   onImported: () => void | Promise<void>;
 };
 
@@ -195,10 +186,9 @@ export function CsvImportDialog({
   open,
   onOpenChange,
   accountIban,
+  bankKey,
   onImported,
 }: CsvImportDialogProps) {
-  const [schemas, setSchemas] = useState<CsvSchemaInfo[]>([]);
-  const [schemaKey, setSchemaKey] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [rows, setRows] = useState<CsvPreviewRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -206,6 +196,10 @@ export function CsvImportDialog({
   const [busy, setBusy] = useState<Busy>(null);
   // Verwirft veraltete Antworten, wenn schnell Datei oder Format gewechselt wird
   const requestId = useRef(0);
+
+  // ponytail: Schema kommt aus dem Konto – C24 bekommt C24, alles andere generisch.
+  const schemaKey = bankKey === "c24" ? "c24" : "generic";
+  const schemaLabel = schemaKey === "c24" ? "C24" : "Generisch";
 
   useEffect(() => {
     if (!open) return;
@@ -215,12 +209,6 @@ export function CsvImportDialog({
     setError(null);
     setFilter("all");
     setBusy(null);
-    fetchCsvSchemas()
-      .then((list) => {
-        setSchemas(list);
-        setSchemaKey((current) => current || list[0]?.key || "");
-      })
-      .catch(() => toast.error("CSV-Formate konnten nicht geladen werden"));
   }, [open]);
 
   const runPreview = useCallback(
@@ -251,12 +239,7 @@ export function CsvImportDialog({
       return;
     }
     setFile(next);
-    if (schemaKey) void runPreview(next, schemaKey);
-  };
-
-  const handleSchemaChange = (key: string) => {
-    setSchemaKey(key);
-    if (file) void runPreview(file, key);
+    void runPreview(next, schemaKey);
   };
 
   const clearFile = () => {
@@ -315,28 +298,13 @@ export function CsvImportDialog({
               </DialogTitle>
               <DialogDescription className="truncate font-mono text-xs tracking-tight">
                 {accountIban}
+                <span className="text-muted-foreground/60"> · {schemaLabel}</span>
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
         <div className="grid gap-5">
-          <div className="grid gap-2">
-            <Label className="text-sm font-medium">Bankformat</Label>
-            <Select value={schemaKey} onValueChange={handleSchemaChange} disabled={importing}>
-              <SelectTrigger className="h-10 rounded-lg bg-background shadow-xs">
-                <SelectValue placeholder="Format wählen" />
-              </SelectTrigger>
-              <SelectContent>
-                {schemas.map((schema) => (
-                  <SelectItem key={schema.key} value={schema.key}>
-                    {schema.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
           {file ? (
             <div className="relative flex items-center gap-3 overflow-hidden rounded-xl border bg-gradient-to-b from-muted/40 to-muted/20 p-3">
               <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-background text-muted-foreground shadow-sm ring-1 ring-border">
@@ -531,7 +499,7 @@ export function CsvImportDialog({
           </Button>
           <Button
             type="button"
-            className="min-w-44 gap-2"
+            className="gap-2"
             onClick={handleImport}
             disabled={!counts || counts.ok === 0 || busy !== null}
           >

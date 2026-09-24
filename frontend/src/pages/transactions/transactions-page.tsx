@@ -951,6 +951,7 @@ export default function TransactionsPage() {
           open={csvImportOpen}
           onOpenChange={setCsvImportOpen}
           accountIban={selectedBank?.accountIban ?? ""}
+          bankKey={selectedBank?.bankKey}
           onImported={reload}
         />
       ) : null}

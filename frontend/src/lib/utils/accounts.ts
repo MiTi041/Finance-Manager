@@ -9,6 +9,7 @@ export type BankAccountOption = {
   accountName: string;
   holderName?: string;
   bankName: string;
+  bankKey?: string;
   bankLogo?: string;
   bankLogoDark?: string;
   logoPadding?: number;
@@ -50,6 +51,7 @@ export function buildAccountOptions(
               "Konto",
             holderName: account.holder_name || undefined,
             bankName: account.bank_name || bank.bank_name || bank.bank_key,
+            bankKey: account.bank_key || bank.bank_key,
             bankLogo: account.bank_logo || bank.bank_logo || undefined,
             bankLogoDark: account.bank_logo_dark || bank.bank_logo_dark || undefined,
             logoPadding: bank.logo_padding || undefined,
@@ -73,6 +75,7 @@ export function buildAccountOptions(
         accountIban: fallbackIban,
         accountName: bank.account_name || bank.bank_name || bank.username || "Konto",
         bankName: bank.bank_name || bank.bank_key,
+        bankKey: bank.bank_key,
         bankLogo: bank.bank_logo || undefined,
         bankLogoDark: bank.bank_logo_dark || undefined,
         logoPadding: bank.logo_padding || undefined,
@@ -125,6 +128,7 @@ export function buildLinkedAccountLookup(linkedAccounts: LinkedBankEntry[]) {
             entry.username ||
             "Konto",
           bankName: account.bank_name || entry.bank_name || entry.bank_key,
+          bankKey: account.bank_key || entry.bank_key,
           bankLogo: account.bank_logo || entry.bank_logo,
           bankLogoDark: account.bank_logo_dark || entry.bank_logo_dark,
           username: entry.username,
@@ -161,6 +165,7 @@ export function buildLinkedAccountLookup(linkedAccounts: LinkedBankEntry[]) {
             accountIban: normalizeIban(entry.account_iban),
             accountName: entry.account_name || entry.bank_name || entry.username || "Konto",
             bankName: entry.bank_name || entry.bank_key,
+            bankKey: entry.bank_key,
             bankLogo: entry.bank_logo,
             bankLogoDark: entry.bank_logo_dark,
             username: entry.username,
