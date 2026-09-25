@@ -5,15 +5,22 @@ from datetime import date, timedelta
 from finance_server.services.subscription_service import SubscriptionService
 
 
-def _insert_monthly_debits(conn, name: str, amount: float, last_offset_days: int, count: int = 4):
+def _insert_monthly_debits(
+    conn,
+    name: str,
+    amount: float,
+    last_offset_days: int,
+    count: int = 4,
+    kategorie: int | None = None,
+):
     last = date.today() - timedelta(days=last_offset_days)
     for i in range(count):
         d = last - timedelta(days=30 * i)
         conn.execute(
             "INSERT INTO umsaetze "
             "(account_iban, amount, purpose, date, entry_date, applicant_name, "
-            "recipient_name, transaction_hash) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "recipient_name, transaction_hash, kategorie) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 "iban",
                 -amount,
@@ -22,7 +29,8 @@ def _insert_monthly_debits(conn, name: str, amount: float, last_offset_days: int
                 d.isoformat(),
                 name,
                 "Zahlempfaenger",
-                f"{name}-{amount}-{i}",
+                f"{name}-{amount}-{last_offset_days}-{i}",
+                kategorie,
             ),
         )
     conn.commit()
@@ -196,3 +204,49 @@ class TestEffectiveAmountUsesNewest:
         subs = SubscriptionService().get_subscriptions()
         netflix = next(s for s in subs if s["name"] == "Netflix")
         assert netflix["effectiveAmount"] == 8.01
+
+
+class TestSubscriptionCategory:
+    def _insert_category(self, conn, name: str) -> int:
+        cursor = conn.execute(
+            "INSERT INTO kategorien (name, typ) VALUES (?, 'ausgabe')", (name,)
+        )
+        conn.commit()
+        return cursor.lastrowid
+
+    def test_category_from_modal_transaction_category(self, monkeypatch, test_db):
+        streaming = self._insert_category(test_db, "Streaming")
+        software = self._insert_category(test_db, "Software")
+        # 3x Streaming, 1x Software -> modal is Streaming
+        _insert_monthly_debits(test_db, "Spotify", 8.99, 5, count=3, kategorie=streaming)
+        _insert_monthly_debits(
+            test_db, "Spotify", 8.99, 95, count=1, kategorie=software
+        )
+        _patch_connections(monkeypatch, test_db)
+        subs = SubscriptionService().get_subscriptions()
+        spotify = next(s for s in subs if s["name"] == "Spotify")
+        assert spotify["categoryId"] == streaming
+        assert spotify["categoryName"] == "Streaming"
+
+    def test_no_category_is_none(self, monkeypatch, test_db):
+        _insert_monthly_debits(test_db, "Spotify", 8.99, 5)
+        _patch_connections(monkeypatch, test_db)
+        subs = SubscriptionService().get_subscriptions()
+        spotify = next(s for s in subs if s["name"] == "Spotify")
+        assert spotify["categoryId"] is None
+        assert spotify["categoryName"] is None
+        assert spotify["categoryTopName"] is None
+
+    def test_top_category_name_resolves_parent(self, monkeypatch, test_db):
+        parent = self._insert_category(test_db, "Medien")
+        child = test_db.execute(
+            "INSERT INTO kategorien (name, typ, parent_id) VALUES ('Streaming', 'ausgabe', ?)",
+            (parent,),
+        ).lastrowid
+        test_db.commit()
+        _insert_monthly_debits(test_db, "Spotify", 8.99, 5, kategorie=child)
+        _patch_connections(monkeypatch, test_db)
+        subs = SubscriptionService().get_subscriptions()
+        spotify = next(s for s in subs if s["name"] == "Spotify")
+        assert spotify["categoryName"] == "Streaming"
+        assert spotify["categoryTopName"] == "Medien"

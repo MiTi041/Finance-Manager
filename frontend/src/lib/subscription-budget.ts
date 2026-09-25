@@ -28,6 +28,16 @@ export function computeSpendingSubscriptionState(
   return { load, shortfall: round2(Math.max(0, load - target)) };
 }
 
+export function monthlyEquivalentAmount(sub: SubscriptionBudgetSub): number {
+  const divisor =
+    sub.frequency === "ANNUAL" ? 12 : sub.frequency === "SEMI_ANNUAL" ? 6 : 1;
+  return sub.effectiveAmount / divisor;
+}
+
+export function totalMonthlyAmount(subs: SubscriptionBudgetSub[]): number {
+  return round2(subs.reduce((sum, sub) => sum + monthlyEquivalentAmount(sub), 0));
+}
+
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }

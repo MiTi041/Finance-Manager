@@ -160,21 +160,32 @@ export function ZahlungspartnerSection({
               >
                 <div className="flex items-center gap-2 p-2 bg-muted/70 rounded-[12pt] hover:bg-muted/40 transition-colors justify-between border">
                   <div className="flex items-center gap-4">
-                    <BrandIcon
-                      src={partnerLogoSrc}
-                      alt={
-                        transaction.zahlungspartner.datenbankName ||
-                        transaction.zahlungspartner.name ||
-                        "Bank"
-                      }
-                      sizeClassName="size-12 shrink-0"
-                      backgroundClassName={logoBackgroundClass(
-                        transaction.zahlungspartner.logoBackground,
-                      )}
-                      kind={transaction.zahlungspartner.isCompany ? "company" : "person"}
-                      className="rounded-lg"
-                      imgNoPadding={!transaction.zahlungspartner.logoPadding}
-                    />
+                    {partnerBank ? (
+                      <BankLogo
+                        src={partnerBank.bankLogo || undefined}
+                        srcDark={partnerBank.bankLogoDark || undefined}
+                        alt={partnerBank.accountName || partnerBank.bankName || "Bank"}
+                        sizeClassName="size-12 shrink-0 p-1"
+                        className="rounded-lg"
+                        archived={partnerBank.archived}
+                      />
+                    ) : (
+                      <BrandIcon
+                        src={partnerLogoSrc}
+                        alt={
+                          transaction.zahlungspartner.datenbankName ||
+                          transaction.zahlungspartner.name ||
+                          "Bank"
+                        }
+                        sizeClassName="size-12 shrink-0"
+                        backgroundClassName={logoBackgroundClass(
+                          transaction.zahlungspartner.logoBackground,
+                        )}
+                        kind={transaction.zahlungspartner.isCompany ? "company" : "person"}
+                        className="rounded-lg"
+                        imgNoPadding={!transaction.zahlungspartner.logoPadding}
+                      />
+                    )}
 
                     {transaction.zahlungspartner.datenbankName ? (
                       <p className="font-mono text-xs text-muted-foreground">
@@ -187,6 +198,7 @@ export function ZahlungspartnerSection({
               </Link>
             </>
           ) : (
+            unknownIban &&
             !isEntgeltabschluss && (
               <>
                 <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">

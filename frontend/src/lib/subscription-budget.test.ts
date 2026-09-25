@@ -1,6 +1,8 @@
 import { strict as assert } from "node:assert";
 import {
   computeSpendingSubscriptionState,
+  monthlyEquivalentAmount,
+  totalMonthlyAmount,
   type SubscriptionBudgetSub,
 } from "./subscription-budget.ts";
 
@@ -50,5 +52,29 @@ const withIncome = computeSpendingSubscriptionState(
 );
 assert.equal(withIncome.load, 10);
 assert.equal(withIncome.shortfall, 0);
+
+// frequency normalized to a monthly equivalent
+assert.equal(monthlyEquivalentAmount({ effectiveAmount: 10, frequency: "MONTHLY" }), 10);
+assert.equal(monthlyEquivalentAmount({ effectiveAmount: 12, frequency: "SEMI_ANNUAL" }), 2);
+assert.equal(monthlyEquivalentAmount({ effectiveAmount: 120, frequency: "ANNUAL" }), 10);
+assert.equal(
+  monthlyEquivalentAmount({ effectiveAmount: 900, frequency: "MONTHLY", direction: "income" }),
+  900,
+);
+
+// sum of monthly equivalents across mixed frequencies
+const totalMixed = totalMonthlyAmount([
+  { effectiveAmount: 2.5, frequency: "MONTHLY" },
+  { effectiveAmount: 3.99, frequency: "MONTHLY" },
+]);
+assert.equal(totalMixed, 6.49);
+assert.equal(
+  totalMonthlyAmount([
+    { effectiveAmount: 10, frequency: "MONTHLY" },
+    { effectiveAmount: 120, frequency: "ANNUAL" },
+  ]),
+  20,
+);
+assert.equal(totalMonthlyAmount([]), 0);
 
 console.log("subscription-budget: all assertions passed");

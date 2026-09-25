@@ -1,5 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
-import { Archive, BarChart3, Check, FileText, Loader2, Pencil, Plus, RotateCcw, Trash2, Undo2, X } from "lucide-react";
+import {
+  Archive,
+  ArrowDown,
+  ArrowUp,
+  BarChart3,
+  Check,
+  FileText,
+  Loader2,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Trash2,
+  Undo2,
+  X,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { BrandIcon } from "@/components/bank-logo";
 import { HelpButton } from "@/components/ui/help-button";
@@ -14,6 +28,7 @@ import {
 import { getServerBaseUrl, logoBackgroundClass } from "@/lib/bank/zahlungspartner-logo";
 import { type ZahlungspartnerRecord } from "@/lib/zahlungspartner";
 import { formatAmount, formatDate } from "@/lib/utils/format";
+import { getPriceChange } from "@/lib/utils/price-change";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router-dom";
 
@@ -67,6 +82,11 @@ export function SubscriptionRow({
   const displayName = subscription.datenbankName || subscription.name || "-";
 
   const counterpartyKey = subscription._counterpartyName || subscription.name;
+
+  const priceChange = useMemo(
+    () => getPriceChange(subscription.direction, subscription.transactions),
+    [subscription.direction, subscription.transactions],
+  );
 
   const [selectedZahlungspartnerId, setSelectedZahlungspartnerId] = useState("");
   const [newZahlungspartnerName, setNewZahlungspartnerName] = useState("");
@@ -183,6 +203,11 @@ export function SubscriptionRow({
 
   const handleRowClick = isHidden ? undefined : onToggle;
 
+  const chip =
+    "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium leading-4 tabular-nums";
+
+  const isUrgent = daysUntil >= 0 && daysUntil <= 7;
+
   return (
     <div className="w-full">
       <div
@@ -192,10 +217,7 @@ export function SubscriptionRow({
         )}
       >
         <div
-          className={cn(
-            "flex w-full items-center gap-4 px-4 py-3",
-            !isHidden && "cursor-pointer",
-          )}
+          className={cn("flex w-full items-center gap-4 px-4 py-3", !isHidden && "cursor-pointer")}
           onClick={isHidden ? undefined : handleRowClick}
           role={isHidden ? undefined : "button"}
           tabIndex={isHidden ? -1 : 0}
@@ -220,6 +242,7 @@ export function SubscriptionRow({
           />
 
           <div className="min-w-0 flex-1">
+            {/* Titelzeile: Name + Frequenz */}
             <div className="flex items-center gap-2">
               <p
                 className={cn(
@@ -233,7 +256,7 @@ export function SubscriptionRow({
                 ) : null}
               </p>
               {isHidden ? (
-                <span className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                <span className={cn(chip, "bg-muted text-muted-foreground")}>
                   {isDismissed ? "Ausgeblendet" : "Nicht mehr aktiv"}
                 </span>
               ) : (
@@ -241,21 +264,23 @@ export function SubscriptionRow({
                   {subscription.frequencyLabel}
                 </Badge>
               )}
-              {paidInPeriod && !isHidden && (
-                <span className="inline-flex items-center gap-1 rounded-md bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium text-green-600 dark:text-green-400">
-                  <Check className="size-3" />
-                  {paidLabel}
-                </span>
-              )}
             </div>
+
+            {/* Statuszeile: Datum + genau ein Status-Chip (Priorität: fällig > bezahlt) */}
             <div className="mt-0.5 flex items-center gap-2">
               <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
                 Nächste: {new Intl.DateTimeFormat("de-DE").format(nextDate)}
               </span>
-              {daysUntil >= 0 && daysUntil <= 7 && !isHidden && (
-                <Badge variant="destructive" className="px-1.5 py-0 text-[10px] leading-4">
+              {!isHidden && isUrgent && (
+                <span className={cn(chip, "bg-destructive/10 text-destructive")}>
                   in {daysUntil} {daysUntil === 1 ? "Tag" : "Tagen"}
-                </Badge>
+                </span>
+              )}
+              {!isHidden && !isUrgent && paidInPeriod && (
+                <span className={cn(chip, "bg-green-500/10 text-green-600 dark:text-green-400")}>
+                  <Check className="size-3" />
+                  {paidLabel}
+                </span>
               )}
             </div>
           </div>
@@ -285,7 +310,9 @@ export function SubscriptionRow({
                 {hasRefunds && (
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400 tabular-nums">
+                      <span
+                        className={cn(chip, "bg-amber-500/10 text-amber-600 dark:text-amber-400")}
+                      >
                         <Undo2 className="size-3" />
                         {formatAmount(lastRefundAmount)}
                       </span>
@@ -293,13 +320,29 @@ export function SubscriptionRow({
                     <TooltipContent side="top">Rückerstattungsbetrag</TooltipContent>
                   </Tooltip>
                 )}
+                {priceChange !== null && (
+                  <span
+                    className={cn(
+                      chip,
+                      priceChange > 0
+                        ? "bg-orange-500/10 text-orange-600 dark:text-orange-400"
+                        : "bg-green-500/10 text-green-600 dark:text-green-400",
+                    )}
+                  >
+                    {priceChange > 0 ? (
+                      <ArrowUp className="size-3" />
+                    ) : (
+                      <ArrowDown className="size-3" />
+                    )}
+                    {formatAmount(Math.abs(priceChange))} {priceChange > 0 ? "erhöht" : "gesenkt"}
+                  </span>
+                )}
                 <span
                   className={cn(
                     "text-sm font-semibold tabular-nums",
                     subscription.direction === "income" ? "text-green-600" : "text-destructive",
                   )}
                 >
-                  {subscription.direction === "income" ? "+" : ""}
                   {formatAmount(subscription.effectiveAmount)}
                 </span>
               </>
@@ -405,9 +448,7 @@ export function SubscriptionRow({
                             src={logoUrl}
                             alt={subscription.datenbankName || subscription.name || "Bank"}
                             sizeClassName="size-12 shrink-0"
-                            backgroundClassName={
-                              logoBackgroundClass(subscription.logoBackground)
-                            }
+                            backgroundClassName={logoBackgroundClass(subscription.logoBackground)}
                             kind={subscription.isCompany ? "company" : "person"}
                             className="rounded-[5px]"
                             imgNoPadding={!subscription.logoPadding}

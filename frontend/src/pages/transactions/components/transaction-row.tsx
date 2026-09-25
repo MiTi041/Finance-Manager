@@ -186,6 +186,7 @@ export function TransactionRow({
         isSelected={isSelected}
         selectedBank={selectedBank}
         accountBank={accountBank}
+        partnerBank={partnerBank}
         isUnassigned={isUnassigned}
         isSubscriptionTransaction={isSubscriptionTransaction}
         subscriptionLink={subscriptionLink}

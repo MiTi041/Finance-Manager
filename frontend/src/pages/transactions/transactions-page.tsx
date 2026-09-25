@@ -57,7 +57,7 @@ import { useBatchActions } from "./hooks/use-batch-actions";
 import { buildCategoryOptions, type TransactionCategoryOption } from "@/lib/utils/categories";
 import { buildAccountOptions, buildLinkedAccountLookup } from "@/lib/utils/accounts";
 import { formatDate, formatAmount } from "@/lib/utils/format";
-import { normalizeIban } from "@/lib/iban";
+import { isUnknownIban, normalizeIban } from "@/lib/iban";
 import { isFullyRefunded } from "@/lib/utils/refunds";
 
 export default function TransactionsPage() {
@@ -237,6 +237,12 @@ export default function TransactionsPage() {
 
   const linkedAccountByIban = useMemo(() => buildLinkedAccountLookup(linkedBanks), [linkedBanks]);
 
+  const knownPartnerIbans = useMemo(() => {
+    const known = new Set(ibanToZahlungspartner.keys());
+    linkedAccountByIban.forEach((_account, iban) => known.add(iban));
+    return known;
+  }, [ibanToZahlungspartner, linkedAccountByIban]);
+
   const categoryOptions = useMemo(() => buildCategoryOptions(categories), [categories]);
 
   const categoryFilterOptions = useMemo<TransactionCategoryOption[]>(
@@ -258,7 +264,7 @@ export default function TransactionsPage() {
       const isUnassigned = kategorieId == null && !isFullyRefunded(transaction);
       const isIncome = transaction.betrag.wert >= 0;
       const partnerIban = normalizeIban(transaction.zahlungspartner.iban);
-      const isUnknownIban = partnerIban.length > 0 && !ibanToZahlungspartner.has(partnerIban);
+      const hasUnknownIban = isUnknownIban(partnerIban, knownPartnerIbans);
       const isBankDeleted = transaction.technisch.bankDeleted;
       const isMigrated = transaction.herkunft != null;
 
@@ -271,7 +277,7 @@ export default function TransactionsPage() {
       {
         let passes = true;
         if (showDeletedBanks && !isBankDeleted) passes = false;
-        if (onlyUnknownIban && !isUnknownIban) passes = false;
+        if (onlyUnknownIban && !hasUnknownIban) passes = false;
         if (hideMigrated && isMigrated) passes = false;
         if (passes && isUnassigned) unassigned++;
       }
@@ -281,13 +287,13 @@ export default function TransactionsPage() {
         if (showDeletedBanks && !isBankDeleted) passes = false;
         if (onlyUnassigned && !isUnassigned) passes = false;
         if (hideMigrated && isMigrated) passes = false;
-        if (passes && isUnknownIban) unknownIban++;
+        if (passes && hasUnknownIban) unknownIban++;
       }
 
       {
         let passes = true;
         if (onlyUnassigned && !isUnassigned) passes = false;
-        if (onlyUnknownIban && !isUnknownIban) passes = false;
+        if (onlyUnknownIban && !hasUnknownIban) passes = false;
         if (hideMigrated && isMigrated) passes = false;
         if (passes && isBankDeleted) deletedBank++;
       }
@@ -296,7 +302,7 @@ export default function TransactionsPage() {
         let passes = true;
         if (showDeletedBanks && !isBankDeleted) passes = false;
         if (onlyUnassigned && !isUnassigned) passes = false;
-        if (onlyUnknownIban && !isUnknownIban) passes = false;
+        if (onlyUnknownIban && !hasUnknownIban) passes = false;
         if (passes && isMigrated) migrated++;
       }
     }
@@ -304,7 +310,7 @@ export default function TransactionsPage() {
     return { unassigned, unknownIban, deletedBank, migrated };
   }, [
     transactions,
-    ibanToZahlungspartner,
+    knownPartnerIbans,
     amountFilter,
     categoryFilter,
     onlyUnassigned,
@@ -561,7 +567,7 @@ export default function TransactionsPage() {
       const isUnassigned = currentCategoryId == null && !isFullyRefunded(transaction);
       const isIncome = transaction.betrag.wert >= 0;
       const partnerIban = normalizeIban(transaction.zahlungspartner.iban);
-      const unknownIban = partnerIban.length > 0 && !ibanToZahlungspartner.has(partnerIban);
+      const unknownIban = isUnknownIban(partnerIban, knownPartnerIbans);
 
       if (showDeletedBanks && !transaction.technisch.bankDeleted) return false;
       if (hideMigrated && transaction.herkunft) return false;
@@ -578,7 +584,7 @@ export default function TransactionsPage() {
   }, [
     amountFilter,
     categoryFilter,
-    ibanToZahlungspartner,
+    knownPartnerIbans,
     onlyUnassigned,
     onlyUnknownIban,
     showDeletedBanks,
@@ -805,11 +811,12 @@ export default function TransactionsPage() {
           const splitHeight = transaction.technisch.splits
             ? transaction.technisch.splits.length * 52 + 80
             : 0;
-          const baseHeight =
-            normalizeIban(transaction.zahlungspartner.iban) &&
-            !ibanToZahlungspartner.has(normalizeIban(transaction.zahlungspartner.iban))
-              ? 604
-              : 468;
+          const baseHeight = isUnknownIban(
+            transaction.zahlungspartner.iban,
+            knownPartnerIbans,
+          )
+            ? 604
+            : 468;
           return baseHeight + splitHeight;
         }}
         renderItem={(transaction) => {
@@ -830,7 +837,7 @@ export default function TransactionsPage() {
           const predictedCategoryId = prediction?.categoryId ?? null;
           const predictedSimilarity = prediction?.similarity ?? null;
           const partnerIban = normalizeIban(transaction.zahlungspartner.iban);
-          const hasUnknownIban = partnerIban.length > 0 && !ibanToZahlungspartner.has(partnerIban);
+          const hasUnknownIban = isUnknownIban(partnerIban, knownPartnerIbans);
           const ownerId = ibanToZahlungspartner.get(partnerIban);
 
           return (

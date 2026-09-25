@@ -24,6 +24,9 @@ export interface Subscription {
   logoBackground?: LogoBackground;
   logoPadding?: boolean;
   isCompany?: boolean;
+  categoryId?: number | null;
+  categoryName?: string | null;
+  categoryTopName?: string | null;
   amount: number;
   direction: "income" | "expense";
   refundAmount: number;

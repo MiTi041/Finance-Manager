@@ -173,6 +173,24 @@ class SubscriptionService:
             for row in all_zahlungspartner_rows
         ]
 
+        # ── Preload category names ──
+        with get_connection() as connection:
+            category_rows = connection.execute(
+                "SELECT id, name, parent_id FROM kategorien"
+            ).fetchall()
+        category_names = {row["id"]: row["name"] for row in category_rows}
+        category_parents = {row["id"]: row["parent_id"] for row in category_rows}
+
+        def top_category_name(cat_id: int | None) -> str | None:
+            seen: set[int] = set()
+            while cat_id is not None and cat_id not in seen:
+                seen.add(cat_id)
+                parent_id = category_parents.get(cat_id)
+                if parent_id is None:
+                    return category_names.get(cat_id)
+                cat_id = parent_id
+            return category_names.get(cat_id) if cat_id is not None else None
+
         # ── Preload subscription identity overrides ──
         identity_overrides: dict[tuple[str, float], dict[str, Any]] = {}
         dismissed_keys: set[tuple[str, float]] = set()
@@ -450,6 +468,18 @@ class SubscriptionService:
                     else (zahlungspartner["id"] if zahlungspartner else None)
                 )
 
+                # ponytail: derive category from the modal umsaetze.kategorie of the
+                # cluster; splits are ignored, add if category-per-split grouping needed.
+                category_counts: dict[int, int] = {}
+                for t in txs_in_cluster:
+                    cat = t.get("kategorie")
+                    if cat is not None:
+                        category_counts[cat] = category_counts.get(cat, 0) + 1
+                category_id = (
+                    max(category_counts, key=category_counts.get) if category_counts else None
+                )
+                category_name = category_names.get(category_id) if category_id is not None else None
+
                 results.append(
                     {
                         "name": sub_name,
@@ -461,6 +491,9 @@ class SubscriptionService:
                         "logoBackground": sub_logo_background,
                         "logoPadding": sub_logo_padding,
                         "isCompany": sub_is_company,
+                        "categoryId": category_id,
+                        "categoryName": category_name,
+                        "categoryTopName": top_category_name(category_id),
                         "amount": sub_amount,
                         "direction": direction,
                         "frequency": frequency,

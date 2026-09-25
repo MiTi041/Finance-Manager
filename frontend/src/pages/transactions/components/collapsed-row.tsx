@@ -23,6 +23,7 @@ type CollapsedRowProps = {
   isSelected: boolean;
   selectedBank: SelectedBankOption | null;
   accountBank: SelectedBankOption | null;
+  partnerBank: SelectedBankOption | null;
   isUnassigned: boolean;
   isSubscriptionTransaction: boolean;
   subscriptionLink: { counterpartyName: string; amount: number } | null;
@@ -43,6 +44,7 @@ export function CollapsedRow({
   isSelected,
   selectedBank,
   accountBank,
+  partnerBank,
   isUnassigned,
   isSubscriptionTransaction,
   subscriptionLink,
@@ -141,6 +143,15 @@ export function CollapsedRow({
                 sizeClassName="size-12 shrink-0 p-1"
                 kind="company"
                 backgroundClassName="bg-muted/70"
+              />
+            ) : partnerBank ? (
+              <BankLogo
+                src={partnerBank.bankLogo || undefined}
+                srcDark={partnerBank.bankLogoDark || undefined}
+                alt={partnerBank.accountName || partnerBank.bankName || "Bank"}
+                sizeClassName="size-12 shrink-0 p-1"
+                backgroundClassName="bg-muted/70"
+                archived={partnerBank.archived}
               />
             ) : (
               <BrandIcon

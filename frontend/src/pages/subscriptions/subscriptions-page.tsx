@@ -25,6 +25,8 @@ import {
 } from "@/pages/subscriptions/hooks/use-subscriptions";
 import { createZahlungspartner, fetchZahlungspartnerReferenceData } from "@/lib/zahlungspartner";
 import type { ZahlungspartnerRecord } from "@/lib/zahlungspartner";
+import { totalMonthlyAmount } from "@/lib/subscription-budget";
+import { formatAmount } from "@/lib/utils/format";
 import { StatCard } from "@/pages/dashboard/components/stat-card";
 import { toast } from "sonner";
 
@@ -38,18 +40,15 @@ import {
 
 const FREQUENCY_ORDER: SubscriptionFrequency[] = ["MONTHLY", "SEMI_ANNUAL", "ANNUAL"];
 
-const FREQUENCY_TITLES: Record<SubscriptionFrequency, string> = {
-  MONTHLY: "Monatliche Abonnements",
-  SEMI_ANNUAL: "Halbjährliche Abonnements",
-  ANNUAL: "Jährliche Abonnements",
-};
-
 type SectionItem = {
   type: "section";
-  frequency: SubscriptionFrequency;
+  key: string;
   label: string;
   count: number;
+  monthlyTotal: number;
 };
+
+const UNCATEGORIZED_KEY = "__uncategorized__";
 
 type SubscriptionItem = {
   type: "subscription";
@@ -65,10 +64,17 @@ const FREQUENCY_OPTIONS: { value: "ALL" | SubscriptionFrequency; label: string }
   { value: "ANNUAL", label: "Jährlich" },
 ];
 
-type SortKey = "amount" | "nextDate";
-
 export default function SubscriptionsPage() {
-  const { loading, error, grouped, subscriptions, reload, removeSubscription, includeDismissed, setIncludeDismissed } = useSubscriptions();
+  const {
+    loading,
+    error,
+    grouped,
+    subscriptions,
+    reload,
+    removeSubscription,
+    includeDismissed,
+    setIncludeDismissed,
+  } = useSubscriptions();
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [zahlungspartnerList, setZahlungspartnerList] = useState<ZahlungspartnerRecord[]>([]);
   const [chartSubscriptions, setChartSubscriptions] = useState<Subscription[]>([]);
@@ -76,8 +82,6 @@ export default function SubscriptionsPage() {
   const [hasHiddenIdentities, setHasHiddenIdentities] = useState(false);
   const [hiddenLoaded, setHiddenLoaded] = useState(false);
   const [frequencyFilter, setFrequencyFilter] = useState<"ALL" | SubscriptionFrequency>("ALL");
-  const [sortKey, setSortKey] = useState<SortKey | null>("nextDate");
-  const [sortAsc, setSortAsc] = useState(true);
   const [searchParams, setSearchParams] = useSearchParams();
   const virtualListRef = useRef<VirtualizedListRef>(null);
   const highlightRef = useRef(false);
@@ -242,7 +246,9 @@ export default function SubscriptionsPage() {
       } catch (err) {
         await reload();
         toast.error(
-          err instanceof Error ? err.message : "Abonnement konnte nicht als beendet markiert werden",
+          err instanceof Error
+            ? err.message
+            : "Abonnement konnte nicht als beendet markiert werden",
         );
       }
     },
@@ -257,7 +263,9 @@ export default function SubscriptionsPage() {
         refreshChart();
         toast.success("Abonnement wieder aktiviert");
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Abonnement konnte nicht wieder aktiviert werden");
+        toast.error(
+          err instanceof Error ? err.message : "Abonnement konnte nicht wieder aktiviert werden",
+        );
       }
     },
     [reload, refreshChart],
@@ -290,7 +298,9 @@ export default function SubscriptionsPage() {
         refreshChart();
         toast.success("Abonnement wiederhergestellt");
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Abonnement konnte nicht wiederhergestellt werden");
+        toast.error(
+          err instanceof Error ? err.message : "Abonnement konnte nicht wiederhergestellt werden",
+        );
       }
     },
     [reload, refreshChart],
@@ -299,35 +309,45 @@ export default function SubscriptionsPage() {
   const flatItems = useMemo<ListItem[]>(() => {
     const items: ListItem[] = [];
 
-    for (const freq of FREQUENCY_ORDER) {
-      if (frequencyFilter !== "ALL" && freq !== frequencyFilter) continue;
-      const group = grouped[freq];
-      if (group.length === 0) continue;
+    const sortSubs = (subs: Subscription[]) =>
+      [...subs].sort((a, b) => new Date(a.nextDate).getTime() - new Date(b.nextDate).getTime());
 
-      const sorted = sortKey
-        ? [...group].sort((a, b) => {
-            let cmp: number;
-            if (sortKey === "amount") {
-              cmp = a.amount - b.amount;
-            } else {
-              cmp = new Date(a.nextDate).getTime() - new Date(b.nextDate).getTime();
-            }
-            return sortAsc ? cmp : -cmp;
-          })
-        : group;
+    const byCategory = new Map<string, Subscription[]>();
+    for (const sub of subscriptions) {
+      if (frequencyFilter !== "ALL" && sub.frequency !== frequencyFilter) continue;
+      const key = sub.categoryTopName ?? sub.categoryName ?? UNCATEGORIZED_KEY;
+      const list = byCategory.get(key);
+      if (list) list.push(sub);
+      else byCategory.set(key, [sub]);
+    }
+    const groups = [...byCategory.entries()]
+      .sort(([a], [b]) => {
+        if (a === UNCATEGORIZED_KEY) return 1;
+        if (b === UNCATEGORIZED_KEY) return -1;
+        return a.localeCompare(b, "de");
+      })
+      .map(([key, subs]) => ({
+        key,
+        label: key === UNCATEGORIZED_KEY ? "Ohne Kategorie" : key,
+        subs,
+      }));
 
+    for (const group of groups) {
+      if (group.subs.length === 0) continue;
+      const sorted = sortSubs(group.subs);
       items.push({
         type: "section",
-        frequency: freq,
-        label: FREQUENCY_TITLES[freq],
+        key: group.key,
+        label: group.label,
         count: sorted.length,
+        monthlyTotal: totalMonthlyAmount(sorted),
       });
       for (const sub of sorted) {
         items.push({ type: "subscription", data: sub });
       }
     }
     return items;
-  }, [grouped, frequencyFilter, sortKey, sortAsc]);
+  }, [subscriptions, frequencyFilter]);
 
   const subscriptionCount = useMemo(
     () => flatItems.filter((item) => item.type === "subscription").length,
@@ -346,18 +366,6 @@ export default function SubscriptionsPage() {
     if (expandedKey !== getSubKey(item.data)) return 88;
     const count = item.data.transactions?.length ?? 0;
     return 520 + count * 32;
-  };
-
-  const toggleSort = (key: SortKey) => {
-    if (sortKey !== key) {
-      setSortKey(key);
-      setSortAsc(true);
-    } else if (sortAsc) {
-      setSortAsc(false);
-    } else {
-      setSortKey(null);
-      setSortAsc(true);
-    }
   };
 
   const monthlyTotal = useMemo(
@@ -387,11 +395,13 @@ export default function SubscriptionsPage() {
       grouped.SEMI_ANNUAL.reduce(
         (sum, s) => sum + (s.direction === "income" ? 0 : s.effectiveAmount),
         0,
-      ) / 6 +
+      ) /
+        6 +
       grouped.ANNUAL.reduce(
         (sum, s) => sum + (s.direction === "income" ? 0 : s.effectiveAmount),
         0,
-      ) / 12,
+      ) /
+        12,
     [grouped],
   );
 
@@ -454,94 +464,98 @@ export default function SubscriptionsPage() {
       </div>
       <div className="h-[750px]">
         <VirtualizedList
-        ref={virtualListRef}
-        className="!h-full"
-        items={flatItems}
-        totalCount={subscriptionCount}
-        loading={loading}
-        getItemKey={(item) =>
-          item.type === "section" ? `section-${item.frequency}` : `sub-${getSubKey(item.data)}`
-        }
-        getItemHeight={getItemHeight}
-        emptyStateTitle="Keine Abonnements gefunden"
-        emptyStateText="Es wurden noch keine regelmäßigen Buchungen erkannt."
-        emptyStateIllustration={<Repeat />}
-        filterItems={
-          [
-            <Select
-              key="freq"
-              value={frequencyFilter}
-              onValueChange={(v) => setFrequencyFilter(v as "ALL" | SubscriptionFrequency)}
-            >
-              <SelectTrigger className="h-9 w-[170px]">
-                <SelectValue placeholder="Frequenz" />
-              </SelectTrigger>
-              <SelectContent>
-                {FREQUENCY_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>,
-            <Button
-              key="dismissed"
-              type="button"
-              variant="ghost"
-              aria-pressed={includeDismissed}
-              onClick={() => setIncludeDismissed(!includeDismissed)}
-              className={includeDismissed
-                ? "!bg-foreground !text-background hover:!bg-foreground/90 hover:!text-background"
-                : "!bg-muted !text-muted-foreground hover:!bg-muted/80 hover:!text-foreground"
-              }
-            >
-              <EyeOff className="size-4" />
-              Ausgeblendete anzeigen
-            </Button>,
-          ] as React.ReactNode[]
-        }
-        filterItem={(item, query) => {
-          if (item.type === "section") return true;
-          const q = query.trim().toLowerCase();
-          if (!q) return true;
-          return (
-            item.data.name.toLowerCase().includes(q) ||
-            item.data.recipientName.toLowerCase().includes(q)
-          );
-        }}
-        renderItem={(item: ListItem) => {
-          if (item.type === "section") {
-            return (
-              <div className="flex items-center gap-2 border-b border-muted/60 bg-muted/30 px-4 py-2">
-                <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/80">
-                  {item.label}
-                </h3>
-                <span className="text-[10px] text-muted-foreground/50">
-                  ({item.count} {item.count === 1 ? "Abonnement" : "Abonnements"})
-                </span>
-              </div>
-            );
+          ref={virtualListRef}
+          className="!h-full"
+          items={flatItems}
+          totalCount={subscriptionCount}
+          loading={loading}
+          getItemKey={(item) =>
+            item.type === "section" ? `section-${item.key}` : `sub-${getSubKey(item.data)}`
           }
-          return (
-            <SubscriptionRow
-              subscription={item.data}
-              isExpanded={expandedKey === getSubKey(item.data)}
-              onToggle={() => toggleRow(item.data)}
-              zahlungspartnerOptions={zahlungspartnerList}
-              onLinkIdentity={handleLinkIdentity}
-              onCreateAndLinkIdentity={handleCreateAndLinkIdentity}
-              onDismissIdentity={handleDismissIdentity}
-              onEndSubscription={handleEndSubscription}
-              onRemoveIdentity={handleRemoveIdentity}
-              onRestoreSubscription={handleRestoreSubscription}
-              onReactivateSubscription={handleReactivateSubscription}
-              onTransactionClick={(tx) =>
-                handleTransactionClick(tx.date, tx.amount < 0 ? "expense" : "income")
-              }
-            />
-          );
-        }}
-      />
+          getItemHeight={getItemHeight}
+          emptyStateTitle="Keine Abonnements gefunden"
+          emptyStateText="Es wurden noch keine regelmäßigen Buchungen erkannt."
+          emptyStateIllustration={<Repeat />}
+          filterItems={
+            [
+              <Select
+                key="freq"
+                value={frequencyFilter}
+                onValueChange={(v) => setFrequencyFilter(v as "ALL" | SubscriptionFrequency)}
+              >
+                <SelectTrigger className="h-9 w-[170px]">
+                  <SelectValue placeholder="Frequenz" />
+                </SelectTrigger>
+                <SelectContent>
+                  {FREQUENCY_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>,
+              <Button
+                key="dismissed"
+                type="button"
+                variant="ghost"
+                aria-pressed={includeDismissed}
+                onClick={() => setIncludeDismissed(!includeDismissed)}
+                className={
+                  includeDismissed
+                    ? "!bg-foreground !text-background hover:!bg-foreground/90 hover:!text-background"
+                    : "!bg-muted !text-muted-foreground hover:!bg-muted/80 hover:!text-foreground"
+                }
+              >
+                <EyeOff className="size-4" />
+                Ausgeblendete anzeigen
+              </Button>,
+            ] as React.ReactNode[]
+          }
+          filterItem={(item, query) => {
+            if (item.type === "section") return true;
+            const q = query.trim().toLowerCase();
+            if (!q) return true;
+            return (
+              item.data.name.toLowerCase().includes(q) ||
+              item.data.recipientName.toLowerCase().includes(q)
+            );
+          }}
+          renderItem={(item: ListItem) => {
+            if (item.type === "section") {
+              return (
+                <div className="flex items-center gap-2 border-b border-muted/60 bg-muted/30 px-4 py-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/80">
+                    {item.label}
+                  </h3>
+                  <span className="text-[10px] text-muted-foreground/50">
+                    ({item.count} {item.count === 1 ? "Abonnement" : "Abonnements"})
+                  </span>
+                  <span className="ml-auto text-[10px] tabular-nums text-muted-foreground/50">
+                    Ø {formatAmount(item.monthlyTotal)} mtl
+                  </span>
+                </div>
+              );
+            }
+            return (
+              <SubscriptionRow
+                subscription={item.data}
+                isExpanded={expandedKey === getSubKey(item.data)}
+                onToggle={() => toggleRow(item.data)}
+                zahlungspartnerOptions={zahlungspartnerList}
+                onLinkIdentity={handleLinkIdentity}
+                onCreateAndLinkIdentity={handleCreateAndLinkIdentity}
+                onDismissIdentity={handleDismissIdentity}
+                onEndSubscription={handleEndSubscription}
+                onRemoveIdentity={handleRemoveIdentity}
+                onRestoreSubscription={handleRestoreSubscription}
+                onReactivateSubscription={handleReactivateSubscription}
+                onTransactionClick={(tx) =>
+                  handleTransactionClick(tx.date, tx.amount < 0 ? "expense" : "income")
+                }
+              />
+            );
+          }}
+        />
       </div>
       {chartSubscriptions.length > 0 && (
         <SubscriptionMonthlyChart

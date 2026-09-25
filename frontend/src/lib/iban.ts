@@ -10,3 +10,11 @@ export function normalizeIban(value?: string | null): string {
   if (normalized.includes(":")) return normalized;
   return normalized.length >= 15 ? normalized : "";
 }
+
+export function isUnknownIban(
+  iban: string | null | undefined,
+  knownIbans: ReadonlySet<string>,
+): boolean {
+  const normalized = normalizeIban(iban);
+  return normalized.length > 0 && !knownIbans.has(normalized);
+}
