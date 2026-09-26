@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import {
   PiggyBank,
   ShieldCheck,
@@ -152,6 +153,7 @@ export function BucketSettingsDialog(props: Props) {
     [],
   );
   const bafoegConfigFetched = useRef(false);
+  const closedByOutside = useRef(false);
 
   useEffect(() => {
     if (bucket.bucket_type !== "bafoeg" || bafoegConfigFetched.current) return;
@@ -173,7 +175,7 @@ export function BucketSettingsDialog(props: Props) {
   }, [bucket.bucket_type]);
 
   const commitBafoegConfig = (nextPayoutDate = localBafoegPayoutDate) => {
-    if (!bafoegConfig) return;
+    if (!bafoegConfig) return false;
     const debt = parseFloat(localBafoegDebt.replace(",", ".")) || 0;
     const balance = parseFloat(localBafoegBalance.replace(",", ".")) || 0;
     const rate = parseFloat(localBafoegRate.replace(",", ".")) || 2.0;
@@ -192,7 +194,7 @@ export function BucketSettingsDialog(props: Props) {
       payout === bafoegConfig.payout_date &&
       JSON.stringify(zinsverlauf) === JSON.stringify(prevVerlauf)
     ) {
-      return;
+      return false;
     }
     updateBafoegConfig({
       total_debt: debt,
@@ -204,6 +206,7 @@ export function BucketSettingsDialog(props: Props) {
       setBafoegConfig(cfg);
       onRefresh?.();
     });
+    return true;
   };
 
   const addZins = () => {
@@ -237,7 +240,7 @@ export function BucketSettingsDialog(props: Props) {
       config.target_amount != null && config.target_amount > 0 ? config.target_amount : 0;
     const currentMonths =
       config.target_months != null && config.target_months > 0 ? config.target_months : 0;
-    if (amt === currentAmount && mos === currentMonths) return;
+    if (amt === currentAmount && mos === currentMonths) return false;
     if (amt > 0) {
       void onUpdateConfig(bucket.bucket_id, { target_amount: amt, target_months: null });
     } else if (mos > 0) {
@@ -245,30 +248,37 @@ export function BucketSettingsDialog(props: Props) {
     } else {
       void onUpdateConfig(bucket.bucket_id, { target_amount: null, target_months: null });
     }
+    return true;
   };
 
   const commitRecipient = () => {
     if (localRecipient === "none") {
       if (config.recipient_account_id != null || config.recipient_iban != null) {
         void onUpdateConfig(bucket.bucket_id, { recipient_account_id: null, recipient_iban: null });
+        return true;
       }
     } else if (localRecipient.startsWith("bank:")) {
       const iban = localRecipient.slice(5);
       if (config.recipient_iban !== iban) {
         void onUpdateConfig(bucket.bucket_id, { recipient_iban: iban, recipient_account_id: null });
+        return true;
       }
     } else if (localRecipient.startsWith("empf:")) {
       const id = Number(localRecipient.slice(5));
       if (config.recipient_account_id !== id) {
         void onUpdateConfig(bucket.bucket_id, { recipient_account_id: id, recipient_iban: null });
+        return true;
       }
     }
+    return false;
   };
 
   const commitSender = () => {
     if ((config.sender_iban ?? "") !== localSender) {
       void onUpdateConfig(bucket.bucket_id, { sender_iban: localSender || null });
+      return true;
     }
+    return false;
   };
 
   const estimatedNetIncome =
@@ -283,18 +293,25 @@ export function BucketSettingsDialog(props: Props) {
     setLocalPct(String(clamped));
     if (clamped !== config.percentage) {
       void onUpdateConfig(bucket.bucket_id, { percentage: clamped });
+      return true;
     }
+    return false;
   };
 
   return (
     <Dialog
       onOpenChange={(open) => {
         if (!open) {
-          commitPercentage(localPct);
-          commitGoal();
-          commitRecipient();
-          commitSender();
-          commitBafoegConfig();
+          const saved = [
+            commitPercentage(localPct),
+            commitGoal(),
+            commitRecipient(),
+            commitSender(),
+            commitBafoegConfig(),
+          ].some(Boolean);
+          // ponytail: commits are fire-and-forget, so the toast is optimistic
+          if (closedByOutside.current && saved) toast.success("Änderungen gespeichert");
+          closedByOutside.current = false;
         }
       }}
     >
@@ -315,7 +332,9 @@ export function BucketSettingsDialog(props: Props) {
           const target = event.target;
           if (target instanceof HTMLElement && target.closest("[data-searchable-select-content]")) {
             event.preventDefault();
+            return;
           }
+          closedByOutside.current = true;
         }}
       >
         <DialogTitle className="sr-only">{bucketLabels[bucket.bucket_type]}</DialogTitle>

@@ -45,6 +45,7 @@ import {
   type SavingsPlan,
 } from "@/lib/allocation";
 import { type RecipientAccountRecord } from "@/lib/recipient-accounts";
+import { normalizeIban } from "@/lib/iban";
 import { formatAmount } from "@/lib/utils/format";
 import {
   formatDateInputValue,
@@ -601,6 +602,12 @@ export function SavingsPlansCard({
   canTransferMap,
 }: Props) {
   const holidaySet = useMemo(() => new Set(holidays ?? []), [holidays]);
+  const recipientLogos = useRecipientAccountLogos();
+  const recipientAccountByIban = useMemo(() => {
+    const map = new Map<string, RecipientAccountRecord>();
+    for (const r of recipientAccounts) map.set(normalizeIban(r.iban), r);
+    return map;
+  }, [recipientAccounts]);
   const [createOpen, setCreateOpen] = useState(false);
   const [createValues, setCreateValues] = useState<FormValues>(emptyForm);
   const [creating, setCreating] = useState(false);
@@ -841,6 +848,12 @@ export function SavingsPlansCard({
             const savedTotalPct = Math.min(100, Math.max(0, (savedTotal / safeTarget) * 100));
             const isVisible = plan.is_visible;
             const hasPaymentData = !!(plan.target_recipient_name && plan.target_recipient_iban);
+            const recipientAccount = plan.target_recipient_iban
+              ? recipientAccountByIban.get(normalizeIban(plan.target_recipient_iban))
+              : undefined;
+            const recipientLogo = recipientAccount
+              ? recipientLogos.get(recipientAccount.id)
+              : undefined;
             const requiredRate = plan.required_monthly_rate;
             const topUpRaw = requiredRate != null ? Math.max(0, requiredRate - thisMonthAmount) : 0;
             const remainingToSave =
@@ -1079,16 +1092,24 @@ export function SavingsPlansCard({
 
                 {hasPaymentData ? (
                   <div className="flex items-center gap-3 rounded-md border bg-muted/50 px-3 py-2.5">
-                    <BankLogo
-                      src={plan.recipient_logo_url ?? undefined}
-                      alt={plan.target_recipient_name ?? ""}
-                      sizeClassName="size-9 shrink-0"
-                      backgroundClassName={logoBackgroundClass(
-                        plan.recipient_logo_background,
-                        "bg-muted",
-                      )}
-                      imgNoPadding={!plan.recipient_logo_padding}
-                    />
+                    {recipientLogo?.src ? (
+                      <RecipientLogo
+                        logo={recipientLogo}
+                        alt={plan.target_recipient_name ?? ""}
+                        sizeClassName="size-9 shrink-0"
+                      />
+                    ) : (
+                      <BankLogo
+                        src={plan.recipient_logo_url ?? undefined}
+                        alt={plan.target_recipient_name ?? ""}
+                        sizeClassName="size-9 shrink-0"
+                        backgroundClassName={logoBackgroundClass(
+                          plan.recipient_logo_background,
+                          "bg-muted",
+                        )}
+                        imgNoPadding={!plan.recipient_logo_padding}
+                      />
+                    )}
                     <div className="min-w-0 space-y-0.5">
                       <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                         Empfänger

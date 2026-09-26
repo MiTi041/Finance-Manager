@@ -29,6 +29,7 @@ import { formatAmount } from "@/lib/utils/format";
 import { EmptyState } from "@/components/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useSubscriptions } from "@/pages/subscriptions/hooks/use-subscriptions";
 import {
   computeSpendingSubscriptionState,
@@ -403,35 +404,50 @@ export default function AllocationPage() {
             <div>
               <div className="flex items-center gap-1">
                 <p className="text-muted-foreground">Netto</p>
-                <button
-                  type="button"
-                  aria-label="Details zur Netto-Berechnung anzeigen"
-                  onClick={() => setIncomeDialogOpen(true)}
-                  className="inline-flex size-4 cursor-pointer items-center justify-center rounded-full bg-muted/60 text-[10px] font-bold text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground/80 select-none"
-                >
-                  ?
-                </button>
-                <button
-                  type="button"
-                  aria-label="Netto-Einkommen manuell festlegen"
-                  onClick={() => setIncomeEditOpen(true)}
-                  className="inline-flex size-4 cursor-pointer items-center justify-center rounded-full bg-muted/60 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground/80"
-                >
-                  <Pencil className="size-2.5" />
-                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label="Details zur Netto-Berechnung anzeigen"
+                      onClick={() => setIncomeDialogOpen(true)}
+                      className="inline-flex size-4 cursor-pointer items-center justify-center rounded-full bg-muted/60 text-[10px] font-bold text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground/80 select-none"
+                    >
+                      ?
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">Details zur Netto-Berechnung anzeigen</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label="Netto-Einkommen manuell festlegen"
+                      onClick={() => setIncomeEditOpen(true)}
+                      className="inline-flex size-4 cursor-pointer items-center justify-center rounded-full bg-muted/60 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground/80"
+                    >
+                      <Pencil className="size-2.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">Netto-Einkommen manuell festlegen</TooltipContent>
+                </Tooltip>
                 {status.income_is_manual && (
                   <>
                     <span className="rounded-full bg-amber-500/15 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
                       Manuell
                     </span>
-                    <button
-                      type="button"
-                      aria-label="Auf automatische Erkennung zurücksetzen"
-                      onClick={() => void resetManualIncome()}
-                      className="inline-flex size-4 cursor-pointer items-center justify-center rounded-full bg-muted/60 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground/80"
-                    >
-                      <RotateCcw className="size-2.5" />
-                    </button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label="Auf automatische Erkennung zurücksetzen"
+                          onClick={() => void resetManualIncome()}
+                          className="inline-flex size-4 cursor-pointer items-center justify-center rounded-full bg-muted/60 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground/80"
+                        >
+                          <RotateCcw className="size-2.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">Auf automatische Erkennung zurücksetzen</TooltipContent>
+                    </Tooltip>
                   </>
                 )}
               </div>

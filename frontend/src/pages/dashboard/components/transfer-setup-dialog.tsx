@@ -116,10 +116,7 @@ export function TransferSetupDialog({
         value: `empf:${r.id}`,
         label: `${r.account_name} ${r.recipient_name} ${r.iban}`,
         leading: (
-          <RecipientLogo
-            logo={recipientLogos.get(r.id)}
-            alt={r.account_name || r.recipient_name}
-          />
+          <RecipientLogo logo={recipientLogos.get(r.id)} alt={r.account_name || r.recipient_name} />
         ),
       })),
       ...ownAccounts
@@ -153,9 +150,7 @@ export function TransferSetupDialog({
     }
     if (recipientValue.startsWith("bank:")) {
       const a = ownAccounts.find((x) => x.iban === recipientValue.slice(5));
-      return a
-        ? { name: a.name, iban: a.iban, bic: "", supportsInstant: a.supportsInstant }
-        : null;
+      return a ? { name: a.name, iban: a.iban, bic: "", supportsInstant: a.supportsInstant } : null;
     }
     return null;
   }, [recipientValue, recipientAccounts, ownAccounts]);
@@ -318,9 +313,7 @@ export function TransferSetupDialog({
                   <div className="flex w-full flex-col items-start gap-0">
                     <span className="flex items-center gap-1.5 truncate text-sm leading-tight">
                       {isBank ? (a as OwnAccount).name : (a as RecipientAccountRecord).account_name}
-                      {isBank && (a as OwnAccount).isPrimary ? (
-                        <PrimaryOptionBadge />
-                      ) : null}
+                      {isBank && (a as OwnAccount).isPrimary ? <PrimaryOptionBadge /> : null}
                     </span>
                     <span className="truncate font-mono text-[11px] text-muted-foreground leading-tight">
                       {formatIban(a.iban)}
@@ -338,9 +331,7 @@ export function TransferSetupDialog({
                   <div className="flex flex-col gap-0.5 py-1">
                     <span className="flex items-center gap-1.5 font-medium text-sm leading-tight">
                       {isBank ? (a as OwnAccount).name : (a as RecipientAccountRecord).account_name}
-                      {isBank && (a as OwnAccount).isPrimary ? (
-                        <PrimaryOptionBadge />
-                      ) : null}
+                      {isBank && (a as OwnAccount).isPrimary ? <PrimaryOptionBadge /> : null}
                     </span>
                     <span className="text-xs text-muted-foreground leading-tight">
                       {isBank ? "Eigenes Konto" : (a as RecipientAccountRecord).recipient_name}
@@ -452,7 +443,6 @@ export function TransferSetupDialog({
               onCheckedChange={setInstant}
             />
           )}
-
         </div>
 
         <div className="flex justify-end gap-2 pt-1">
@@ -462,8 +452,8 @@ export function TransferSetupDialog({
                 Abbrechen
               </Button>
               <Button type="button" onClick={handleReview} disabled={!canSubmit}>
-                <Search className="size-4" />
-                Überprüfen
+                <Lock className="size-4" />
+                Jetzt überweisen
               </Button>
             </>
           ) : (
