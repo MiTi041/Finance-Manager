@@ -74,7 +74,7 @@ export function PendingRow({ transaction, accountBank }: PendingRowProps) {
         </div>
       </div>
 
-      <span className="shrink-0 pr-11 text-sm font-semibold tabular-nums text-muted-foreground">
+      <span className="shrink-0 pr-11 text-sm font-semibold tabular-nums font-mono text-muted-foreground">
         {formatAmount(transaction.betrag.wert, transaction.betrag.waehrung)}
       </span>
     </div>

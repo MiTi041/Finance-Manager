@@ -22,7 +22,7 @@ from finance_server.db.savings import (
     get_bafoeg_breakdown, get_bafoeg_month_einzahlungen,
     sender_filter,
 )
-from finance_server.db.settings import get_setting, set_setting, get_holiday_state
+from finance_server.db.settings import get_setting, set_setting, delete_setting, get_holiday_state
 from finance_server.services.sync_logger import log_crud_event
 
 
@@ -90,7 +90,17 @@ class AllocationService:
             "bafoeg_enabled": get_setting("bafoeg_enabled") == "true",
             "holiday_state": get_holiday_state(),
             "holiday_states": [{"code": code, "name": name} for code, name in BUNDESLAENDER.items()],
+            "manual_net_income": self._manual_net_income(),
         }
+
+    def _manual_net_income(self) -> float | None:
+        raw = get_setting("manual_net_income")
+        if raw is None or raw == "":
+            return None
+        try:
+            return float(raw)
+        except ValueError:
+            return None
 
     def update_settings(self, payload: dict[str, Any]) -> dict[str, Any]:
         if "bafoeg_enabled" in payload:
@@ -120,6 +130,12 @@ class AllocationService:
             set_setting("holiday_state", state)
             # payout-day detection depends on the holiday calendar → drop current run
             db.delete_run(datetime.now().strftime("%Y-%m"))
+        if "manual_net_income" in payload:
+            value = payload["manual_net_income"]
+            if value is None:
+                delete_setting("manual_net_income")
+            else:
+                set_setting("manual_net_income", str(float(value)))
         return self.get_settings()
 
     def get_or_create_run(self, month: str, force: bool = False) -> dict[str, Any]:
@@ -143,7 +159,9 @@ class AllocationService:
             else:
                 return self._build_run_response(existing)
 
-        net_income = self._detect_income(month)
+        net_income = self._manual_net_income()
+        if net_income is None:
+            net_income = self._detect_income(month)
         run_id = db.create_run(month, net_income, net_income)
         all_buckets = db.list_buckets()
 
@@ -170,7 +188,8 @@ class AllocationService:
         effective = net_income - bafoeg_amount
         active = [b for b in all_buckets if b["is_active"] and b["bucket_type"] != "bafoeg"]
 
-        # Donation from effective (before savings plans)
+        # ponytail: donation is its own bucket but is paid out of the spending
+        # remainder — it must NOT shrink the invest/emergency base.
         donation_config = next((b for b in active if b["bucket_type"] == "donation"), None)
         donation_target = 0.0
         if donation_config:
@@ -179,7 +198,7 @@ class AllocationService:
 
         # Only visible plans reserve budget: hiding a plan frees its monthly
         # rate for the remaining buckets.
-        available_for_savings = effective - donation_target
+        available_for_savings = effective
         all_plans = sorted(list_plans(), key=lambda p: p["created_at"])
         enriched_plans = [self._enrich_savings_plan(p, month) for p in all_plans]
         # ponytail: count by rate due this month, not completion — a plan completed
@@ -188,9 +207,9 @@ class AllocationService:
             p["monthly_rate"] for p in enriched_plans if p["is_visible"] and p["monthly_rate"] > 0
         )
 
-        # Remaining after donation and savings plans → invest, emergency.
+        # Remaining after savings plans → invest, emergency.
         # Clamp so buckets never receive negative targets.
-        remaining = max(0.0, effective - donation_target - savings_total)
+        remaining = max(0.0, effective - savings_total)
         bucket_sum = 0.0
         for bucket in active:
             if bucket["bucket_type"] in ("donation", "spending"):
@@ -199,10 +218,12 @@ class AllocationService:
             bucket_sum += target
             db.create_run_bucket(run_id, bucket["id"], target)
 
-        # Spending = what's left of remaining
+        # Spending = what's left of remaining after invest/emergency and donation
         spending_config = next((b for b in active if b["bucket_type"] == "spending"), None)
         if spending_config:
-            db.create_run_bucket(run_id, spending_config["id"], round(remaining - bucket_sum, 2))
+            db.create_run_bucket(
+                run_id, spending_config["id"], round(remaining - bucket_sum - donation_target, 2)
+            )
 
         run = db.get_run_for_month(month)
         if preserved:
@@ -368,13 +389,12 @@ class AllocationService:
         bafoeg_bucket = next((b for b in buckets if b["bucket_type"] == "bafoeg"), None)
         if bafoeg_bucket:
             bafoeg_amount = bafoeg_bucket["target_amount"]
-        donation_bucket = next((b for b in buckets if b["bucket_type"] == "donation"), None)
-        donation_target = donation_bucket["target_amount"] if donation_bucket else 0.0
-        available_for_savings = round(run["net_income"] - bafoeg_amount - donation_target, 2)
+        available_for_savings = round(run["net_income"] - bafoeg_amount, 2)
 
         return {
             "month": run["month"],
             "net_income": run["net_income"],
+            "income_is_manual": self._manual_net_income() is not None,
             "income_sources": self._detect_income_breakdown(run["month"])["sources"],
             "total_allocated": allocated,
             "remaining": round(run["net_income"] - allocated, 2),

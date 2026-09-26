@@ -57,7 +57,7 @@ function BarTooltip({ active, payload, label }: any) {
           <span className="opacity-70">
             {p.dataKey === "einnahmen" ? "Einnahmen  " : "Ausgaben  "}
           </span>
-          {fmtShort(p.value)}
+          <span className="font-mono">{fmtShort(p.value)}</span>
         </p>
       ))}
     </div>
@@ -117,7 +117,7 @@ export function MonthlyChart({ transactions }: MonthlyChartProps) {
               axisLine={false}
             />
             <YAxis
-              tick={{ fill: MUTED, fontSize: 11 }}
+              tick={{ fill: MUTED, fontSize: 11, className: "font-mono" }}
               tickLine={false}
               axisLine={false}
               tickFormatter={fmtShort}

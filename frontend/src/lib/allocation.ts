@@ -89,6 +89,7 @@ export type IncomeSource = {
 export type AllocationStatus = {
   month: string;
   net_income: number;
+  income_is_manual?: boolean;
   income_sources?: IncomeSource[];
   total_allocated: number;
   remaining: number;
@@ -274,6 +275,7 @@ export type AllocationSettings = {
   bafoeg_enabled: boolean;
   holiday_state: string;
   holiday_states: { code: string; name: string }[];
+  manual_net_income: number | null;
 };
 
 export async function fetchAllocationSettings(): Promise<AllocationSettings> {

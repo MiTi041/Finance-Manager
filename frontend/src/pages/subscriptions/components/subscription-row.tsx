@@ -314,7 +314,7 @@ export function SubscriptionRow({
                         className={cn(chip, "bg-amber-500/10 text-amber-600 dark:text-amber-400")}
                       >
                         <Undo2 className="size-3" />
-                        {formatAmount(lastRefundAmount)}
+                        <span className="font-mono">{formatAmount(lastRefundAmount)}</span>
                       </span>
                     </TooltipTrigger>
                     <TooltipContent side="top">Rückerstattungsbetrag</TooltipContent>
@@ -334,12 +334,13 @@ export function SubscriptionRow({
                     ) : (
                       <ArrowDown className="size-3" />
                     )}
-                    {formatAmount(Math.abs(priceChange))} {priceChange > 0 ? "erhöht" : "gesenkt"}
+                    <span className="font-mono">{formatAmount(Math.abs(priceChange))}</span>{" "}
+                    {priceChange > 0 ? "erhöht" : "gesenkt"}
                   </span>
                 )}
                 <span
                   className={cn(
-                    "text-sm font-semibold tabular-nums",
+                    "font-mono text-sm font-semibold tabular-nums",
                     subscription.direction === "income" ? "text-green-600" : "text-destructive",
                   )}
                 >
@@ -621,7 +622,7 @@ export function SubscriptionRow({
                           ) : null}
                           <span
                             className={cn(
-                              "text-right text-xs tabular-nums",
+                              "font-mono text-right text-xs tabular-nums",
                               t.amount < 0 ? "font-medium text-destructive" : "text-green-600",
                             )}
                           >

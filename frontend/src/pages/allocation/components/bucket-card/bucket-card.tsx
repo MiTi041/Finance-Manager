@@ -6,6 +6,7 @@ import {
   Wallet,
   TriangleAlert,
   Repeat,
+  Calculator,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { HelpButton } from "@/components/ui/help-button";
@@ -13,7 +14,7 @@ import { BucketSettingsDialog } from "./bucket-settings-dialog";
 import { BucketProgress } from "./bucket-progress";
 import { BucketDetails } from "./bucket-details";
 import { BucketFooter } from "./bucket-footer";
-import type { AllocationBucket, AllocationRunBucket } from "@/lib/allocation";
+import type { AllocationBucket, AllocationRunBucket, AllocationStatus } from "@/lib/allocation";
 import { formatAmount } from "@/lib/utils/format";
 import type { SpendingSubscriptionState } from "@/lib/subscription-budget";
 
@@ -79,12 +80,90 @@ const bucketDescriptionsBafoeg: Record<string, (pct: number) => string> = {
   spending: () => "Budget nach Bafög, Sparplänen, Notgroschen, Investieren und Spenden.",
   emergency: (pct) => `${pct}% vom verbleibenden Netto nach Bafög und Sparplänen.`,
   invest: (pct) => `${pct}% vom verbleibenden Netto nach Bafög und Sparplänen.`,
-  donation: (pct) => `${pct}% vom Netto-Einkommen.`,
+  donation: (pct) => `${pct}% vom Netto nach Bafög.`,
 };
+
+function bucketCalculation(
+  bucket: AllocationRunBucket,
+  config: AllocationBucket,
+  status: AllocationStatus,
+): React.ReactNode {
+  const findTarget = (type: string) =>
+    status.buckets.find((b) => b.bucket_type === type)?.target_amount ?? 0;
+
+  const net = status.net_income;
+  const bafoeg = findTarget("bafoeg");
+  const donation = findTarget("donation");
+  const emergency = findTarget("emergency");
+  const invest = findTarget("invest");
+  const savings = status.savings_total;
+  const effective = Math.round((net - bafoeg) * 100) / 100;
+  const remaining = Math.max(0, Math.round((effective - savings) * 100) / 100);
+
+  const amount = (value: number) => <span className="font-mono">{formatAmount(value)}</span>;
+
+  switch (bucket.bucket_type) {
+    case "bafoeg":
+      return (
+        <div className="space-y-1">
+          <p>Wird zuerst vom Netto abgezogen. Die Rate wird automatisch berechnet.</p>
+          <div className="space-y-0.5">
+            <div>Monatsrate: {amount(bucket.target_amount)}</div>
+            {bucket.goal_amount != null && <div>Restschuld: {amount(bucket.goal_amount)}</div>}
+            {bucket.interest_rate != null && <div>Zinssatz: {bucket.interest_rate}%</div>}
+            {bucket.payout_date && <div>Zieldatum: {bucket.payout_date}</div>}
+          </div>
+        </div>
+      );
+    case "donation":
+      return (
+        <div className="space-y-0.5">
+          <div>Netto: {amount(net)}</div>
+          {bafoeg > 0 && (
+            <div>
+              − Bafög: {amount(bafoeg)} = {amount(effective)}
+            </div>
+          )}
+          <div>
+            × {config.percentage}% = <span className="font-semibold">{amount(donation)}</span>
+          </div>
+        </div>
+      );
+    case "emergency":
+    case "invest":
+      return (
+        <div className="space-y-0.5">
+          <div>Netto: {amount(net)}</div>
+          {bafoeg > 0 && <div>− Bafög: {amount(bafoeg)}</div>}
+          {savings > 0 && <div>− Sparpläne: {amount(savings)}</div>}
+          <div>= Rest: {amount(remaining)}</div>
+          <div>
+            × {config.percentage}% ={" "}
+            <span className="font-semibold">{amount(bucket.target_amount)}</span>
+          </div>
+        </div>
+      );
+    case "spending":
+      return (
+        <div className="space-y-0.5">
+          <div>Rest nach Sparplänen: {amount(remaining)}</div>
+          {emergency > 0 && <div>− Notgroschen: {amount(emergency)}</div>}
+          {invest > 0 && <div>− Investieren: {amount(invest)}</div>}
+          {donation > 0 && <div>− Spenden: {amount(donation)}</div>}
+          <div>
+            = <span className="font-semibold">{amount(bucket.target_amount)}</span>
+          </div>
+        </div>
+      );
+    default:
+      return null;
+  }
+}
 
 type Props = {
   bucket: AllocationRunBucket;
   config: AllocationBucket;
+  status: AllocationStatus;
   hasRecipient: boolean;
   hasSender: boolean;
   recipientAccounts: { id: number; account_name: string; recipient_name: string; iban: string }[];
@@ -102,6 +181,7 @@ type Props = {
 export function BucketCard({
   bucket,
   config,
+  status,
   hasRecipient,
   hasSender,
   recipientAccounts,
@@ -174,18 +254,23 @@ export function BucketCard({
               )}
             </CardTitle>
           </div>
-          {!isInfoOnly && (
-            <BucketSettingsDialog
-              bucket={bucket}
-              config={config}
-              accent={accent}
-              recipientAccounts={recipientAccounts}
-              bankAccounts={bankAccounts}
-              canTransferMap={canTransferMap}
-              onUpdateConfig={onUpdateConfig}
-              onRefresh={onRefresh}
-            />
-          )}
+          <div className="flex h-8 items-center gap-1">
+            <HelpButton label="Berechnung" icon={<Calculator className="size-3" />}>
+              {bucketCalculation(bucket, config, status)}
+            </HelpButton>
+            {!isInfoOnly && (
+              <BucketSettingsDialog
+                bucket={bucket}
+                config={config}
+                accent={accent}
+                recipientAccounts={recipientAccounts}
+                bankAccounts={bankAccounts}
+                canTransferMap={canTransferMap}
+                onUpdateConfig={onUpdateConfig}
+                onRefresh={onRefresh}
+              />
+            )}
+          </div>
         </div>
         <CardDescription className="break-words">
           {bucket.bucket_type === "bafoeg"
@@ -196,7 +281,7 @@ export function BucketCard({
         </CardDescription>
       </CardHeader>
 
-      <CardContent className="flex flex-1 flex-col space-y-3 text-sm">
+      <CardContent className="flex flex-1 flex-col gap-3 text-sm">
         <BucketProgress
           bucket={bucket}
           accent={accent}
@@ -257,16 +342,21 @@ export function BucketCard({
                 </div>
 
                 <div className="flex items-center justify-between text-muted-foreground">
-                  <span className="tabular-nums">
+                  <span className="font-mono tabular-nums">
                     {formatAmount(subscriptionState.load)} / {formatAmount(bucket.target_amount)}
                   </span>
-                  {!isOver && <span className="tabular-nums">{formatAmount(remaining)} übrig</span>}
+                  {!isOver && (
+                    <span className="tabular-nums">
+                      <span className="font-mono">{formatAmount(remaining)}</span> übrig
+                    </span>
+                  )}
                 </div>
 
                 {isOver && (
                   <p className="flex items-center gap-1 pt-0.5 font-medium text-red-500">
                     <TriangleAlert className="size-3.5 shrink-0" />
-                    Abos übersteigen das Budget um {formatAmount(subscriptionState.shortfall)}
+                    Abos übersteigen das Budget um{" "}
+                    <span className="font-mono">{formatAmount(subscriptionState.shortfall)}</span>
                   </p>
                 )}
                 {!isOver && isTight && (
@@ -291,22 +381,26 @@ export function BucketCard({
           incomeEventsLeft={bucket.future_income_events}
         />
 
-        <BucketFooter
-          bucketType={bucket.bucket_type}
-          isInfoOnly={isInfoOnly}
-          hasRecipient={hasRecipient}
-          hasSender={hasSender}
-          accent={accent}
-          transferring={transferring}
-          bucketRunId={bucket.id}
-          isPaid={isPaid}
-          topUp={topUp}
-          bafoegFullyPaid={bafoegFullyPaid}
-          bafoegTopUp={bafoegTopUp}
-          bafoegPaid={bafoegPaid}
-          bafoegOutstanding={bafoegOutstanding}
-          onTransfer={onTransfer}
-        />
+        {!isInfoOnly && (
+          <div className="mt-auto">
+            <BucketFooter
+              bucketType={bucket.bucket_type}
+              isInfoOnly={isInfoOnly}
+              hasRecipient={hasRecipient}
+              hasSender={hasSender}
+              accent={accent}
+              transferring={transferring}
+              bucketRunId={bucket.id}
+              isPaid={isPaid}
+              topUp={topUp}
+              bafoegFullyPaid={bafoegFullyPaid}
+              bafoegTopUp={bafoegTopUp}
+              bafoegPaid={bafoegPaid}
+              bafoegOutstanding={bafoegOutstanding}
+              onTransfer={onTransfer}
+            />
+          </div>
+        )}
       </CardContent>
     </Card>
   );

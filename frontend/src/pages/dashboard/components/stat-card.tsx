@@ -49,10 +49,12 @@ export function StatCard({
             value={value + (pendingValue ?? 0)}
             format={valueFormat}
             locales={valueLocales}
-            className="text-[26px] font-bold tabular-nums tracking-tight text-foreground"
+            className={`text-[26px] font-bold tabular-nums tracking-tight text-foreground ${
+              valueFormat?.style === "currency" ? "font-mono" : ""
+            }`}
           />
           {pendingValue != null && pendingValue !== 0 && (
-            <span className="text-sm font-medium tabular-nums text-muted-foreground/60">
+            <span className="font-mono text-sm font-medium tabular-nums text-muted-foreground/60">
               {euroFormatter.format(value)}
             </span>
           )}
@@ -61,7 +63,7 @@ export function StatCard({
           <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
             <Clock size={13} />
             <span>Vorgemerkt:</span>
-            <span className="tabular-nums">{euroFormatter.format(pendingValue)}</span>
+            <span className="font-mono tabular-nums">{euroFormatter.format(pendingValue)}</span>
           </div>
         )}
       </div>

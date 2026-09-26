@@ -106,10 +106,7 @@ export default function DashboardPage() {
       for (const acc of bank.accounts ?? []) {
         const iban = normalizeIban(acc.iban);
         if (!iban) continue;
-        map.set(
-          iban,
-          acc.can_transfer != null ? acc.can_transfer : bankCanTransfer === true,
-        );
+        map.set(iban, acc.can_transfer != null ? acc.can_transfer : bankCanTransfer === true);
       }
     }
     return map;
@@ -291,16 +288,21 @@ export default function DashboardPage() {
               pendingValue={selectedPending}
               action={
                 activeAccountIban !== "all" && senderAccounts.length > 0 ? (
-                  <Button
-                    className="w-full gap-1"
-                    onClick={() => {
-                      setPresetSenderIban(undefined);
-                      setSetupOpen(true);
-                    }}
-                  >
-                    <ArrowUpRight className="size-4" />
-                    Überweisen
-                  </Button>
+                  <div className="flex w-full flex-col gap-1">
+                    <Button
+                      className="w-full gap-1"
+                      onClick={() => {
+                        setPresetSenderIban(undefined);
+                        setSetupOpen(true);
+                      }}
+                    >
+                      <ArrowUpRight className="size-4" />
+                      Überweisen
+                    </Button>
+                    <p className="text-center text-[11px] leading-tight text-muted-foreground">
+                      Zahlung erst nach Bestätigung
+                    </p>
+                  </div>
                 ) : undefined
               }
             />

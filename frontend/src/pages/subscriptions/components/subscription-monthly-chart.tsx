@@ -148,11 +148,11 @@ function ChartTooltip({
       <p className="m-0 mb-2 text-xs text-muted-foreground">{data?.fullLabel ?? label}</p>
       <p className="m-0 mt-0.5 text-[13px] tabular-nums" style={{ color: RED }}>
         <span className="opacity-70">Ausgaben  </span>
-        {data ? fmtShort(data.ausgaben) : ""}
+        <span className="font-mono">{data ? fmtShort(data.ausgaben) : ""}</span>
       </p>
       <p className="m-0 mt-0.5 text-[13px] tabular-nums" style={{ color: GREEN }}>
         <span className="opacity-70">Einnahmen  </span>
-        {data ? fmtShort(data.einnahmen) : ""}
+        <span className="font-mono">{data ? fmtShort(data.einnahmen) : ""}</span>
       </p>
     </div>
   );
@@ -209,7 +209,7 @@ export function SubscriptionMonthlyChart({ data, highlight, containerRef }: Prop
               axisLine={false}
             />
             <YAxis
-              tick={{ fill: MUTED, fontSize: 11 }}
+              tick={{ fill: MUTED, fontSize: 11, className: "font-mono" }}
               tickLine={false}
               axisLine={false}
               tickFormatter={fmtShort}

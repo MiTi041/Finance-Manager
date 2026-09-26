@@ -181,7 +181,7 @@ export function PayoutSlider({
                 value={value}
                 format={{ style: "decimal", minimumFractionDigits: 2, maximumFractionDigits: 2 }}
                 locales="de-DE"
-                className="text-5xl font-bold leading-none text-foreground"
+                className="font-mono text-5xl font-bold leading-none text-foreground"
               />
             </button>
           )}
@@ -207,7 +207,7 @@ export function PayoutSlider({
                 setEditing(null);
                 setOutOfRange(false);
               }}
-              className={`w-28 pr-6 text-right text-sm font-semibold tabular-nums rounded-md border px-1.5 py-0.5 outline-none transition-colors ${
+              className={`w-28 pr-6 text-right font-mono text-sm font-semibold tabular-nums rounded-md border px-1.5 py-0.5 outline-none transition-colors ${
                 outOfRange
                   ? "border-orange-500 bg-orange-500/5 text-orange-600 focus:ring-2 focus:ring-orange-500/40"
                   : "border-input bg-muted/40 text-foreground hover:bg-muted/70 focus:border-ring focus:bg-background focus:ring-2 focus:ring-ring/40"
@@ -221,7 +221,7 @@ export function PayoutSlider({
       )}
       {outOfRange && (
         <p className="text-right text-[11px] font-medium text-orange-500">
-          Betrag muss zwischen 0 und {formatAmount(max)} liegen
+          Betrag muss zwischen 0 und <span className="font-mono">{formatAmount(max)}</span> liegen
         </p>
       )}
 
@@ -274,7 +274,7 @@ export function PayoutSlider({
                 active ? "opacity-100 scale-100" : "opacity-0 scale-90"
               }`}
             >
-              {formatAmount(value)}
+              <span className="font-mono">{formatAmount(value)}</span>
               <div className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-foreground" />
             </div>
           </div>

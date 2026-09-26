@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import { Loader2, Plus, Search, Trash2 } from "lucide-react";
 
-import { BrandIcon } from "@/components/bank-logo";
+import { BankLogo, BrandIcon } from "@/components/bank-logo";
+import { type SelectedBankOption } from "@/lib/bank/selected";
 import { logoBackgroundClass } from "@/lib/bank/zahlungspartner-logo";
+import { normalizeIban } from "@/lib/iban";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,13 +27,53 @@ import { formatAmount, formatDate } from "@/lib/utils/format";
 import { addRefundLink, deleteRefundLink } from "@/lib/transactions";
 import { type Transaction } from "@/types/transaction";
 
+function TransactionLogo({
+  transaction,
+  linkedAccountByIban,
+  sizeClassName,
+}: {
+  transaction: Transaction | undefined;
+  linkedAccountByIban: Map<string, SelectedBankOption>;
+  sizeClassName: string;
+}) {
+  const partnerBank = transaction
+    ? linkedAccountByIban.get(normalizeIban(transaction.zahlungspartner.iban))
+    : undefined;
+
+  if (partnerBank) {
+    return (
+      <BankLogo
+        src={partnerBank.bankLogo || undefined}
+        srcDark={partnerBank.bankLogoDark || undefined}
+        alt={partnerBank.accountName || partnerBank.bankName || "Bank"}
+        sizeClassName={sizeClassName}
+        backgroundClassName="bg-muted/70"
+        archived={partnerBank.archived}
+      />
+    );
+  }
+
+  return (
+    <BrandIcon
+      src={transaction?.zahlungspartner.logoUrl || undefined}
+      alt={transaction?.zahlungspartner.datenbankName || transaction?.zahlungspartner.name || "?"}
+      sizeClassName={sizeClassName}
+      backgroundClassName={logoBackgroundClass(transaction?.zahlungspartner.logoBackground)}
+      kind={transaction?.zahlungspartner.isCompany ? "company" : "person"}
+      imgNoPadding={!transaction?.zahlungspartner.logoPadding}
+    />
+  );
+}
+
 export function RefundSectionIncoming({
   transaction,
   allTransactions,
+  linkedAccountByIban,
   onRefundLinkChange,
 }: {
   transaction: Transaction;
   allTransactions: Transaction[];
+  linkedAccountByIban: Map<string, SelectedBankOption>;
   onRefundLinkChange: () => void;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -132,17 +174,10 @@ export function RefundSectionIncoming({
                 className="flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-muted/30 px-3 py-2.5"
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <BrandIcon
-                    src={expense?.zahlungspartner.logoUrl || undefined}
-                    alt={
-                      expense?.zahlungspartner.datenbankName || expense?.zahlungspartner.name || "?"
-                    }
+                  <TransactionLogo
+                    transaction={expense}
+                    linkedAccountByIban={linkedAccountByIban}
                     sizeClassName="size-8 shrink-0"
-                    backgroundClassName={logoBackgroundClass(
-                      expense?.zahlungspartner.logoBackground,
-                    )}
-                    kind={expense?.zahlungspartner.isCompany ? "company" : "person"}
-                    imgNoPadding={!expense?.zahlungspartner.logoPadding}
                   />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-foreground">
@@ -156,7 +191,7 @@ export function RefundSectionIncoming({
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="rounded-md bg-green-500/10 px-2 py-1 text-xs font-medium tabular-nums text-green-500">
+                  <span className="rounded-md bg-green-500/10 px-2 py-1 text-xs font-medium tabular-nums font-mono text-green-500">
                     +{formatAmount(link.amount, transaction.betrag.waehrung)}
                   </span>
                   <Tooltip>
@@ -225,15 +260,10 @@ export function RefundSectionIncoming({
                     onSelect={() => handlePick(t)}
                     className="cursor-pointer"
                   >
-                    <BrandIcon
-                      src={t.zahlungspartner.logoUrl || undefined}
-                      alt={t.zahlungspartner.datenbankName || t.zahlungspartner.name || "?"}
+                    <TransactionLogo
+                      transaction={t}
+                      linkedAccountByIban={linkedAccountByIban}
                       sizeClassName="size-9 shrink-0"
-                      backgroundClassName={logoBackgroundClass(
-                        t.zahlungspartner.logoBackground,
-                      )}
-                      kind={t.zahlungspartner.isCompany ? "company" : "person"}
-                      imgNoPadding={!t.zahlungspartner.logoPadding}
                     />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-foreground">
@@ -251,12 +281,16 @@ export function RefundSectionIncoming({
                       )}
                     </div>
                     <div className="shrink-0 text-right">
-                      <span className="block text-sm tabular-nums text-red-500">
+                      <span className="block text-sm tabular-nums font-mono text-red-500">
                         {formatAmount(Math.abs(t.betrag.wert), t.betrag.waehrung)}
                       </span>
                       {expenseRefundedFor(t) > 0.005 && (
                         <span className="block text-xs tabular-nums text-green-600">
-                          −{formatAmount(expenseRefundedFor(t), t.betrag.waehrung)} erstattet
+                          −
+                          <span className="font-mono">
+                            {formatAmount(expenseRefundedFor(t), t.betrag.waehrung)}
+                          </span>{" "}
+                          erstattet
                         </span>
                       )}
                     </div>
@@ -273,7 +307,10 @@ export function RefundSectionIncoming({
           <DialogHeader className="p-5 pb-2">
             <DialogTitle>Betrag der Rückerstattung</DialogTitle>
             <DialogDescription>
-              Wie viel der {formatAmount(transaction.betrag.wert, transaction.betrag.waehrung)}{" "}
+              Wie viel der{" "}
+              <span className="font-mono">
+                {formatAmount(transaction.betrag.wert, transaction.betrag.waehrung)}
+              </span>{" "}
               entfällt auf{" "}
               {selectedExpense?.zahlungspartner.datenbankName ||
                 selectedExpense?.zahlungspartner.name ||
@@ -294,10 +331,12 @@ export function RefundSectionIncoming({
             {selectedExpense && (
               <p className="text-xs text-muted-foreground">
                 Maximal{" "}
-                {formatAmount(
-                  Math.min(remaining, expenseRemainingFor(selectedExpense)),
-                  transaction.betrag.waehrung,
-                )}{" "}
+                <span className="font-mono">
+                  {formatAmount(
+                    Math.min(remaining, expenseRemainingFor(selectedExpense)),
+                    transaction.betrag.waehrung,
+                  )}
+                </span>{" "}
                 — Rest der Gutschrift und Rest der Ausgabe
               </p>
             )}
@@ -325,10 +364,12 @@ export function RefundSectionIncoming({
 export function RefundSectionOutgoing({
   transaction,
   allTransactions,
+  linkedAccountByIban,
   onRefundLinkChange,
 }: {
   transaction: Transaction;
   allTransactions: Transaction[];
+  linkedAccountByIban: Map<string, SelectedBankOption>;
   onRefundLinkChange: () => void;
 }) {
   const [unlinkingId, setUnlinkingId] = useState<number | null>(null);
@@ -368,19 +409,10 @@ export function RefundSectionOutgoing({
             className="flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-muted/30 px-3 py-2.5"
           >
             <div className="flex items-center gap-3 min-w-0">
-              <BrandIcon
-                src={link.income.zahlungspartner.logoUrl || undefined}
-                alt={
-                  link.income.zahlungspartner.datenbankName ||
-                  link.income.zahlungspartner.name ||
-                  "?"
-                }
+              <TransactionLogo
+                transaction={link.income}
+                linkedAccountByIban={linkedAccountByIban}
                 sizeClassName="size-8 shrink-0"
-                backgroundClassName={logoBackgroundClass(
-                  link.income.zahlungspartner.logoBackground,
-                )}
-                kind={link.income.zahlungspartner.isCompany ? "company" : "person"}
-                imgNoPadding={!link.income.zahlungspartner.logoPadding}
               />
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-foreground">
@@ -394,7 +426,7 @@ export function RefundSectionOutgoing({
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <span className="rounded-md bg-green-500/10 px-2 py-1 text-xs font-medium tabular-nums text-green-500">
+              <span className="rounded-md bg-green-500/10 px-2 py-1 text-xs font-medium tabular-nums font-mono text-green-500">
                 +{formatAmount(link.amount, transaction.betrag.waehrung)}
               </span>
               <Tooltip>

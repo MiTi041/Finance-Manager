@@ -319,7 +319,7 @@ function PlanFormFields({
             <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
               <div>
                 <p className="text-xs text-muted-foreground">Monatliche Rate</p>
-                <p className="font-medium tabular-nums">{formatAmount(computedRate)}</p>
+                <p className="font-mono font-medium tabular-nums">{formatAmount(computedRate)}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">
@@ -331,8 +331,11 @@ function PlanFormFields({
             {rateExceedsBudget && (
               <p className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
                 <TriangleAlert className="size-3 shrink-0" />
-                Max. Rate/Monat: {formatAmount(Math.max(0, availableForSavings - existingTotal))} -
-                überschreitet das verfügbare Budget.
+                Max. Rate/Monat:{" "}
+                <span className="font-mono">
+                  {formatAmount(Math.max(0, availableForSavings - existingTotal))}
+                </span>{" "}
+                - überschreitet das verfügbare Budget.
               </p>
             )}
           </div>
@@ -802,7 +805,7 @@ export function SavingsPlansCard({
         {savingsTotal > availableForSavings + 0.001 && (
           <div className="w-min whitespace-nowrap rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
             ⚠ Die Sparpläne übersteigen das verfügbare Budget um{" "}
-            {formatAmount(savingsTotal - availableForSavings)}
+            <span className="font-mono">{formatAmount(savingsTotal - availableForSavings)}</span>
           </div>
         )}
 
@@ -913,9 +916,9 @@ export function SavingsPlansCard({
                 <div className="space-y-3">
                   <div className="flex items-baseline justify-between">
                     <span className="text-sm font-semibold tabular-nums">
-                      {formatAmount(savedTotal)}{" "}
+                      <span className="font-mono">{formatAmount(savedTotal)}</span>{" "}
                       <span className="font-normal text-muted-foreground">
-                        von {formatAmount(effectiveTarget)}
+                        von <span className="font-mono">{formatAmount(effectiveTarget)}</span>
                       </span>
                     </span>
                     <span className="text-xs font-medium tabular-nums text-muted-foreground">
@@ -937,7 +940,8 @@ export function SavingsPlansCard({
                           />
                         </TooltipTrigger>
                         <TooltipContent side="top">
-                          {formatAmount(displayedBeforeMonth)} eingezahlt (vorherige Monate)
+                          <span className="font-mono">{formatAmount(displayedBeforeMonth)}</span>{" "}
+                          eingezahlt (vorherige Monate)
                         </TooltipContent>
                       </Tooltip>
                     )}
@@ -955,7 +959,8 @@ export function SavingsPlansCard({
                           />
                         </TooltipTrigger>
                         <TooltipContent side="top">
-                          {formatAmount(displayedMonth)} eingezahlt (diesen Monat)
+                          <span className="font-mono">{formatAmount(displayedMonth)}</span>{" "}
+                          eingezahlt (diesen Monat)
                         </TooltipContent>
                       </Tooltip>
                     )}
@@ -973,7 +978,8 @@ export function SavingsPlansCard({
                           />
                         </TooltipTrigger>
                         <TooltipContent side="top">
-                          {formatAmount(verschuldungTotal)} zurückgeholt (wird zurückgezahlt)
+                          <span className="font-mono">{formatAmount(verschuldungTotal)}</span>{" "}
+                          zurückgeholt (wird zurückgezahlt)
                         </TooltipContent>
                       </Tooltip>
                     )}
@@ -981,19 +987,28 @@ export function SavingsPlansCard({
                   </div>
                   {displayedMonth > 0 && (
                     <p className="text-xs text-muted-foreground">
-                      {formatAmount(displayedMonth)} diesen Monat eingezahlt
+                      <span className="font-mono">{formatAmount(displayedMonth)}</span> diesen Monat
+                      eingezahlt
                     </p>
                   )}
                   {verschuldungTotal > 0 && (
                     <p className="text-xs text-rose-600 dark:text-rose-400">
-                      {formatAmount(verschuldungTotal)} zurückgeholt, muss wieder eingezahlt werden
-                      {plan.month_verschuldung > 0 &&
-                        ` (${formatAmount(plan.month_verschuldung)} diesen Monat)`}
+                      <span className="font-mono">{formatAmount(verschuldungTotal)}</span>{" "}
+                      zurückgeholt, muss wieder eingezahlt werden
+                      {plan.month_verschuldung > 0 && (
+                        <>
+                          {" ("}
+                          <span className="font-mono">
+                            {formatAmount(plan.month_verschuldung)}
+                          </span>{" "}
+                          diesen Monat)
+                        </>
+                      )}
                     </p>
                   )}
                   {savedTotal < 0 && (
                     <p className="text-xs font-medium text-destructive">
-                      {formatAmount(-savedTotal)} Rückstand
+                      <span className="font-mono">{formatAmount(-savedTotal)}</span> Rückstand
                     </p>
                   )}
                 </div>
@@ -1010,7 +1025,11 @@ export function SavingsPlansCard({
                   <div>
                     <p className="text-muted-foreground">Nötige Rate/Monat</p>
                     <p className="font-medium">
-                      {requiredRate == null ? "offen" : formatAmount(requiredRate)}
+                      {requiredRate == null ? (
+                        "offen"
+                      ) : (
+                        <span className="font-mono">{formatAmount(requiredRate)}</span>
+                      )}
                     </p>
                   </div>
                 </div>
@@ -1043,12 +1062,14 @@ export function SavingsPlansCard({
                     </p>
                     <p className="flex items-baseline justify-between text-[11px]">
                       <span className="text-muted-foreground">Ursprüngliches Ziel</span>
-                      <span className="font-medium tabular-nums">{formatAmount(targetAmount)}</span>
+                      <span className="font-mono font-medium tabular-nums">
+                        {formatAmount(targetAmount)}
+                      </span>
                     </p>
                     {entnahmenTotal > 0 && (
                       <p className="flex items-baseline justify-between text-[11px]">
                         <span className="text-muted-foreground">Entnommen</span>
-                        <span className="font-medium tabular-nums">
+                        <span className="font-mono font-medium tabular-nums">
                           −{formatAmount(entnahmenTotal)}
                         </span>
                       </p>
@@ -1130,7 +1151,10 @@ export function SavingsPlansCard({
                         onClick={() => onTransfer(plan, sliderValues[plan.id] ?? topUp)}
                       >
                         <ArrowRightToLine className="size-4" />
-                        {`${formatAmount(sliderValues[plan.id] ?? topUp)} jetzt zahlen`}
+                        <span className="font-mono">
+                          {formatAmount(sliderValues[plan.id] ?? topUp)}
+                        </span>{" "}
+                        jetzt zahlen
                       </Button>
                     </>
                   ) : (
@@ -1142,7 +1166,7 @@ export function SavingsPlansCard({
                       onClick={() => onTransfer(plan)}
                     >
                       <ArrowRightToLine className="size-4" />
-                      {`${formatAmount(topUp)} jetzt zahlen`}
+                      <span className="font-mono">{formatAmount(topUp)}</span> jetzt zahlen
                     </Button>
                   )}
                 </div>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, ShieldCheck, Info, Zap, TriangleAlert } from "lucide-react";
+import { Loader2, Lock, ShieldCheck, Info, Zap, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -117,7 +117,7 @@ export function TransferDialog({
           }}
         >
           <div className="min-w-0 rounded-lg border bg-muted/30 p-4 text-center">
-            <p className="break-words text-2xl font-semibold tabular-nums">
+            <p className="break-words font-mono text-2xl font-semibold tabular-nums">
               {formatAmount(amount)}
             </p>
             <p className="mt-1 truncate text-sm text-muted-foreground">an {recipientName}</p>
@@ -200,7 +200,7 @@ export function TransferDialog({
                   <p className="mt-0.5">{tanChallenge}</p>
                   {tanDecoupled && (
                     <p className="mt-1">
-                      Bitte in deiner Banking-App freigeben und erneut auf „Abschicken" klicken.
+                      Bitte in deiner Banking-App freigeben und erneut auf „Jetzt überweisen" klicken.
                     </p>
                   )}
                 </div>
@@ -236,7 +236,16 @@ export function TransferDialog({
             </Button>
             <Button type="submit" disabled={sending}>
               {sending && <Loader2 className="size-4 animate-spin" />}
-              {sending ? "Wird gesendet…" : vopError ? "Trotzdem überweisen" : "Abschicken"}
+              {sending ? (
+                "Wird gesendet…"
+              ) : vopError ? (
+                "Trotzdem überweisen"
+              ) : (
+                <>
+                  <Lock className="size-4" />
+                  Jetzt überweisen
+                </>
+              )}
             </Button>
           </div>
         </form>

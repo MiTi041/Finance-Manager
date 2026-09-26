@@ -75,7 +75,7 @@ export function BucketProgress(props: Props) {
         <span className="text-muted-foreground">
           {isInfoOnly ? "Verfügbar" : bucket.bucket_type === "bafoeg" ? "Ziel" : "Monatsziel"}
         </span>
-        <span className="text-lg font-semibold tabular-nums">
+        <span className="font-mono text-lg font-semibold tabular-nums">
           {isInfoOnly && bucket.available != null
             ? formatAmount(bucket.available)
             : bucket.bucket_type === "bafoeg" && bucket.goal_amount != null
@@ -101,14 +101,17 @@ export function BucketProgress(props: Props) {
                   />
                 </TooltipTrigger>
                 <TooltipContent side="top">
-                  {formatAmount(bucket.spent)} ausgegeben (diesen Monat)
+                  <span className="font-mono">{formatAmount(bucket.spent)}</span> ausgegeben
+                  (diesen Monat)
                 </TooltipContent>
               </Tooltip>
             )}
             <div className="h-full flex-1 rounded-full bg-muted" />
           </div>
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>{formatAmount(bucket.spent)} ausgegeben</span>
+            <span>
+              <span className="font-mono">{formatAmount(bucket.spent)}</span> ausgegeben
+            </span>
             <span
               className={`font-medium tabular-nums ${bucket.spent > bucket.target_amount ? "text-red-500" : ""}`}
             >
@@ -129,7 +132,8 @@ export function BucketProgress(props: Props) {
                 />
               </TooltipTrigger>
               <TooltipContent side="top">
-                {formatAmount(bafoegBeforeMonth)} angespart (vorherige Monate)
+                <span className="font-mono">{formatAmount(bafoegBeforeMonth)}</span> angespart
+                (vorherige Monate)
               </TooltipContent>
             </Tooltip>
           )}
@@ -142,7 +146,8 @@ export function BucketProgress(props: Props) {
                 />
               </TooltipTrigger>
               <TooltipContent side="top">
-                {formatAmount(bafoegMonthEinz)} angespart (diesen Monat)
+                <span className="font-mono">{formatAmount(bafoegMonthEinz)}</span> angespart
+                (diesen Monat)
               </TooltipContent>
             </Tooltip>
           )}
@@ -157,7 +162,8 @@ export function BucketProgress(props: Props) {
                 />
               </TooltipTrigger>
               <TooltipContent side="top">
-                {formatAmount(bafoegOutstanding)} ausstehende Schulden
+                <span className="font-mono">{formatAmount(bafoegOutstanding)}</span> ausstehende
+                Schulden
               </TooltipContent>
             </Tooltip>
           )}
@@ -179,7 +185,8 @@ export function BucketProgress(props: Props) {
                 />
               </TooltipTrigger>
               <TooltipContent side="top">
-                {formatAmount(segBeforeMonthEinz)} eingezahlt (vorherige Monate)
+                <span className="font-mono">{formatAmount(segBeforeMonthEinz)}</span> eingezahlt
+                (vorherige Monate)
               </TooltipContent>
             </Tooltip>
           )}
@@ -197,7 +204,8 @@ export function BucketProgress(props: Props) {
                 />
               </TooltipTrigger>
               <TooltipContent side="top">
-                {formatAmount(segMonthEinz)} eingezahlt (diesen Monat)
+                <span className="font-mono">{formatAmount(segMonthEinz)}</span> eingezahlt
+                (diesen Monat)
               </TooltipContent>
             </Tooltip>
           )}
@@ -215,7 +223,7 @@ export function BucketProgress(props: Props) {
                 />
               </TooltipTrigger>
               <TooltipContent side="top">
-                {formatAmount(segTotalEntnahmen)} entnommen
+                <span className="font-mono">{formatAmount(segTotalEntnahmen)}</span> entnommen
               </TooltipContent>
             </Tooltip>
           )}
@@ -238,7 +246,8 @@ export function BucketProgress(props: Props) {
                   />
                 </TooltipTrigger>
                 <TooltipContent side="top">
-                  {formatAmount(bucket.transferred)} überwiesen (diesen Monat)
+                  <span className="font-mono">{formatAmount(bucket.transferred)}</span> überwiesen
+                  (diesen Monat)
                 </TooltipContent>
               </Tooltip>
             )}
@@ -269,7 +278,8 @@ export function BucketProgress(props: Props) {
           {hasBafoegGoal ? (
             <>
               <span>
-                {formatAmount(bafoegAvailable)} von {formatAmount(bucket.goal_amount!)}
+                <span className="font-mono">{formatAmount(bafoegAvailable)}</span> von{" "}
+                <span className="font-mono">{formatAmount(bucket.goal_amount!)}</span>
               </span>
               <span className="font-medium tabular-nums text-foreground">
                 {Math.round((bafoegAvailable / bafoegSafeTarget) * 100)}%
@@ -278,13 +288,15 @@ export function BucketProgress(props: Props) {
           ) : hasEmergencyGoal ? (
             <>
               <span>
-                {formatAmount(bucket.saved_total ?? 0)} von {formatAmount(bucket.goal_amount!)}{" "}
-                gespart
+                <span className="font-mono">{formatAmount(bucket.saved_total ?? 0)}</span> von{" "}
+                <span className="font-mono">{formatAmount(bucket.goal_amount!)}</span> gespart
               </span>
             </>
           ) : (
             <>
-              <span>{formatAmount(bucket.transferred)} überwiesen</span>
+              <span>
+                <span className="font-mono">{formatAmount(bucket.transferred)}</span> überwiesen
+              </span>
               <span className="font-medium tabular-nums text-foreground">{progress}%</span>
             </>
           )}
@@ -295,11 +307,11 @@ export function BucketProgress(props: Props) {
         <div className="flex items-center justify-between text-xs">
           <span className="text-muted-foreground">Netto investiert</span>
           <span className="font-medium tabular-nums">
-            {formatAmount(bucket.saved_total)}
+            <span className="font-mono">{formatAmount(bucket.saved_total)}</span>
             {bucket.saved_profit != null && bucket.saved_profit > 0 && (
               <span className="text-emerald-500">
                 {" "}
-                (Gewinn: {formatAmount(bucket.saved_profit)})
+                (Gewinn: <span className="font-mono">{formatAmount(bucket.saved_profit)}</span>)
               </span>
             )}
           </span>

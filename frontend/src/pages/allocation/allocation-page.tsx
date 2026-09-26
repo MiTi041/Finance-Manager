@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { CheckCircle2, ListTree, Loader2, TriangleAlert } from "lucide-react";
+import { CheckCircle2, ListTree, Loader2, Pencil, RotateCcw, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { useAllocation } from "./hooks/use-allocation";
 import { BucketCard } from "./components/bucket-card";
@@ -7,6 +7,7 @@ import { SavingsPlansCard } from "./components/savings-plans-card";
 import { TransferDialog } from "./components/transfer-dialog";
 import { DonationAnalysisDialog } from "./components/donation-analysis-dialog";
 import { IncomeBreakdownDialog } from "./components/income-breakdown-dialog";
+import { ManualIncomeDialog } from "./components/manual-income-dialog";
 import { MonthlyOverviewDialog } from "./components/monthly-overview-dialog";
 import {
   fetchRecipientAccountsReferenceData,
@@ -20,6 +21,7 @@ import {
 import {
   fetchAllocationSettings,
   updateAllocationBucket,
+  updateAllocationSettings,
   type AllocationBucket,
   type SavingsPlan,
 } from "@/lib/allocation";
@@ -110,6 +112,7 @@ export default function AllocationPage() {
   });
   const [donationAnalysisOpen, setDonationAnalysisOpen] = useState(false);
   const [incomeDialogOpen, setIncomeDialogOpen] = useState(false);
+  const [incomeEditOpen, setIncomeEditOpen] = useState(false);
   const [overviewOpen, setOverviewOpen] = useState(false);
   const [bafoegEnabled, setBafoegEnabled] = useState(false);
   const { subscriptions } = useSubscriptions();
@@ -327,6 +330,16 @@ export default function AllocationPage() {
     [load],
   );
 
+  const resetManualIncome = useCallback(async () => {
+    try {
+      await updateAllocationSettings({ manual_net_income: null });
+      await load();
+      toast.success("Automatische Erkennung wieder aktiv");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Zurücksetzen fehlgeschlagen");
+    }
+  }, [load]);
+
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -376,7 +389,13 @@ export default function AllocationPage() {
                   ? "Netto-Einkommen ist vollständig verteilt"
                   : diff < 0
                     ? `Mehr verteilt als Netto-Einkommen`
-                    : `Differenz von ${formatAmount(diff)} zum Netto-Einkommen`}
+                    : (
+                        <>
+                          Differenz von{" "}
+                          <span className="font-mono">{formatAmount(diff)}</span> zum
+                          Netto-Einkommen
+                        </>
+                      )}
               </p>
             </div>
           </div>
@@ -392,16 +411,39 @@ export default function AllocationPage() {
                 >
                   ?
                 </button>
+                <button
+                  type="button"
+                  aria-label="Netto-Einkommen manuell festlegen"
+                  onClick={() => setIncomeEditOpen(true)}
+                  className="inline-flex size-4 cursor-pointer items-center justify-center rounded-full bg-muted/60 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground/80"
+                >
+                  <Pencil className="size-2.5" />
+                </button>
+                {status.income_is_manual && (
+                  <>
+                    <span className="rounded-full bg-amber-500/15 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                      Manuell
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="Auf automatische Erkennung zurücksetzen"
+                      onClick={() => void resetManualIncome()}
+                      className="inline-flex size-4 cursor-pointer items-center justify-center rounded-full bg-muted/60 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground/80"
+                    >
+                      <RotateCcw className="size-2.5" />
+                    </button>
+                  </>
+                )}
               </div>
-              <p className="font-semibold tabular-nums">{formatAmount(status.net_income)}</p>
+              <p className="font-mono font-semibold tabular-nums">{formatAmount(status.net_income)}</p>
             </div>
             <div>
               <p className="text-muted-foreground">Verteilt</p>
-              <p className="font-semibold tabular-nums">{formatAmount(status.total_allocated)}</p>
+              <p className="font-mono font-semibold tabular-nums">{formatAmount(status.total_allocated)}</p>
             </div>
             <div>
               <p className="text-muted-foreground">Übrig</p>
-              <p className="font-semibold tabular-nums">{formatAmount(status.remaining)}</p>
+              <p className="font-mono font-semibold tabular-nums">{formatAmount(status.remaining)}</p>
             </div>
             <Button
               variant="outline"
@@ -444,6 +486,7 @@ export default function AllocationPage() {
                 key={bucket.id}
                 bucket={bucket}
                 config={config}
+                status={status}
                 hasRecipient={hasRecipient}
                 hasSender={hasSender}
                 recipientAccounts={recipientAccounts.map((r) => ({
@@ -504,6 +547,15 @@ export default function AllocationPage() {
         open={incomeDialogOpen}
         onOpenChange={setIncomeDialogOpen}
         sources={status.income_sources ?? []}
+        isManual={status.income_is_manual ?? false}
+      />
+
+      <ManualIncomeDialog
+        open={incomeEditOpen}
+        onOpenChange={setIncomeEditOpen}
+        currentValue={status.net_income}
+        isManual={status.income_is_manual ?? false}
+        onSaved={load}
       />
 
       <MonthlyOverviewDialog

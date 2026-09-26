@@ -67,13 +67,23 @@ export function BucketDetails(props: Props) {
           {hasBafoegGoal && (
             <>
               {bafoegOutstanding > 0 && (
-                <DetailRow label="Ausstehende Schulden" value={formatAmount(bafoegOutstanding)} tone="destructive" />
+                <DetailRow
+                  label="Ausstehende Schulden"
+                  value={<span className="font-mono">{formatAmount(bafoegOutstanding)}</span>}
+                  tone="destructive"
+                />
               )}
               {requiredMonthlyRate != null && requiredMonthlyRate > 0 && (
-                <DetailRow label="Nötige Rate/Monat (mit Zinsen)" value={formatAmount(requiredMonthlyRate)} />
+                <DetailRow
+                  label="Nötige Rate/Monat (mit Zinsen)"
+                  value={<span className="font-mono">{formatAmount(requiredMonthlyRate)}</span>}
+                />
               )}
               {monthEinzahlungen != null && (
-                <DetailRow label="Diesen Monat überwiesen" value={formatAmount(monthEinzahlungen)} />
+                <DetailRow
+                  label="Diesen Monat überwiesen"
+                  value={<span className="font-mono">{formatAmount(monthEinzahlungen)}</span>}
+                />
               )}
               {monthsLeft != null && monthsLeft > 0 && (
                 <DetailRow label="Noch nötig bei aktueller Rate" value={formatMonthsLeft(monthsLeft)} />

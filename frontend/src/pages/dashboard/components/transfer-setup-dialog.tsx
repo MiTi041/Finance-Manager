@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRightToLine, Info, TriangleAlert, Zap } from "lucide-react";
+import { ArrowLeft, Info, Lock, Search, TriangleAlert, Zap } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -90,6 +90,7 @@ export function TransferSetupDialog({
   const [purpose, setPurpose] = useState("");
   const [amount, setAmount] = useState(0);
   const [instant, setInstant] = useState(true);
+  const [step, setStep] = useState<"form" | "review">("form");
 
   useEffect(() => {
     if (!open) return;
@@ -102,6 +103,7 @@ export function TransferSetupDialog({
     setPurpose("");
     setAmount(0);
     setInstant(true);
+    setStep("form");
   }, [open]);
 
   const sender = senderAccount;
@@ -174,7 +176,12 @@ export function TransferSetupDialog({
     sender?.supportsInstant !== false && selectedRecipient?.supportsInstant !== false;
   const effectiveInstant = instant && instantAllowed;
 
-  const handleSubmit = () => {
+  const handleReview = () => {
+    if (!canSubmit) return;
+    setStep("review");
+  };
+
+  const handleConfirm = () => {
     if (!canSubmit || !sender) return;
     onConfirm({
       senderIban: sender.iban,
@@ -194,11 +201,64 @@ export function TransferSetupDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-md overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Überweisung</DialogTitle>
-          <DialogDescription>Wähle Empfänger, Verwendungszweck und Betrag.</DialogDescription>
+          <DialogTitle>{step === "review" ? "Überweisung prüfen" : "Überweisung"}</DialogTitle>
+          <DialogDescription>
+            {step === "review"
+              ? "Bitte prüfe die Angaben. Überwiesen wird erst mit dem letzten Klick."
+              : "Wähle Empfänger, Verwendungszweck und Betrag."}
+          </DialogDescription>
         </DialogHeader>
 
-        <div className="min-w-0 space-y-4">
+        {step === "review" && (
+          <div className="min-w-0 space-y-4">
+            <div className="min-w-0 rounded-lg border bg-muted/30 p-4 text-center">
+              <p className="break-words font-mono text-2xl font-semibold tabular-nums">
+                {formatAmount(amount)}
+              </p>
+              <p className="mt-1 truncate text-sm text-muted-foreground">an {recipientName}</p>
+            </div>
+
+            <div className="min-w-0 space-y-2 rounded-lg border p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="shrink-0 text-xs text-muted-foreground">Absenderkonto</span>
+                <span className="min-w-0 truncate text-sm font-medium">{sender?.name}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="shrink-0 text-xs text-muted-foreground">Empfänger</span>
+                <span className="min-w-0 truncate text-sm font-medium">{recipientName}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="shrink-0 text-xs text-muted-foreground">IBAN</span>
+                <span className="min-w-0 truncate font-mono text-sm">
+                  {formatIban(recipientIban)}
+                </span>
+              </div>
+              {purpose.trim() && (
+                <div className="flex items-start justify-between gap-2">
+                  <span className="shrink-0 text-xs text-muted-foreground">Verwendungszweck</span>
+                  <span className="min-w-0 whitespace-normal break-words text-right text-sm font-medium">
+                    {purpose.trim()}
+                  </span>
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-2">
+                <span className="shrink-0 text-xs text-muted-foreground">Übertragung</span>
+                <span className="text-sm font-medium">
+                  {effectiveInstant ? "Echtzeit (SEPA Instant)" : "Standard"}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+              <Info className="mt-0.5 size-4 shrink-0" />
+              <span>
+                Noch wird nichts überwiesen. Löse die Überweisung erst mit „Jetzt überweisen" aus.
+              </span>
+            </div>
+          </div>
+        )}
+
+        <div className={step === "review" ? "hidden" : "min-w-0 space-y-4"}>
           {sender ? (
             maxAmount > 0 ? (
               <div className="pt-4">
@@ -393,15 +453,31 @@ export function TransferSetupDialog({
             />
           )}
 
-          <div className="flex justify-end gap-2 pt-1">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Abbrechen
-            </Button>
-            <Button type="button" onClick={handleSubmit} disabled={!canSubmit}>
-              <ArrowRightToLine className="size-4" />
-              Jetzt bezahlen
-            </Button>
-          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-1">
+          {step === "form" ? (
+            <>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Abbrechen
+              </Button>
+              <Button type="button" onClick={handleReview} disabled={!canSubmit}>
+                <Search className="size-4" />
+                Überprüfen
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => setStep("form")}>
+                <ArrowLeft className="size-4" />
+                Zurück
+              </Button>
+              <Button type="button" onClick={handleConfirm} disabled={!canSubmit}>
+                <Lock className="size-4" />
+                Jetzt überweisen
+              </Button>
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>

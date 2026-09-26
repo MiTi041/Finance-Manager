@@ -104,7 +104,7 @@ export function SubscriptionMonthBreakdownDialog({
                     <div className="shrink-0 text-right">
                       <p
                         className={cn(
-                          "text-sm font-semibold tabular-nums",
+                          "font-mono text-sm font-semibold tabular-nums",
                           sub.direction === "income" ? "text-green-600" : "text-destructive",
                         )}
                       >
@@ -112,7 +112,7 @@ export function SubscriptionMonthBreakdownDialog({
                       </p>
                       {c.projectedAmount > 0 && (
                         <p className="text-[11px] tabular-nums text-orange-500/80">
-                          davon {formatAmount(c.projectedAmount)}
+                          davon <span className="font-mono">{formatAmount(c.projectedAmount)}</span>
                           {c.projectedDate ? ` · ${formatDate(c.projectedDate)}` : ""}
                         </p>
                       )}
@@ -134,7 +134,7 @@ export function SubscriptionMonthBreakdownDialog({
                 <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Ausgaben gesamt
                 </span>
-                <span className="text-lg font-bold tabular-nums text-destructive">
+                <span className="font-mono text-lg font-bold tabular-nums text-destructive">
                   {formatAmount(total)}
                 </span>
               </div>
@@ -143,7 +143,7 @@ export function SubscriptionMonthBreakdownDialog({
                   <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Einnahmen gesamt
                   </span>
-                  <span className="text-lg font-bold tabular-nums text-green-600">
+                  <span className="font-mono text-lg font-bold tabular-nums text-green-600">
                     {formatAmount(totalIncome)}
                   </span>
                 </div>

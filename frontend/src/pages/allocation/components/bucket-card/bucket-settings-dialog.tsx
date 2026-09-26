@@ -302,7 +302,7 @@ export function BucketSettingsDialog(props: Props) {
         <Button
           variant="ghost"
           size="icon"
-          className="size-7 -mr-2 -mt-1 text-muted-foreground hover:text-foreground"
+          className="size-7 -mr-2 text-muted-foreground hover:text-foreground"
           aria-label={`Einstellungen für ${bucketLabels[bucket.bucket_type]}`}
         >
           <Settings2 className="size-4" />
@@ -359,7 +359,7 @@ export function BucketSettingsDialog(props: Props) {
                         placeholder="0"
                         value={localBafoegBalance}
                         onChange={(e) => setLocalBafoegBalance(e.target.value)}
-                        className="h-8 w-28 bg-background pr-7 text-right text-sm tabular-nums"
+                        className="h-8 w-28 bg-background pr-7 text-right font-mono text-sm tabular-nums"
                       />
                       <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
                         €
@@ -381,7 +381,7 @@ export function BucketSettingsDialog(props: Props) {
                         placeholder="0"
                         value={localBafoegDebt}
                         onChange={(e) => setLocalBafoegDebt(e.target.value)}
-                        className="h-8 w-28 bg-background pr-7 text-right text-sm tabular-nums"
+                        className="h-8 w-28 bg-background pr-7 text-right font-mono text-sm tabular-nums"
                       />
                       <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
                         €
@@ -499,7 +499,7 @@ export function BucketSettingsDialog(props: Props) {
                     <Label className="text-sm font-normal text-foreground">
                       Bisher erhaltene Zinsen
                     </Label>
-                    <span className="text-sm tabular-nums">
+                    <span className="font-mono text-sm tabular-nums">
                       {formatAmount(bafoegConfig?.anlagezinsen ?? 0)}
                     </span>
                   </div>
@@ -525,7 +525,7 @@ export function BucketSettingsDialog(props: Props) {
                               addZins();
                             }
                           }}
-                          className="h-8 w-24 bg-background pr-7 text-right text-sm tabular-nums"
+                          className="h-8 w-24 bg-background pr-7 text-right font-mono text-sm tabular-nums"
                         />
                         <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
                           €
@@ -570,8 +570,9 @@ export function BucketSettingsDialog(props: Props) {
                   </div>
                   {previewAmount !== null && (
                     <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Info className="size-3 shrink-0" />≈ {formatAmount(previewAmount)} bei
-                      aktuellem Netto-Einkommen
+                      <Info className="size-3 shrink-0" />≈{" "}
+                      <span className="font-mono">{formatAmount(previewAmount)}</span> bei aktuellem
+                      Netto-Einkommen
                     </p>
                   )}
                 </div>
@@ -604,7 +605,7 @@ export function BucketSettingsDialog(props: Props) {
                               setLocalGoalAmount(e.target.value);
                               setLocalGoalMonths("");
                             }}
-                            className="h-8 w-28 bg-background pr-7 text-right text-sm tabular-nums"
+                            className="h-8 w-28 bg-background pr-7 text-right font-mono text-sm tabular-nums"
                           />
                           <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
                             €

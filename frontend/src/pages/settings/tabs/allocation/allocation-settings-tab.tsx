@@ -1,10 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
-import { PiggyBank, Loader2, CalendarDays } from "lucide-react";
+import {
+  PiggyBank,
+  Loader2,
+  CalendarDays,
+  ShieldCheck,
+  TrendingUp,
+  Heart,
+  Wallet,
+} from "lucide-react";
 import { ToggleRow } from "@/components/toggle-row";
 import {
   fetchAllocationSettings,
   updateAllocationSettings,
+  fetchAllocationBuckets,
+  updateAllocationBucket,
   type AllocationSettings,
+  type AllocationBucket,
 } from "@/lib/allocation";
 import {
   Select,
@@ -14,8 +25,23 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+const bucketLabels: Record<string, string> = {
+  emergency: "Notgroschen",
+  invest: "Investieren",
+  donation: "Spenden",
+  spending: "Restliche Ausgaben",
+};
+
+const bucketIcons: Record<string, React.ReactNode> = {
+  emergency: <ShieldCheck className="size-5" />,
+  invest: <TrendingUp className="size-5" />,
+  donation: <Heart className="size-5" />,
+  spending: <Wallet className="size-5" />,
+};
+
 export function AllocationSettingsTab() {
   const [settings, setSettings] = useState<AllocationSettings | null>(null);
+  const [buckets, setBuckets] = useState<AllocationBucket[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,8 +50,12 @@ export function AllocationSettingsTab() {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchAllocationSettings();
+      const [data, bucketList] = await Promise.all([
+        fetchAllocationSettings(),
+        fetchAllocationBuckets(),
+      ]);
       setSettings(data);
+      setBuckets(bucketList);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Einstellungen konnten nicht geladen werden");
     } finally {
@@ -50,6 +80,19 @@ export function AllocationSettingsTab() {
       setSaving(false);
     }
   }, [settings]);
+
+  const toggleBucket = useCallback(async (bucket: AllocationBucket) => {
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await updateAllocationBucket(bucket.id, { is_active: !bucket.is_active });
+      setBuckets((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Einstellung konnte nicht gespeichert werden");
+    } finally {
+      setSaving(false);
+    }
+  }, []);
 
   const changeHolidayState = useCallback(async (state: string) => {
     if (!settings || state === settings.holiday_state) return;
@@ -122,6 +165,23 @@ export function AllocationSettingsTab() {
         disabled={saving}
         pill={saving ? "..." : undefined}
       />
+
+      <div className="mt-6 flex flex-col gap-2">
+        {buckets
+          .filter((b) => b.bucket_type !== "bafoeg")
+          .sort((a, b) => a.sort_order - b.sort_order)
+          .map((bucket) => (
+            <ToggleRow
+              key={bucket.id}
+              title={bucketLabels[bucket.bucket_type] ?? bucket.bucket_type}
+              description="Bucket in der Allokation anzeigen."
+              icon={bucketIcons[bucket.bucket_type]}
+              checked={bucket.is_active}
+              onCheckedChange={() => void toggleBucket(bucket)}
+              disabled={saving}
+            />
+          ))}
+      </div>
     </div>
   );
 }

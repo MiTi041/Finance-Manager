@@ -41,6 +41,7 @@ class BafoegConfig(BaseModel):
 class AllocationSettingsUpdate(BaseModel):
     bafoeg_enabled: bool | None = None
     holiday_state: str | None = None
+    manual_net_income: float | None = Field(default=None, ge=0)
 
 
 class SavingsPlan(BaseModel):

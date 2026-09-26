@@ -47,7 +47,7 @@ export function MonthlyOverviewDialog({ open, onOpenChange, status }: Props) {
 
         <div className="flex items-baseline justify-between gap-3">
           <span className="text-sm text-muted-foreground">Einkommen</span>
-          <span className="text-base font-bold tabular-nums">
+          <span className="font-mono text-base font-bold tabular-nums">
             {formatAmount(income?.amount ?? 0)}
           </span>
         </div>
@@ -62,7 +62,7 @@ export function MonthlyOverviewDialog({ open, onOpenChange, status }: Props) {
                 />
               </TooltipTrigger>
               <TooltipContent side="top">
-                {row.label}: {formatAmount(row.amount)}
+                {row.label}: <span className="font-mono">{formatAmount(row.amount)}</span>
               </TooltipContent>
             </Tooltip>
           ))}
@@ -90,7 +90,7 @@ export function MonthlyOverviewDialog({ open, onOpenChange, status }: Props) {
                   {row.percent.toFixed(1)}%
                 </span>
                 <span
-                  className={row.kind === "leftover" ? "text-sm font-bold" : "text-sm font-medium"}
+                  className={`font-mono ${row.kind === "leftover" ? "text-sm font-bold" : "text-sm font-medium"}`}
                 >
                   {formatAmount(row.amount)}
                 </span>

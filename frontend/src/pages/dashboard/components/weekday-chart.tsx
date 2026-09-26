@@ -53,7 +53,7 @@ function WeekdayTooltip({ active, payload, label }: any) {
   return (
     <div className="rounded-xl border border-border bg-[#12122a] px-3.5 py-2.5 shadow-[0_16px_40px_rgba(0,0,0,0.5)]">
       <p className="m-0 text-xs text-muted-foreground">{label}</p>
-      <p className="m-0 mt-1 text-base font-semibold tabular-nums" style={{ color: RED }}>
+      <p className="m-0 mt-1 font-mono text-base font-semibold tabular-nums" style={{ color: RED }}>
         {fmt(payload[0].value as number)}
       </p>
     </div>
@@ -99,7 +99,7 @@ export function WeekdayChart({ transactions }: WeekdayChartProps) {
               axisLine={false}
             />
             <YAxis
-              tick={{ fill: MUTED, fontSize: 11 }}
+              tick={{ fill: MUTED, fontSize: 11, className: "font-mono" }}
               tickLine={false}
               axisLine={false}
               tickFormatter={fmtShort}

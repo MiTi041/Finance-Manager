@@ -88,7 +88,7 @@ export function AddBudgetDialog({
             onKeyDown={(e) => {
               if (e.key === "Enter" && canSubmit) submit();
             }}
-            className="pr-8"
+            className="pr-8 font-mono"
           />
           <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">
             €

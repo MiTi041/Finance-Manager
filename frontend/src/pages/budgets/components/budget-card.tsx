@@ -141,11 +141,11 @@ export function BudgetCard({
         {/* Betrag + Fortschritt */}
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <span className="text-2xl leading-none font-semibold tracking-tight tabular-nums">
+            <span className="text-2xl leading-none font-semibold tracking-tight tabular-nums font-mono">
               {formatAmount(budget.spent)}
             </span>
             <span className="text-sm text-muted-foreground tabular-nums">
-              von {formatAmount(budget.amount)}
+              von <span className="font-mono">{formatAmount(budget.amount)}</span>
             </span>
           </div>
 
@@ -159,9 +159,16 @@ export function BudgetCard({
           <div className="flex items-center justify-between gap-3 text-xs">
             <span className="text-muted-foreground tabular-nums">{percent}&nbsp;% genutzt</span>
             <span className={cn("font-semibold tabular-nums", tone.text)}>
-              {isOver
-                ? `${formatAmount(Math.abs(budget.remaining))} überzogen`
-                : `${formatAmount(budget.remaining)} übrig`}
+              {isOver ? (
+                <>
+                  <span className="font-mono">{formatAmount(Math.abs(budget.remaining))}</span>{" "}
+                  überzogen
+                </>
+              ) : (
+                <>
+                  <span className="font-mono">{formatAmount(budget.remaining)}</span> übrig
+                </>
+              )}
             </span>
           </div>
         </div>

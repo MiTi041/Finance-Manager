@@ -45,7 +45,7 @@ function SplitAmountInput({ value, onCommit }: { value: number; onCommit: (v: nu
         onCommit(Number.isFinite(n) ? n : 0);
       }}
       onKeyDown={(e) => e.stopPropagation()}
-      className="h-10 w-full rounded-md border border-input bg-background pl-6 pr-2 text-xs tabular-nums text-foreground shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      className="h-10 w-full rounded-md border border-input bg-background pl-6 pr-2 text-xs tabular-nums font-mono text-foreground shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
     />
   );
 }
@@ -164,9 +164,13 @@ export function CategorySection({
                 splits.splitOverTotal ? "text-destructive" : "text-green-600 dark:text-green-400",
               )}
             >
-              {formatAmount(splits.splitAbsSum, transaction.betrag.waehrung)}
+              <span className="font-mono">
+                {formatAmount(splits.splitAbsSum, transaction.betrag.waehrung)}
+              </span>
               <span className="text-muted-foreground/40 mx-0.5">/</span>
-              {formatAmount(splits.absTotal, transaction.betrag.waehrung)}
+              <span className="font-mono">
+                {formatAmount(splits.absTotal, transaction.betrag.waehrung)}
+              </span>
               {splits.splitOverTotal ? (
                 <span className="ml-1">✗</span>
               ) : (

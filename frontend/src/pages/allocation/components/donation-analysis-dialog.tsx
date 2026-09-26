@@ -82,7 +82,7 @@ export function DonationAnalysisDialog({ open, onOpenChange }: Props) {
                               {acc.count === 1 ? "Spende" : "Spenden"}
                             </p>
                           </div>
-                          <span className="shrink-0 text-sm font-semibold tabular-nums">
+                          <span className="shrink-0 font-mono text-sm font-semibold tabular-nums">
                             {formatAmount(acc.total)}
                           </span>
                         </div>
@@ -114,7 +114,7 @@ export function DonationAnalysisDialog({ open, onOpenChange }: Props) {
                             (nicht zuordenbar)
                           </p>
                         </div>
-                        <span className="shrink-0 text-sm font-semibold tabular-nums">
+                        <span className="shrink-0 font-mono text-sm font-semibold tabular-nums">
                           {formatAmount(data.others.total)}
                         </span>
                       </div>
@@ -138,7 +138,7 @@ export function DonationAnalysisDialog({ open, onOpenChange }: Props) {
                   <span className="text-xs uppercase tracking-wide text-muted-foreground/50">
                     Gesamt
                   </span>
-                  <span className="text-lg font-bold tabular-nums">
+                  <span className="font-mono text-lg font-bold tabular-nums">
                     {formatAmount(data.total)}
                   </span>
                 </div>

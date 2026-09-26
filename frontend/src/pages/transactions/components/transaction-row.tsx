@@ -35,6 +35,7 @@ type TransactionRowProps = {
   predictedSimilarity: number | null;
   accountBank: SelectedBankOption | null;
   partnerBank: SelectedBankOption | null;
+  linkedAccountByIban: Map<string, SelectedBankOption>;
   selectedBank: SelectedBankOption | null;
   categoryOptions: TransactionCategoryOption[];
   zahlungspartnerOptions: ZahlungspartnerRecord[];
@@ -71,6 +72,7 @@ export function TransactionRow({
   predictedSimilarity,
   accountBank,
   partnerBank,
+  linkedAccountByIban,
   selectedBank,
   categoryOptions,
   zahlungspartnerOptions,
@@ -265,12 +267,14 @@ export function TransactionRow({
                     <RefundSectionIncoming
                       transaction={transaction}
                       allTransactions={allTransactions}
+                      linkedAccountByIban={linkedAccountByIban}
                       onRefundLinkChange={onRefundLinkChange}
                     />
                   ) : (
                     <RefundSectionOutgoing
                       transaction={transaction}
                       allTransactions={allTransactions}
+                      linkedAccountByIban={linkedAccountByIban}
                       onRefundLinkChange={onRefundLinkChange}
                     />
                   )}

@@ -448,7 +448,7 @@ export function CsvImportDialog({
                       </td>
                       <td
                         className={cn(
-                          "whitespace-nowrap px-3 py-2 text-right tabular-nums",
+                          "whitespace-nowrap px-3 py-2 text-right tabular-nums font-mono",
                           row.status === "ok" && "font-medium",
                           row.status === "ok" &&
                             isNegative(row.amount) &&

@@ -531,7 +531,7 @@ export default function SubscriptionsPage() {
                     ({item.count} {item.count === 1 ? "Abonnement" : "Abonnements"})
                   </span>
                   <span className="ml-auto text-[10px] tabular-nums text-muted-foreground/50">
-                    Ø {formatAmount(item.monthlyTotal)} mtl
+                    Ø <span className="font-mono">{formatAmount(item.monthlyTotal)}</span> mtl
                   </span>
                 </div>
               );

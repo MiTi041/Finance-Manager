@@ -91,7 +91,7 @@ function ChartTooltip({ active, payload }: any) {
         {isOther ? <Ellipsis size={12} /> : entry.icon && <span>{entry.icon}</span>}
         {name}
       </p>
-      <p className="m-0 mt-1.5 text-[17px] font-semibold tabular-nums tracking-tight text-foreground">
+      <p className="m-0 mt-1.5 font-mono text-[17px] font-semibold tabular-nums tracking-tight text-foreground">
         {fmt(value)}
       </p>
     </div>
@@ -194,7 +194,7 @@ function LegendRow({
         )}
 
         <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">{name}</span>
-        <span className="shrink-0 text-[12px] font-semibold tabular-nums tracking-tight text-foreground">
+        <span className="shrink-0 font-mono text-[12px] font-semibold tabular-nums tracking-tight text-foreground">
           {fmt(value)}
         </span>
       </div>
@@ -319,7 +319,7 @@ function ChartCard({
           value={total}
           format={CURRENCY}
           locales="de-DE"
-          className="text-[20px] font-bold tabular-nums tracking-tight text-foreground"
+          className="font-mono text-[20px] font-bold tabular-nums tracking-tight text-foreground"
         />
       </div>
     </Card>

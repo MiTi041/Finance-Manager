@@ -55,10 +55,10 @@ import { CsvImportDialog } from "./components/csv-import-dialog";
 import { useSelection } from "./hooks/use-selection";
 import { useBatchActions } from "./hooks/use-batch-actions";
 import { buildCategoryOptions, type TransactionCategoryOption } from "@/lib/utils/categories";
+import { isTransactionUnassigned } from "@/lib/utils/assignment";
 import { buildAccountOptions, buildLinkedAccountLookup } from "@/lib/utils/accounts";
 import { formatDate, formatAmount } from "@/lib/utils/format";
 import { isUnknownIban, normalizeIban } from "@/lib/iban";
-import { isFullyRefunded } from "@/lib/utils/refunds";
 
 export default function TransactionsPage() {
   const { dateFilter, setDateFilter } = useGlobalDateFilter();
@@ -261,7 +261,7 @@ export default function TransactionsPage() {
 
     for (const transaction of transactions) {
       const kategorieId = transaction.technisch.kategorieId;
-      const isUnassigned = kategorieId == null && !isFullyRefunded(transaction);
+      const isUnassigned = isTransactionUnassigned(transaction);
       const isIncome = transaction.betrag.wert >= 0;
       const partnerIban = normalizeIban(transaction.zahlungspartner.iban);
       const hasUnknownIban = isUnknownIban(partnerIban, knownPartnerIbans);
@@ -564,7 +564,7 @@ export default function TransactionsPage() {
   const filteredTransactions = useMemo(() => {
     return transactions.filter((transaction) => {
       const currentCategoryId = transaction.technisch.kategorieId;
-      const isUnassigned = currentCategoryId == null && !isFullyRefunded(transaction);
+      const isUnassigned = isTransactionUnassigned(transaction);
       const isIncome = transaction.betrag.wert >= 0;
       const partnerIban = normalizeIban(transaction.zahlungspartner.iban);
       const unknownIban = isUnknownIban(partnerIban, knownPartnerIbans);
@@ -705,8 +705,10 @@ export default function TransactionsPage() {
           <ul className="mt-1.5 space-y-1 pl-6 text-xs text-destructive/90">
             {pendingOverrunAccounts.map((account) => (
               <li key={account.iban}>
-                {account.name}: {formatAmount(Math.abs(account.shortfall), "EUR")} über dem Guthaben
-                von {formatAmount(account.balance, "EUR")}
+                {account.name}:{" "}
+                <span className="font-mono">{formatAmount(Math.abs(account.shortfall), "EUR")}</span>{" "}
+                über dem Guthaben von{" "}
+                <span className="font-mono">{formatAmount(account.balance, "EUR")}</span>
               </li>
             ))}
           </ul>
@@ -847,12 +849,13 @@ export default function TransactionsPage() {
               isSubscriptionTransaction={subscriptionTransactionIds.has(transaction.id)}
               subscriptionOverride={subscriptionOverrideMap.get(transaction.id) ?? null}
               subscriptionLink={subscriptionLinkMap.get(transaction.id) ?? null}
-              isUnassigned={currentCategoryId == null && !isFullyRefunded(transaction)}
+              isUnassigned={isTransactionUnassigned(transaction)}
               isSelected={selectedTransactionIds.has(transaction.id)}
               predictedCategoryId={predictedCategoryId}
               predictedSimilarity={predictedSimilarity}
               accountBank={accountBank ?? null}
               partnerBank={partnerBank ?? null}
+              linkedAccountByIban={linkedAccountByIban}
               selectedBank={selectedBank}
               categoryOptions={categoryOptions}
               zahlungspartnerOptions={zahlungspartner}

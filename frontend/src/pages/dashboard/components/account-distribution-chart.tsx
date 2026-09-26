@@ -83,7 +83,7 @@ export function AccountDistributionChart({ accountBalances }: AccountDistributio
               />
             </TooltipTrigger>
             <TooltipContent side="top">
-              {entry.name}: {fmt(entry.value)}
+              {entry.name}: <span className="font-mono">{fmt(entry.value)}</span>
             </TooltipContent>
           </Tooltip>
         ))}
@@ -101,7 +101,7 @@ export function AccountDistributionChart({ accountBalances }: AccountDistributio
               value={entry.value}
               format={CURRENCY0}
               locales="de-DE"
-              className="shrink-0 tabular-nums text-foreground"
+              className="shrink-0 font-mono tabular-nums text-foreground"
             />
             <span className="w-10 shrink-0 whitespace-nowrap text-right tabular-nums text-muted-foreground/60">
               {total > 0 ? `${Math.round((entry.value / total) * 100)} %` : ""}

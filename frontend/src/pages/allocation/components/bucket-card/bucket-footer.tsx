@@ -26,9 +26,20 @@ type Props = {
 
 export function BucketFooter(props: Props) {
   const {
-    bucketType, isInfoOnly, hasRecipient, hasSender, accent, transferring, bucketRunId,
-    isPaid, topUp,
-    bafoegFullyPaid, bafoegTopUp, bafoegPaid, bafoegOutstanding, onTransfer,
+    bucketType,
+    isInfoOnly,
+    hasRecipient,
+    hasSender,
+    accent,
+    transferring,
+    bucketRunId,
+    isPaid,
+    topUp,
+    bafoegFullyPaid,
+    bafoegTopUp,
+    bafoegPaid,
+    bafoegOutstanding,
+    onTransfer,
   } = props;
   const [sliderValues, setSliderValues] = useState<Record<number, number>>({});
 
@@ -37,7 +48,9 @@ export function BucketFooter(props: Props) {
   if (bucketType === "bafoeg") {
     if (bafoegFullyPaid) {
       return (
-        <div className={`flex h-10 w-full items-center justify-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium ${accent.badge}`}>
+        <div
+          className={`flex h-10 w-full items-center justify-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium ${accent.badge}`}
+        >
           <CheckCircle2 className="size-4" />
           Schulden beglichen
         </div>
@@ -63,12 +76,30 @@ export function BucketFooter(props: Props) {
     return (
       <div className="flex flex-col gap-2">
         {bafoegTopUp > 0 ? (
-          <Button size="sm" className="w-full" disabled={transferring} onClick={() => onTransfer(bucketRunId)}>
-            <ArrowRightToLine className="size-4" />
-            {transferring ? "Wird gesendet…" : `${formatAmount(bafoegTopUp)} jetzt überweisen`}
-          </Button>
+          <div className="flex flex-col gap-1">
+            <Button
+              size="sm"
+              className="w-full"
+              disabled={transferring}
+              onClick={() => onTransfer(bucketRunId)}
+            >
+              <ArrowRightToLine className="size-4" />
+              {transferring ? (
+                "Wird gesendet…"
+              ) : (
+                <>
+                  <span className="font-mono">{formatAmount(bafoegTopUp)}</span> jetzt überweisen
+                </>
+              )}
+            </Button>
+            <p className="text-center text-[11px] leading-tight text-muted-foreground">
+              Zahlung erst nach Bestätigung
+            </p>
+          </div>
         ) : bafoegPaid && !bafoegFullyPaid ? (
-          <div className={`flex h-10 w-full items-center justify-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium ${accent.badge}`}>
+          <div
+            className={`flex h-10 w-full items-center justify-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium ${accent.badge}`}
+          >
             <CheckCircle2 className="size-4" />
             Monatsziel erreicht
           </div>
@@ -78,7 +109,8 @@ export function BucketFooter(props: Props) {
             <div className="flex items-center gap-1.5">
               <span className="text-xs font-semibold text-destructive">Schulden tilgen</span>
               <HelpButton>
-                Hier kannst du einen zusätzlichen Betrag zur Tilgung deiner ausstehenden BAföG-Schulden überweisen. Der Betrag wird zusätzlich zur monatlichen Rate gezahlt.
+                Hier kannst du einen zusätzlichen Betrag zur Tilgung deiner ausstehenden
+                BAföG-Schulden überweisen. Der Betrag wird zusätzlich zur monatlichen Rate gezahlt.
               </HelpButton>
             </div>
             <PayoutSlider
@@ -88,19 +120,33 @@ export function BucketFooter(props: Props) {
               variant="destructive"
               onChange={(v) => setSliderValues((prev) => ({ ...prev, [bucketRunId]: v }))}
             />
-            <Button
-              type="button"
-              size="sm"
-              variant="destructive"
-              className="w-full"
-              disabled={transferring || (sliderValues[bucketRunId] ?? bafoegOutstanding) <= 0}
-              onClick={() => onTransfer(bucketRunId, sliderValues[bucketRunId] ?? bafoegOutstanding)}
-            >
-              <ArrowRightToLine className="size-4" />
-              {transferring
-                ? "Wird gesendet…"
-                : `${formatAmount(sliderValues[bucketRunId] ?? bafoegOutstanding)} jetzt überweisen`}
-            </Button>
+            <div className="flex flex-col gap-1">
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                className="w-full"
+                disabled={transferring || (sliderValues[bucketRunId] ?? bafoegOutstanding) <= 0}
+                onClick={() =>
+                  onTransfer(bucketRunId, sliderValues[bucketRunId] ?? bafoegOutstanding)
+                }
+              >
+                <ArrowRightToLine className="size-4" />
+                {transferring ? (
+                  "Wird gesendet…"
+                ) : (
+                  <>
+                    <span className="font-mono">
+                      {formatAmount(sliderValues[bucketRunId] ?? bafoegOutstanding)}
+                    </span>{" "}
+                    jetzt überweisen
+                  </>
+                )}
+              </Button>
+              <p className="text-center text-[11px] leading-tight text-muted-foreground">
+                Zahlung erst nach Bestätigung
+              </p>
+            </div>
           </div>
         )}
       </div>
@@ -109,7 +155,9 @@ export function BucketFooter(props: Props) {
 
   if (isPaid) {
     return (
-      <div className={`flex h-10 w-full items-center justify-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium ${accent.badge}`}>
+      <div
+        className={`flex h-10 w-full items-center justify-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium ${accent.badge}`}
+      >
         <CheckCircle2 className="size-4" />
         Monatsziel erreicht
       </div>
@@ -133,9 +181,25 @@ export function BucketFooter(props: Props) {
   }
 
   return (
-    <Button size="sm" disabled={transferring || topUp <= 0} onClick={() => onTransfer(bucketRunId)} className="w-full">
-      <ArrowRightToLine className="size-4" />
-      {transferring ? "Wird gesendet…" : `${formatAmount(topUp)} jetzt überweisen`}
-    </Button>
+    <div className="flex flex-col gap-1">
+      <Button
+        size="sm"
+        disabled={transferring || topUp <= 0}
+        onClick={() => onTransfer(bucketRunId)}
+        className="w-full"
+      >
+        <ArrowRightToLine className="size-4" />
+        {transferring ? (
+          "Wird gesendet…"
+        ) : (
+          <>
+            <span className="font-mono">{formatAmount(topUp)}</span> jetzt überweisen
+          </>
+        )}
+      </Button>
+      <p className="text-center text-[11px] leading-tight text-muted-foreground">
+        Zahlung erst nach Bestätigung
+      </p>
+    </div>
   );
 }

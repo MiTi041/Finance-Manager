@@ -655,12 +655,17 @@ function AccountCard({
             <p className="truncate text-[10px] text-muted-foreground">{node.bankName}</p>
             <p className="truncate text-[10px] text-muted-foreground">{formatIban(node.iban)}</p>
             <p className="truncate text-[10px] font-medium text-foreground">
-              Kontostand: {node.balance === undefined ? "-" : formatAmount(node.balance)}
+              Kontostand:{" "}
+              <span className="font-mono">
+                {node.balance === undefined ? "-" : formatAmount(node.balance)}
+              </span>
             </p>
             {node.externalFlow !== undefined && (
               <p className="truncate text-[10px] font-medium text-foreground">
                 {node.externalFlow > 0 ? "Kontoeinfluss" : "Kontoausfluss"}:{" "}
-                <span className={node.externalFlow > 0 ? "text-emerald-500" : "text-red-500"}>
+                <span
+                  className={`font-mono ${node.externalFlow > 0 ? "text-emerald-500" : "text-red-500"}`}
+                >
                   {formatAmount(Math.abs(node.externalFlow))}
                 </span>
               </p>
@@ -732,7 +737,9 @@ function IncomeChip({
           <TooltipContent side="left">
             <span className="block font-medium">{node.label}</span>
             {node.purpose ? <span className="block text-xs opacity-80">{node.purpose}</span> : null}
-            <span className="block text-xs opacity-80">{formatAmount(node.amount)} / Monat</span>
+            <span className="block text-xs opacity-80">
+              <span className="font-mono">{formatAmount(node.amount)}</span> / Monat
+            </span>
           </TooltipContent>
         </Tooltip>
       </foreignObject>
@@ -741,7 +748,7 @@ function IncomeChip({
         y={position.y + INCOME_CHIP_SIZE / 2 + 12}
         textAnchor="middle"
         pointerEvents="none"
-        className="fill-emerald-600 text-[10px] font-semibold"
+        className="fill-emerald-600 font-mono text-[10px] font-semibold"
       >
         {formatAmount(node.amount)}
       </text>

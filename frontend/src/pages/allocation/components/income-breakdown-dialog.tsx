@@ -11,15 +11,23 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   sources: IncomeSource[];
+  isManual?: boolean;
 };
 
-export function IncomeBreakdownDialog({ open, onOpenChange, sources }: Props) {
+export function IncomeBreakdownDialog({ open, onOpenChange, sources, isManual }: Props) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Netto-Berechnung</DialogTitle>
         </DialogHeader>
+
+        {isManual ? (
+          <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+            Das Netto-Einkommen wurde manuell festgelegt. Die unten erkannten Einnahmen werden nicht
+            verwendet.
+          </p>
+        ) : null}
 
         {sources.length === 0 ? (
           <p className="py-4 text-center text-sm text-muted-foreground">
@@ -48,7 +56,7 @@ export function IncomeBreakdownDialog({ open, onOpenChange, sources }: Props) {
                         </p>
                       )}
                     </div>
-                    <span className="shrink-0 text-sm font-semibold tabular-nums">
+                    <span className="shrink-0 font-mono text-sm font-semibold tabular-nums">
                       {formatAmount(source.amount)}
                     </span>
                   </div>
@@ -59,7 +67,7 @@ export function IncomeBreakdownDialog({ open, onOpenChange, sources }: Props) {
                         className="flex items-center justify-between gap-2 text-xs text-muted-foreground"
                       >
                         <span className="truncate">{formatDate(tx.date)}</span>
-                        <span className="shrink-0 tabular-nums">
+                        <span className="shrink-0 font-mono tabular-nums">
                           {formatAmount(tx.amount)}
                         </span>
                       </div>
@@ -72,7 +80,7 @@ export function IncomeBreakdownDialog({ open, onOpenChange, sources }: Props) {
               <span className="text-xs uppercase tracking-wide text-muted-foreground/50">
                 Netto gesamt
               </span>
-              <span className="text-lg font-bold tabular-nums">
+              <span className="font-mono text-lg font-bold tabular-nums">
                 {formatAmount(sources.reduce((sum, s) => sum + s.amount, 0))}
               </span>
             </div>

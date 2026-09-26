@@ -275,6 +275,63 @@ class TestBuildRunResponse:
         assert result["net_income"] == 2000.0
 
 
+class TestManualNetIncome:
+    def _make_conn_mock(self):
+        cursor = Mock()
+        cursor.fetchone.return_value = [0.0]
+        conn = Mock()
+        conn.execute.return_value = cursor
+        return conn
+
+    def test_manual_income_overrides_detection(self):
+        service = AllocationService()
+        buckets = [
+            {"bucket_type": "invest", "percentage": 100, "id": 1, "is_active": True, "sort_order": 0, "recipient_account_id": None, "sender_iban": None},
+        ]
+        run_buckets = [
+            {"id": 1, "run_id": 1, "bucket_id": 1, "bucket_type": "invest", "target_amount": 2500.0, "transferred": 0.0, "is_completed": False},
+        ]
+        run_data = {"id": 1, "month": "2026-07", "net_income": 2500.0, "total_allocated": 2500.0, "status": "pending"}
+        settings = {"manual_net_income": "2500", "bafoeg_enabled": "false"}
+        with (
+            patch("finance_server.services.allocation_service.get_setting", side_effect=settings.get),
+            patch("finance_server.services.allocation_service.db.list_buckets") as mock_list,
+            patch("finance_server.services.allocation_service.db.get_run_for_month") as mock_run,
+            patch("finance_server.services.allocation_service.db.create_run") as mock_create_run,
+            patch("finance_server.services.allocation_service.db.create_run_bucket") as mock_create_bucket,
+            patch("finance_server.services.allocation_service.db.get_run_buckets") as mock_run_buckets,
+            patch("finance_server.services.allocation_service.AllocationService._detect_income", return_value=3000.0) as mock_detect,
+            patch("finance_server.services.allocation_service.AllocationService._detect_income_breakdown",
+                  return_value={"total": 3000.0, "sources": []}),
+            patch("finance_server.services.allocation_service.get_connection") as mock_conn,
+        ):
+            mock_conn.return_value.__enter__.return_value = self._make_conn_mock()
+            mock_list.return_value = buckets
+            mock_run.side_effect = [None, run_data]
+            mock_create_run.return_value = 1
+            mock_create_bucket.return_value = 1
+            mock_run_buckets.return_value = run_buckets
+
+            result = service.get_or_create_run("2026-07")
+
+        mock_detect.assert_not_called()
+        mock_create_run.assert_called_once_with("2026-07", 2500.0, 2500.0)
+        assert result["net_income"] == 2500.0
+        assert result["income_is_manual"] is True
+
+    def test_reset_clears_setting(self):
+        service = AllocationService()
+        with (
+            patch("finance_server.services.allocation_service.get_setting", return_value=None),
+            patch("finance_server.services.allocation_service.get_holiday_state", return_value="nw"),
+            patch("finance_server.services.allocation_service.delete_setting") as mock_delete,
+        ):
+            result = service.update_settings({"manual_net_income": None})
+
+        mock_delete.assert_called_once_with("manual_net_income")
+        assert result["manual_net_income"] is None
+
+
 class TestUpdateSettings:
     def _service_with_store(self, initial: str = "false"):
         store = {"bafoeg_enabled": initial}
@@ -440,6 +497,19 @@ class TestSavingsPlanBudget:
 
         calls = [call.args[2] for call in mock_create_bucket.call_args_list]
         assert calls == [0.0, 0.0]
+
+    def test_donation_reduces_spending_not_invest_base(self):
+        # Spenden kommt aus dem Ausgaben-Topf und darf die Investitionsbasis nicht senken.
+        buckets = [
+            {"id": 10, "bucket_type": "donation", "percentage": 10.0, "is_active": True},
+            {"id": 11, "bucket_type": "invest", "percentage": 50.0, "is_active": True},
+            {"id": 12, "bucket_type": "spending", "percentage": 0.0, "is_active": True},
+        ]
+        _, _, mock_create_bucket = self._run("2026-07", 1000.0, [], {}, buckets)
+
+        calls = [call.args[2] for call in mock_create_bucket.call_args_list]
+        # Spenden 100, Investieren 50% von 1000 = 500, Ausgaben 1000-500-100 = 400
+        assert calls == [100.0, 500.0, 400.0]
 
     def _enrich_completed(self, completed_ids, rates=None):
         def fake_enrich(plan, month):
