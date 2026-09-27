@@ -18,6 +18,9 @@ class BankDefinition:
     # SEPA-Instant (Echtzeit) wird von dieser Bank unterstützt. False blendet
     # die Echtzeit-Option bei Überweisungen von/an diese Bank aus.
     sepa_express: bool = True
+    # Bank liefert "Saldo der vorgemerkten Umsätze" verlässlich. ING spiegelt
+    # dort den gebuchten Saldo, obwohl es keine vorgemerkten Umsätze überträgt.
+    supports_pending: bool = True
     # Fixed IBAN the provider pays out from / sends with (e.g. Scalable's
     # Verrechnungskonto). Only set for manual providers.
     sender_iban: str | None = None
@@ -38,6 +41,7 @@ BANKS: tuple[BankDefinition, ...] = (
         fints_url="https://fints.ing.de/fints/",
         bank_logo="images/bank-logos/ing-diba.png",
         can_transfer=False,
+        supports_pending=False,
     ),
     BankDefinition(
         key="sparkasse-lemgo",

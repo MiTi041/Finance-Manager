@@ -22,6 +22,8 @@ export type AccountFlowNode = {
   bankLogoDark?: string;
   logoPadding?: number;
   balance?: number;
+  /** Signed saldo of pending transactions; `balance + balancePending` is available. */
+  balancePending?: number;
   isPrimary?: boolean;
   /**
    * Balance minus the account's net internal flow: money that flowed in
@@ -94,6 +96,7 @@ const TRANSFER_LEG_WINDOW_MS = 5 * 24 * 60 * 60 * 1000;
 type AccountBalance = {
   accountIban: string;
   balance: number;
+  balancePending?: number;
 };
 
 type TransferLeg = {
@@ -165,6 +168,9 @@ export function buildAccountFlowGraph(
   const balanceByIban = new Map(
     balances.map((account) => [normalizeIban(account.accountIban), account.balance]),
   );
+  const pendingByIban = new Map(
+    balances.map((account) => [normalizeIban(account.accountIban), account.balancePending]),
+  );
   const accountByIban = new Map(
     accounts
       .map((account) => [normalizeIban(account.accountIban), account] as const)
@@ -206,6 +212,7 @@ export function buildAccountFlowGraph(
         bankLogoDark: account.bankLogoDark,
         logoPadding: account.logoPadding,
         balance: balanceByIban.get(iban),
+        balancePending: pendingByIban.get(iban),
         isPrimary: account.isPrimary === true,
       };
     })

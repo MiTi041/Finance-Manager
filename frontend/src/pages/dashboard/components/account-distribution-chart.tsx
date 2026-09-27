@@ -77,7 +77,7 @@ export function AccountDistributionChart({ accountBalances }: AccountDistributio
                 className="h-full cursor-pointer rounded-full transition hover:brightness-125"
                 style={{
                   flex: `${entry.value} 1 0%`,
-                  minWidth: "6px",
+                  minWidth: "16px",
                   background: `linear-gradient(135deg, ${COLORS[i % COLORS.length]}, ${COLORS[i % COLORS.length]}bf)`,
                 }}
               />

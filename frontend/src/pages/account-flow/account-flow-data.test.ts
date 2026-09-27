@@ -117,13 +117,15 @@ const externalGraph = buildAccountFlowGraph(
     tx(20, NORIS, CHASE, -2009.96, "2026-08-06"),
     tx(21, CHASE, NORIS, 2009.96, "2026-08-07"),
   ],
-  [{ accountIban: CHASE, balance: 74.88 }],
+  [{ accountIban: CHASE, balance: 74.88, balancePending: -10 }],
 );
 const chaseNode = accountNode(externalGraph, CHASE);
 assert.equal(chaseNode?.balance, 74.88);
+assert.equal(chaseNode?.balancePending, -10, "pending saldo is carried onto the node");
 assert.equal(chaseNode?.externalFlow, -1935.08);
 const norisNode = accountNode(externalGraph, NORIS);
 assert.equal(norisNode?.externalFlow, undefined, "no balance means no external flow");
+assert.equal(norisNode?.balancePending, undefined, "no balance entry means no pending saldo");
 
 // A balance that exactly matches the internal flow cancels out and is hidden.
 const balancedGraph = buildAccountFlowGraph(

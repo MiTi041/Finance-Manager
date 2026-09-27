@@ -121,7 +121,7 @@ def _sync_bank_accounts(
 ) -> None:
     existing = connection.execute(
         "SELECT iban, holder_name, archived, exclude_from_totals, can_transfer, can_transfer_override, balance, "
-        "bank_key, sender_iban, is_primary FROM bank_accounts WHERE scope = ?",
+        "balance_pending, bank_key, sender_iban, is_primary FROM bank_accounts WHERE scope = ?",
         (scope,),
     ).fetchall()
     previous_holder = {
@@ -153,6 +153,9 @@ def _sync_bank_accounts(
     previous_balance = {
         normalize_text(row["iban"]).upper(): row["balance"] for row in existing
     }
+    previous_pending = {
+        normalize_text(row["iban"]).upper(): row["balance_pending"] for row in existing
+    }
     previous_primary = {
         normalize_text(row["iban"]).upper(): row["is_primary"] for row in existing
     }
@@ -167,9 +170,9 @@ def _sync_bank_accounts(
         """
         INSERT INTO bank_accounts
             (scope, iban, account_name, holder_name, bank_key, sender_iban, archived,
-             exclude_from_totals, can_transfer, can_transfer_override, balance, is_primary,
-             created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             exclude_from_totals, can_transfer, can_transfer_override, balance, balance_pending,
+             is_primary, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
             (
@@ -190,6 +193,7 @@ def _sync_bank_accounts(
                 ),
                 previous_override.get(normalize_text(account["iban"]).upper()),
                 previous_balance.get(normalize_text(account["iban"]).upper()),
+                previous_pending.get(normalize_text(account["iban"]).upper()),
                 previous_primary.get(normalize_text(account["iban"]).upper(), 0),
                 now,
                 now,
@@ -557,6 +561,13 @@ def compute_and_store_balance_corrections(
                 })
             except Exception:
                 logging.exception("Saldo-Korrektur fehlgeschlagen für IBAN=%s", iban)
+
+        pending_amount = entry.get("pending_amount")
+        if iban and pending_amount is not None:
+            try:
+                update_account_pending_balance(scope, iban, float(pending_amount))
+            except Exception:
+                logging.exception("Pending-Saldo-Speicherung fehlgeschlagen für IBAN=%s", iban)
     return results
 
 
@@ -574,6 +585,24 @@ def update_account_balance(scope: str, iban: str, balance: float) -> bool:
             WHERE scope = ? AND UPPER(iban) = UPPER(?)
             """,
             (balance, now, scope, normalized_iban),
+        )
+        return cursor.rowcount > 0
+
+
+def update_account_pending_balance(scope: str, iban: str, pending_balance: float) -> bool:
+    normalized_iban = normalize_text(iban)
+    if not normalized_iban:
+        return False
+
+    now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    with get_connection() as connection:
+        cursor = connection.execute(
+            """
+            UPDATE bank_accounts
+            SET balance_pending = ?, updated_at = ?
+            WHERE scope = ? AND UPPER(iban) = UPPER(?)
+            """,
+            (pending_balance, now, scope, normalized_iban),
         )
         return cursor.rowcount > 0
 

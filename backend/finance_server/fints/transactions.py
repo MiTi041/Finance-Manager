@@ -78,6 +78,21 @@ def _is_out_of_range_error(err: Exception) -> bool:
     return any(code in message for code in ("9210", "9010", "9050"))
 
 
+# ponytail: Norisbank liefert SEPA-Instant/Wero-Umsätze im Stream "nicht gebuchte
+# Umsätze", obwohl sie im gebuchten Saldo bereits enthalten sind (Bank-App zeigt
+# sie als "Gebucht"). Sie bleiben in der Pending-Liste sichtbar, werden aber aus
+# dem Vorgemerkt-Saldo herausgerechnet — sonst doppelte Zählung im Dashboard.
+_INSTANT_BANK_KEYS = {"norisbank"}
+_INSTANT_MARKERS = ("ECHTZEIT", "WERO")
+
+
+def _is_already_booked_pending(bank_key: str, data: dict[str, Any]) -> bool:
+    if bank_key not in _INSTANT_BANK_KEYS:
+        return False
+    text = f"{data.get('posting_text', '')} {data.get('purpose', '')}".upper()
+    return any(marker in text for marker in _INSTANT_MARKERS)
+
+
 def _storage_days_from_segment(segment) -> int | None:
     """Liest den Speicherzeitraum (Tage) aus einem HIKAZS/HICAZS-Segment."""
     parameter = getattr(segment, "parameter", None)
@@ -264,11 +279,18 @@ def fetch_transactions(
                 try:
                     bal_obj = client.get_balance(account)
                     bal_amt = getattr(bal_obj, "amount", None)
+                    pending_obj = getattr(bal_obj, "pending", None)
+                    pending_amt = getattr(pending_obj, "amount", None)
                     balances.append({
                         "iban": account.iban,
                         "amount": to_decimal_or_none(getattr(bal_amt, "amount", bal_amt)),
                         "currency": getattr(bal_amt, "currency", None),
                         "date": to_jsonable(getattr(bal_obj, "date", None)),
+                        "pending_amount": (
+                            to_decimal_or_none(getattr(pending_amt, "amount", pending_amt))
+                            if pending_obj is not None
+                            else None
+                        ),
                     })
                 except Exception:
                     logging.exception("FinTS balance fetch failed for IBAN=%s", account.iban)
@@ -400,6 +422,24 @@ def fetch_transactions(
                 overall_start = datetime.date.today() - datetime.timedelta(days=days)
             else:
                 overall_start = min_start_date or (datetime.date.today() - datetime.timedelta(days=INITIAL_SYNC_DAYS))
+
+            # Vorgemerkt-Saldo je Konto: Bank-Wert bevorzugen, sonst gefilterte
+            # Pending-Summe (bereits gebuchte Echtzeitüberweisungen raus).
+            pending_balance_by_iban: dict[str, float] = {}
+            for entry in pending_transactions:
+                data = entry["data"]
+                if _is_already_booked_pending(creds.bank_key, data):
+                    continue
+                entry_iban = entry["account"]["iban"]
+                pending_balance_by_iban[entry_iban] = pending_balance_by_iban.get(entry_iban, 0.0) + float(
+                    data.get("amount") or 0
+                )
+
+            for balance in balances:
+                if balance.get("pending_amount") is None:
+                    balance["pending_amount"] = round(
+                        pending_balance_by_iban.get(balance["iban"], 0.0), 2
+                    )
 
             return {
                 "range": {"start": str(overall_start), "end": str(end), "days": days},

@@ -25,6 +25,7 @@ from finance_server.api.budgets import router as budgets_router
 from finance_server.api.notifications import router as notifications_router
 from finance_server.api.keys import router as keys_router
 from finance_server.api.account_flow import router as account_flow_router
+from finance_server.api.app_settings import router as app_settings_router
 from finance_server.services.sync_service import SyncService
 
 # .env laden
@@ -90,6 +91,7 @@ app.include_router(budgets_router, prefix="/api")
 app.include_router(notifications_router, prefix="/api")
 app.include_router(keys_router, prefix="/api")
 app.include_router(account_flow_router, prefix="/api")
+app.include_router(app_settings_router, prefix="/api")
 
 
 @app.get("/health")

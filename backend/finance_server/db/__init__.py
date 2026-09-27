@@ -15,6 +15,7 @@ from .credentials import (
     load_bank_credentials_by_iban,
     save_bank_credentials,
     update_account_balance,
+    update_account_pending_balance,
     update_bank_account,
     upsert_bank_accounts,
 )
@@ -94,6 +95,7 @@ __all__ = [
     "list_categories",
     "list_bank_accounts",
     "update_account_balance",
+    "update_account_pending_balance",
     "list_iban_zahlungspartner_references",
     "list_zahlungspartner_iban_mappings",
     "list_zahlungspartner_records",

@@ -667,6 +667,7 @@ def initialize_database(connection: sqlite3.Connection) -> None:
         "bank_accounts",
         {
             "balance": "REAL",
+            "balance_pending": "REAL",
             "holder_name": "TEXT",
             "can_transfer": "INTEGER",
             "can_transfer_override": "INTEGER",

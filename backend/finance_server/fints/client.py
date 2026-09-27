@@ -387,6 +387,7 @@ def _apply_bank_specific_client_config(
         client.force_twostep_tan = {"HKKAZ", "HKSAL"}
 
     bank = get_bank_definition(creds.bank_key)
+    client._finance_supports_pending = bank.supports_pending
     if bank.decoupled_login and not (creds.tan_medium or "").strip():
         # Sparkassen (pushTAN 923, decoupled) verlangen eine Login-SCA, die
         # bereits beim Dialog-Init als 3955-Challenge zurueckkommt. Ein vorab

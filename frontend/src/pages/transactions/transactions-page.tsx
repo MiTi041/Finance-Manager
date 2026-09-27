@@ -32,6 +32,7 @@ import {
   updateTransactionSplits,
 } from "@/lib/transactions";
 import { updateIbanZahlungspartnerMapping } from "@/lib/reference-data";
+import { fetchAppSettings, updateAppSettings } from "@/lib/settings";
 
 import { type Transaction } from "@/types/transaction";
 import { getApiBaseUrl } from "@/lib/api";
@@ -92,6 +93,7 @@ export default function TransactionsPage() {
   const [onlyUnknownIban, setOnlyUnknownIban] = useState(false);
   const [showDeletedBanks, setShowDeletedBanks] = useState(false);
   const [hideMigrated, setHideMigrated] = useState(false);
+  const [hidePending, setHidePending] = useState(false);
   const [amountFilter, setAmountFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [visibleTransactions, setVisibleTransactions] = useState<Transaction[]>([]);
@@ -189,6 +191,19 @@ export default function TransactionsPage() {
       .catch(() => {
         if (active) setPredictionsMap(new Map());
       });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void fetchAppSettings()
+      .then((settings) => {
+        if (active) setHidePending(settings.hide_pending_transactions);
+      })
+      .catch(() => {});
 
     return () => {
       active = false;
@@ -435,6 +450,15 @@ export default function TransactionsPage() {
     }
   };
 
+  const toggleHidePending = () => {
+    const next = !hidePending;
+    setHidePending(next);
+    void updateAppSettings({ hide_pending_transactions: next }).catch(() => {
+      setHidePending(!next);
+      toast.error("Einstellung konnte nicht gespeichert werden");
+    });
+  };
+
   const toggleRow = (id: number) => {
     if (
       expandedTransactionId !== null &&
@@ -612,26 +636,19 @@ export default function TransactionsPage() {
   );
 
   const listItems = useMemo(
-    () => [...pendingTransactions, ...filteredTransactions],
-    [pendingTransactions, filteredTransactions],
+    () =>
+      hidePending ? filteredTransactions : [...pendingTransactions, ...filteredTransactions],
+    [pendingTransactions, filteredTransactions, hidePending],
   );
 
   const pendingOverrunAccounts = useMemo(() => {
     if (dateFilter.timeSpan || dateFilter.timeRange) return [];
 
-    const pendingSumByIban = new Map<string, number>();
-    for (const transaction of pendingTransactions) {
-      const iban = normalizeIban(transaction.konto.iban);
-      if (!iban) continue;
-      pendingSumByIban.set(iban, (pendingSumByIban.get(iban) ?? 0) + transaction.betrag.wert);
-    }
-    if (pendingSumByIban.size === 0) return [];
-
     const overrun: Array<{ iban: string; name: string; balance: number; shortfall: number }> = [];
     for (const account of accountBalances) {
       const iban = normalizeIban(account.accountIban);
-      const pending = pendingSumByIban.get(iban);
-      if (pending == null || pending >= 0) continue;
+      const pending = account.balancePending ?? 0;
+      if (!iban || pending >= 0) continue;
       const shortfall = account.balance + pending;
       if (shortfall < 0) {
         overrun.push({
@@ -643,7 +660,7 @@ export default function TransactionsPage() {
       }
     }
     return overrun;
-  }, [accountBalances, dateFilter.timeSpan, dateFilter.timeRange, pendingTransactions]);
+  }, [accountBalances, dateFilter.timeSpan, dateFilter.timeRange]);
 
   const {
     batchDeleteOpen,
@@ -788,10 +805,12 @@ export default function TransactionsPage() {
             onlyUnknownIban={onlyUnknownIban}
             showDeletedBanks={showDeletedBanks}
             hideMigrated={hideMigrated}
+            hidePending={hidePending}
             unassignedCount={filterCounts.unassigned}
             unknownIbanCount={filterCounts.unknownIban}
             deletedBankCount={filterCounts.deletedBank}
             migratedCount={filterCounts.migrated}
+            pendingCount={pendingTransactions.length}
             amountFilter={amountFilter}
             categoryFilter={categoryFilter}
             categoryOptions={categoryFilterOptions}
@@ -799,6 +818,7 @@ export default function TransactionsPage() {
             onToggleOnlyUnknownIban={() => setOnlyUnknownIban((current) => !current)}
             onToggleShowDeletedBanks={() => setShowDeletedBanks((current) => !current)}
             onToggleHideMigrated={() => setHideMigrated((current) => !current)}
+            onToggleHidePending={toggleHidePending}
             onAmountFilterChange={setAmountFilter}
             onCategoryFilterChange={setCategoryFilter}
           />,

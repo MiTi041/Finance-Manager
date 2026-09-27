@@ -188,6 +188,7 @@ def _resolve_lookup(
 
 SYNCED_APP_SETTING_KEYS = {
     "bafoeg_enabled",
+    "hide_pending_transactions",
     "resend_api_key",
     "resend_from",
     "hunter_logo_key",

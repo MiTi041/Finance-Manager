@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatIban } from "@/lib/iban";
+import { availableBalance } from "@/lib/utils/available-balance";
 import { SectionHeading } from "./section-heading";
 
 const euroFormatter = new Intl.NumberFormat("de-DE", {
@@ -38,9 +39,9 @@ export function AccountCards({
   onAccountTransfer,
   onToggleExclude,
 }: AccountCardsProps) {
-  const available = (acc: AccountBalance) => acc.balance + (acc.balancePending ?? 0);
+  const available = (acc: AccountBalance) => availableBalance(acc);
   const isTransferable = (acc: AccountBalance) => transferableIbans?.has(acc.accountIban) === true;
-  const canTransfer = (acc: AccountBalance) => isTransferable(acc) && acc.balance > 0;
+  const canTransfer = (acc: AccountBalance) => isTransferable(acc) && available(acc) > 0;
   const transferRank = (acc: AccountBalance) =>
     canTransfer(acc) ? 2 : isTransferable(acc) ? 1 : 0;
   const sortedBalances = [...accountBalances].sort(

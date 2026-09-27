@@ -11,6 +11,7 @@ from finance_server.db import (
     list_bank_accounts,
     load_bank_credentials,
     update_account_balance,
+    update_account_pending_balance,
     update_bank_account as update_bank_account_row,
     upsert_bank_accounts,
     save_bank_credentials,
@@ -347,6 +348,10 @@ class CredentialsService:
         transaction_sum = fetch_transaction_balance(iban)
         correction = balance_amount - transaction_sum
         update_account_balance(scope, iban, correction)
+
+        pending_amount = balance.get("pending_amount")
+        if pending_amount is not None:
+            update_account_pending_balance(scope, iban, float(pending_amount))
 
         return {"correction": correction, "bank_balance": balance_amount}
 

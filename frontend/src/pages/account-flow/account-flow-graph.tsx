@@ -70,6 +70,12 @@ const COLOR_INCOME = "#10b981";
 
 type Point = { x: number; y: number };
 
+const PENDING_EPSILON = 0.005;
+
+function hasPending(node: AccountFlowNode) {
+  return node.balancePending !== undefined && Math.abs(node.balancePending) >= PENDING_EPSILON;
+}
+
 function getCardHeight(note: string) {
   return note.trim() ? CARD_MIN_HEIGHT + 14 : CARD_MIN_HEIGHT;
 }
@@ -636,18 +642,15 @@ function AccountCard({
             src={node.bankLogo}
             srcDark={node.bankLogoDark}
             alt={node.bankName}
-          sizeClassName="size-12"
-          className="p-1"
-          backgroundClassName="bg-muted/70"
+            sizeClassName="size-12"
+            className="p-1"
+            backgroundClassName="bg-muted/70"
           />
           <div className="min-w-0 flex-1 pr-7">
             <div className="flex min-w-0 items-center gap-1.5">
               <span className="truncate text-sm font-semibold">{node.label}</span>
               {node.isPrimary ? (
-                <Badge
-                  variant="secondary"
-                  className="shrink-0 px-1.5 py-0 text-[10px] font-medium"
-                >
+                <Badge variant="secondary" className="shrink-0 px-1.5 py-0 text-[10px] font-medium">
                   Hauptkonto
                 </Badge>
               ) : null}
@@ -657,7 +660,9 @@ function AccountCard({
             <p className="truncate text-[10px] font-medium text-foreground">
               Kontostand:{" "}
               <span className="font-mono">
-                {node.balance === undefined ? "-" : formatAmount(node.balance)}
+                {node.balance === undefined
+                  ? "-"
+                  : formatAmount(node.balance + (node.balancePending ?? 0))}
               </span>
             </p>
             {node.externalFlow !== undefined && (
@@ -716,7 +721,9 @@ function IncomeChip({
               aria-label={`Einkommen ${node.label}`}
               className={cn(
                 "flex h-full w-full items-center justify-center rounded-full border bg-card shadow-sm transition-[transform,box-shadow,border-color,opacity] duration-150 ease-out",
-                hovered && !dimmed ? "-translate-y-px border-[#10b981]/60 shadow-md" : "border-border",
+                hovered && !dimmed
+                  ? "-translate-y-px border-[#10b981]/60 shadow-md"
+                  : "border-border",
                 dimmed && "opacity-35",
               )}
               onPointerEnter={onPointerEnter}
@@ -905,10 +912,7 @@ export function AccountFlowGraph({
       })
       .catch(() => {
         if (cancelled) return;
-        const fitView = getFitView(
-          graph.nodes,
-          computeIncomePositions(graph.nodes, positions),
-        );
+        const fitView = getFitView(graph.nodes, computeIncomePositions(graph.nodes, positions));
         setScale(fitView.scale);
         setOffset(fitView.offset);
       })
@@ -1394,8 +1398,7 @@ export function AccountFlowGraph({
           <Waypoints className="size-4 text-[#54a0ff]" />
           <span className="text-xs text-muted-foreground">
             {accountCount} Konten
-            {incomeCount > 0 ? ` · ${incomeCount} Einkommen` : ""} · {graph.edges.length}{" "}
-            Geldflüsse
+            {incomeCount > 0 ? ` · ${incomeCount} Einkommen` : ""} · {graph.edges.length} Geldflüsse
           </span>
         </div>
         <div className="absolute bottom-4 right-4 z-10 flex items-center gap-1 rounded-lg border border-border bg-card/90 p-1 backdrop-blur">

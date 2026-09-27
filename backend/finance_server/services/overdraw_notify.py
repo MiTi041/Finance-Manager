@@ -135,7 +135,7 @@ def check_pending_overdraw(scope: str, balances: list[dict[str, Any]], pending: 
         return
 
     try:
-        pending_by_iban: dict[str, float] = {}
+        list_pending_by_iban: dict[str, float] = {}
         for entry in pending:
             account = entry.get("account") or {}
             iban = (account.get("iban") or "").strip().upper()
@@ -143,15 +143,26 @@ def check_pending_overdraw(scope: str, balances: list[dict[str, Any]], pending: 
             amount = data.get("amount")
             if not iban or amount is None:
                 continue
-            pending_by_iban[iban] = pending_by_iban.get(iban, 0.0) + float(amount)
-
-        if not pending_by_iban:
-            return
+            list_pending_by_iban[iban] = list_pending_by_iban.get(iban, 0.0) + float(amount)
 
         balance_by_iban = {
             (b.get("iban") or "").strip().upper(): float(b.get("amount") or 0)
             for b in balances
         }
+        # ponytail: Bank-Saldo der vorgemerkten Umsätze bevorzugen; die Listen-
+        # Summe zählt Echtzeitüberweisungen doppelt (bereits gebucht).
+        bank_pending_by_iban = {
+            (b.get("iban") or "").strip().upper(): float(b["pending_amount"])
+            for b in balances
+            if b.get("pending_amount") is not None
+        }
+        pending_by_iban = {
+            iban: bank_pending_by_iban.get(iban, list_pending_by_iban.get(iban, 0.0))
+            for iban in set(bank_pending_by_iban) | set(list_pending_by_iban)
+        }
+
+        if not pending_by_iban:
+            return
         names = _account_names(scope)
 
         overruns: list[dict[str, Any]] = []

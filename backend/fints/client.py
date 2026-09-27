@@ -672,7 +672,25 @@ class FinTS3Client:
 
     def _get_balance(self, command_seg, response):
         for resp in response.response_segments(command_seg, 'HISAL'):
-            return resp.balance_booked.as_mt940_Balance()
+            booked = resp.balance_booked.as_mt940_Balance()
+            # ponytail: HISALS liefert "Saldo der vorgemerkten Umsätze" mit; ohne
+            # Weitergabe summiert die App die Pending-Liste und zählt Echtzeit-
+            # überweisungen doppelt (bereits im gebuchten Saldo).
+            pending = getattr(resp, 'balance_pending', None)
+            booked.pending = None
+            # Fehlt das Feld, liefert der Parser ein Balance2 mit None-Feldern.
+            # ponytail: Banken ohne verlässliches Pending-Feld (ING) liefern
+            # trotzdem einen Wert; Flag aus der Bank-Definition überspringt ihn.
+            if (
+                getattr(self, '_finance_supports_pending', True)
+                and pending is not None
+                and getattr(pending, 'credit_debit', None) is not None
+            ):
+                try:
+                    booked.pending = pending.as_mt940_Balance()
+                except Exception:
+                    booked.pending = None
+            return booked
 
     def get_balance(self, account: SEPAAccount):
         """

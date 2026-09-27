@@ -5,6 +5,7 @@ from fints.client import NeedTANResponse
 from finance_server.db.utils import normalize_text
 from finance_server.models.bank import BankCredentials
 
+from .banks import get_bank_definition
 from .common import to_decimal_or_none, to_jsonable
 from .client import (
     with_state_retry, make_client, bootstrap_client, save_state,
@@ -44,11 +45,20 @@ def fetch_account_balance(creds: BankCredentials, iban: str) -> dict[str, Any]:
                 from fastapi import HTTPException
                 raise HTTPException(status_code=502, detail="Kontostand konnte nicht gelesen werden.")
 
+            pending = getattr(balance, "pending", None)
+            pending_amount = getattr(pending, "amount", None)
+            supports_pending = get_bank_definition(creds.bank_key).supports_pending
+
             return {
                 "iban": account.iban,
                 "amount": amount,
                 "currency": getattr(balance_amount, "currency", None) or getattr(account, "currency", None) or "EUR",
                 "date": to_jsonable(getattr(balance, "date", None)),
+                "pending_amount": (
+                    to_decimal_or_none(getattr(pending_amount, "amount", pending_amount))
+                    if supports_pending and pending is not None
+                    else (0 if not supports_pending else None)
+                ),
             }
 
     return with_state_retry(creds, _run)

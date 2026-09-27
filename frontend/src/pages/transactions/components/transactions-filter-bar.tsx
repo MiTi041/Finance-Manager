@@ -7,7 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { FilterX, SearchX, Landmark, ArrowRightLeft } from "lucide-react";
+import { FilterX, SearchX, Landmark, ArrowRightLeft, Clock } from "lucide-react";
 
 import { type TransactionCategoryOption } from "@/lib/utils/categories";
 
@@ -16,10 +16,12 @@ type TransactionsFilterBarProps = {
   onlyUnknownIban: boolean;
   showDeletedBanks: boolean;
   hideMigrated: boolean;
+  hidePending: boolean;
   unassignedCount: number;
   unknownIbanCount: number;
   deletedBankCount: number;
   migratedCount: number;
+  pendingCount: number;
   amountFilter: string;
   categoryFilter: string;
   categoryOptions: TransactionCategoryOption[];
@@ -27,6 +29,7 @@ type TransactionsFilterBarProps = {
   onToggleOnlyUnknownIban: () => void;
   onToggleShowDeletedBanks: () => void;
   onToggleHideMigrated: () => void;
+  onToggleHidePending: () => void;
   onAmountFilterChange: (value: string) => void;
   onCategoryFilterChange: (value: string) => void;
 };
@@ -36,10 +39,12 @@ export function TransactionsFilterBar({
   onlyUnknownIban,
   showDeletedBanks,
   hideMigrated,
+  hidePending,
   unassignedCount,
   unknownIbanCount,
   deletedBankCount,
   migratedCount,
+  pendingCount,
   amountFilter,
   categoryFilter,
   categoryOptions,
@@ -47,6 +52,7 @@ export function TransactionsFilterBar({
   onToggleOnlyUnknownIban,
   onToggleShowDeletedBanks,
   onToggleHideMigrated,
+  onToggleHidePending,
   onAmountFilterChange,
   onCategoryFilterChange,
 }: TransactionsFilterBarProps) {
@@ -155,6 +161,30 @@ export function TransactionsFilterBar({
           </span>
         </Button>
       )}
+
+      <Button
+        type="button"
+        variant="ghost"
+        aria-pressed={hidePending}
+        className={
+          hidePending
+            ? "!bg-foreground !text-background hover:!bg-foreground/90 hover:!text-background"
+            : "!bg-muted !text-muted-foreground hover:!bg-muted/80 hover:!text-foreground"
+        }
+        onClick={onToggleHidePending}
+      >
+        <Clock className="size-4" />
+        <span>Vorgemerkte Umsätze ausblenden</span>
+        <span
+          className={
+            hidePending
+              ? "hidden shrink-0 rounded-full bg-blue-500/20 px-1.5 py-px text-[10px] font-medium text-blue-200 sm:inline dark:text-blue-300"
+              : "hidden shrink-0 rounded-full bg-blue-500/10 px-1.5 py-px text-[10px] font-medium text-blue-700 sm:inline dark:text-blue-400"
+          }
+        >
+          {pendingCount}
+        </span>
+      </Button>
 
       <Select value={amountFilter} onValueChange={onAmountFilterChange}>
         <SelectTrigger className="h-9 w-[170px]">

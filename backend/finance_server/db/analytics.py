@@ -108,18 +108,36 @@ def fetch_account_balances(
 
         pending_rows = conn.execute(
             """
-            SELECT account_iban, COALESCE(SUM(amount), 0) AS balance_pending
+            SELECT account_iban, COALESCE(SUM(amount), 0) AS pending_sum
             FROM vorgemerkte_umsaetze
             GROUP BY account_iban
             """
         ).fetchall()
-    pending_by_iban = {row["account_iban"]: row["balance_pending"] for row in pending_rows}
+        bank_pending_rows = conn.execute(
+            """
+            SELECT UPPER(REPLACE(iban, ' ', '')) AS account_iban, balance_pending
+            FROM bank_accounts
+            WHERE balance_pending IS NOT NULL
+            """
+        ).fetchall()
+    pending_by_iban = {row["account_iban"]: row["pending_sum"] for row in pending_rows}
+    bank_pending_by_iban = {
+        row["account_iban"]: row["balance_pending"] for row in bank_pending_rows
+    }
+
+    def _pending_for(iban: str) -> float:
+        # ponytail: Bank-Saldo der vorgemerkten Umsätze ist maßgeblich; die Summe
+        # der Pending-Liste zählt Echtzeitüberweisungen doppelt (schon gebucht).
+        bank_value = bank_pending_by_iban.get("".join(str(iban).split()).upper())
+        if bank_value is not None:
+            return float(bank_value)
+        return float(pending_by_iban.get(iban, 0))
 
     return [
         {
             "account_iban": row["account_iban"],
             "balance": round(float(row["balance"]), 2),
-            "balance_pending": round(float(pending_by_iban.get(row["account_iban"], 0)), 2),
+            "balance_pending": round(_pending_for(row["account_iban"]), 2),
         }
         for row in rows
     ]
