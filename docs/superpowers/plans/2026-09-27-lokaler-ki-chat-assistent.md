@@ -19,6 +19,46 @@
 - Default Base-URL: `http://localhost:11434/v1`.
 - Keine neue Frontend-Dependency (kein Markdown-Renderer, keine Textarea-Primitive).
 
+## Abweichungen von der Spezifikation
+
+Bewusste Abweichungen dieses Plans von
+`docs/superpowers/specs/2026-09-27-lokaler-ki-chat-assistent-design.md`:
+
+| Design-requirement | Plan | Grund |
+| --- | --- | --- |
+| Markdown-Antworten | Plaintext mit `whitespace-pre-wrap` | Global Constraint: keine neue Frontend-Dependency (kein Markdown-Renderer) |
+| Avatare an den Bubbles | keine | reine Dekoration, kein Informationsgehalt |
+| Hinweis mit Link zu den Einstellungen bei Fehlern | roher Backend-`detail`-String im Chat | die Route wird in Task 8 ohnehin nur registriert; ein Link dorthin ist Kosmetik |
+| `error`-Event → Toast „KI nicht erreichbar, Einstellungen prüfen" | inline `<p>` unter dem Chat | Toasts bei jedem Token-Fehler sind störend; die Meldung bleibt sichtbar |
+| Fehlercode `AI_NOT_CONFIGURED` | `detail="KI ist nicht konfiguriert"`, HTTP 400 | ein Error-Code-Enum ist für v1 ungenutzt |
+| Settings-Key `ai_api_key` | `ai_api_key_enc` | das suffix `_enc` macht sichtbar, dass der Wert verschlüsselt in der DB liegt |
+| `GET /config` liefert 4 Felder | 5 Felder (+ `configured`) | `configured` steuert in Task 8 die Sidebar-Sichtbarkeit, das Frontend darf die Bedingung nicht selbst nachbauen |
+
+## Voraussetzungen für die manuellen Schritte
+
+Die manuellen Schritte in Task 7/8/9 brauchen einen laufenden, OpenAI-kompatiblen
+Modell-Server, z. B. `ollama serve` plus ein geladenes Modell (`ollama pull llama3.1:8b`).
+Ohne ihn sind diese Schritte nicht durchführbar — sie dann überspringen und stattdessen
+die automatisierten Schritte als Beleg werten. Kein anderer Schritt des Plans braucht das.
+
+## Bekannte Test-Baseline
+
+`.venv/bin/python -m pytest -q` ist **vor** diesem Plan bereits rot:
+`2 failed, 344 passed`, beide Fehler in `tests/test_allocation_service.py`
+(`KeyError: 'account_iban'` in `finance_server/services/allocation_service.py:455`).
+Neue Tasks dürfen diese zwei Fehler nicht verändern, aber auch nicht versuchen zu beheben.
+
+## Ausführungs-Hinweise (Pre-Flight)
+
+- Durchgehend `.venv/bin/python -m pytest`, nie `.venv/bin/pytest` — `finance_server` ist
+  nicht im venv installiert, pytest legt nur `backend/tests` auf `sys.path`.
+- Frontend-Compile-Check ist `npx tsc -p tsconfig.json --noEmit`, nicht `pnpm build`
+  (das ist nur `vite build` und parst neue, noch nicht importierte Dateien nicht).
+- `package.json` meint in diesem Plan **immer die Repo-Wurzel**-Version (die mit
+  `electron:build`), nicht `backend/package.json`.
+- `build_context` greift auf die DB zu und ist damit **keine** reine Funktion; sie wird
+  deshalb gegen die `test_db`-Fixture getestet, nicht mit Hand-Dicts.
+
 ## File Structure
 
 Backend (neu):
@@ -44,7 +84,7 @@ Frontend (neu):
 - `frontend/src/pages/assistant/assistant-page.tsx`
 
 Frontend (geändert):
-- `frontend/src/pages/settings/settings-page.tsx`, `frontend/src/layouts/sidebar/app-sidebar.tsx`, `frontend/src/App.tsx`
+- `frontend/src/pages/settings/settings-page.tsx`, `frontend/src/layouts/sidebar/app-sidebar.tsx`, `frontend/src/layouts/breadcrumb.tsx`, `frontend/src/App.tsx`
 
 ---
 
@@ -96,8 +136,16 @@ In `backend/finance_server_bin.spec` die `hiddenimports=[...]`-Liste um folgende
 
 - [ ] **Step 5: Bestehende Backend-Tests laufen lassen (Regressionscheck)**
 
-Run (aus `backend/`): `.venv/bin/pytest -q`
-Expected: PASS (keine neuen Fehler durch die Dependency).
+Run (aus `backend/`): `.venv/bin/python -m pytest -q`
+Expected: `2 failed, 344 passed`. Die zwei Fehler in `tests/test_allocation_service.py`
+(`test_detects_recurring_income`, `test_breakdown_returns_used_transactions`, beide
+`KeyError: 'account_iban'` in `finance_server/services/allocation_service.py:455`) sind
+**vorbestehend** und dürfen sich durch dieses Plan nicht verändern. Baseline merken und
+in späteren Tasks als Vergleichsmaßstab nutzen.
+
+> Hinweis: `.venv/bin/pytest` **ohne** `-m` schlägt fehl, weil `finance_server` nicht im
+> venv installiert ist und pytest nur `backend/tests` auf `sys.path` legt. Deshalb
+> durchgehend `.venv/bin/python -m pytest`.
 
 - [ ] **Step 6: Commit**
 
@@ -184,7 +232,7 @@ def test_default_base_url_when_unset(mem_settings):
 
 - [ ] **Step 2: Test laufen lassen, Fehlschlag bestätigen**
 
-Run (aus `backend/`): `.venv/bin/pytest tests/test_assistant.py -q`
+Run (aus `backend/`): `.venv/bin/python -m pytest tests/test_assistant.py -q`
 Expected: FAIL mit `ModuleNotFoundError: No module named 'finance_server.services.assistant'`.
 
 - [ ] **Step 3: Paket und Config-Modul implementieren**
@@ -275,7 +323,7 @@ def save_ai_config(
 
 - [ ] **Step 4: Test laufen lassen, Erfolg bestätigen**
 
-Run (aus `backend/`): `.venv/bin/pytest tests/test_assistant.py -q`
+Run (aus `backend/`): `.venv/bin/python -m pytest tests/test_assistant.py -q`
 Expected: PASS (4 Tests).
 
 - [ ] **Step 5: Commit**
@@ -306,7 +354,12 @@ git commit -m "feat: KI-Konfiguration speichern und maskieren"
 Ans Ende von `backend/tests/test_assistant.py`:
 
 ```python
+from datetime import date
+from unittest.mock import patch
+
 from finance_server.services.assistant.context import (
+    MAX_CONTEXT_TRANSACTIONS,
+    build_context,
     build_system_prompt,
     resolve_date_range,
 )
@@ -314,8 +367,7 @@ from finance_server.services.assistant.context import (
 
 def test_resolve_date_range_defaults_to_last_year():
     start, end = resolve_date_range(None, None)
-    assert end >= start
-    assert len(start) == 10 and len(end) == 10
+    assert (date.fromisoformat(end) - date.fromisoformat(start)).days == 365
 
 
 def test_resolve_date_range_honours_explicit_values():
@@ -361,12 +413,74 @@ def test_build_system_prompt_notes_truncation():
         "transaction_count": 500,
         "transactions_truncated": True,
     }
-    assert "nur die ersten 200" in build_system_prompt(context)
+    assert f"nur die ersten {MAX_CONTEXT_TRANSACTIONS}" in build_system_prompt(context)
+```
+
+- [ ] **Step 1b: `build_context` gegen die echte DB testen (Kappung + Kategorie-Name)**
+
+`build_context` ist keine reine Funktion, sondern greift auf die DB zu. Ohne Test bleibt
+Global Constraint „gekappt bei 200" ungeprüft. An das Ende von
+`backend/tests/test_assistant.py`:
+
+```python
+from unittest.mock import patch
+
+from finance_server.services.assistant.context import (
+    MAX_CONTEXT_TRANSACTIONS,
+    build_context,
+)
+
+
+def _seed_transactions(connection, count: int, kategorie_id: int | None) -> None:
+    connection.executemany(
+        """
+        INSERT INTO umsaetze (date, amount, recipient_name, purpose, kategorie)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        [
+            (
+                "2025-01-05",
+                -float(index),
+                f"SHOP{index}",
+                "Einkauf",
+                kategorie_id,
+            )
+            for index in range(count)
+        ],
+    )
+    connection.commit()
+
+
+def test_build_context_caps_transactions(test_db):
+    with patch(
+        "finance_server.db.settings.get_connection", return_value=test_db
+    ):
+        _seed_transactions(test_db, MAX_CONTEXT_TRANSACTIONS + 50, None)
+        context = build_context("2025-01-01", "2025-12-31")
+
+    assert len(context["transactions"]) == MAX_CONTEXT_TRANSACTIONS
+    assert context["transaction_count"] == MAX_CONTEXT_TRANSACTIONS + 50
+    assert context["transactions_truncated"] is True
+
+
+def test_build_context_resolves_category_id_to_name(test_db):
+    with patch(
+        "finance_server.db.settings.get_connection", return_value=test_db
+    ):
+        cursor = test_db.execute(
+            "INSERT INTO kategorien (name, typ) VALUES ('Lebensmittel', 'ausgabe')"
+        )
+        kategorie_id = cursor.lastrowid
+        test_db.commit()
+        _seed_transactions(test_db, 1, kategorie_id)
+        context = build_context("2025-01-01", "2025-12-31")
+
+    assert context["transactions"][0]["category"] == "Lebensmittel"
 ```
 
 - [ ] **Step 2: Test laufen lassen, Fehlschlag bestätigen**
 
-Run (aus `backend/`): `.venv/bin/pytest tests/test_assistant.py -q`
+Run (aus `backend/`): `.venv/bin/python -m pytest tests/test_assistant.py -q`
 Expected: FAIL mit `ModuleNotFoundError: No module named 'finance_server.services.assistant.context'`.
 
 - [ ] **Step 3: context.py implementieren**
@@ -385,6 +499,7 @@ from finance_server.db.analytics import (
     fetch_summary,
 )
 from finance_server.db.budgets import list_budgets
+from finance_server.db.categories import list_categories
 from finance_server.db.transactions import fetch_transactions
 
 MAX_CONTEXT_TRANSACTIONS = 200
@@ -397,7 +512,10 @@ def resolve_date_range(from_date: str | None, to_date: str | None) -> tuple[str,
     return start, end
 
 
-def _compact_transaction(transaction: dict[str, Any]) -> dict[str, Any]:
+def _compact_transaction(
+    transaction: dict[str, Any], category_names: dict[int, str]
+) -> dict[str, Any]:
+    category_id = transaction.get("kategorie")
     return {
         "date": (
             transaction.get("entry_date")
@@ -409,15 +527,19 @@ def _compact_transaction(transaction: dict[str, Any]) -> dict[str, Any]:
         or transaction.get("applicant_name")
         or "",
         "purpose": transaction.get("purpose") or transaction.get("purpose_edit") or "",
-        "category": transaction.get("kategorie") or "",
+        "category": category_names.get(category_id, ""),
     }
 
 
 def build_context(from_date: str | None, to_date: str | None) -> dict[str, Any]:
     start, end = resolve_date_range(from_date, to_date)
     transactions = fetch_transactions(None, from_date=start, to_date=end)
+    # umsaetze.kategorie ist eine INTEGER-ID; das Modell braucht den Namen.
+    category_names = {
+        category["id"]: category["name"] for category in list_categories()
+    }
     compact = [
-        _compact_transaction(transaction)
+        _compact_transaction(transaction, category_names)
         for transaction in transactions[:MAX_CONTEXT_TRANSACTIONS]
     ]
     return {
@@ -471,7 +593,7 @@ def build_system_prompt(context: dict[str, Any]) -> str:
     lines += ["", f"Transaktionen ({len(context['transactions'])}):"]
     for transaction in context["transactions"]:
         lines.append(
-            f"- {transaction['date']} | {transaction['amount']} EUR | "
+            f"- {transaction['date']} | {transaction['amount']:.2f} EUR | "
             f"{transaction['recipient']} | {transaction['purpose']} | "
             f"{transaction['category']}"
         )
@@ -487,8 +609,9 @@ def build_system_prompt(context: dict[str, Any]) -> str:
 
 - [ ] **Step 4: Test laufen lassen, Erfolg bestätigen**
 
-Run (aus `backend/`): `.venv/bin/pytest tests/test_assistant.py -q`
-Expected: PASS (8 Tests).
+Run (aus `backend/`): `.venv/bin/python -m pytest tests/test_assistant.py -q`
+Expected: PASS (10 Tests) — 8 aus Step 1 plus `test_build_context_caps_transactions`
+und `test_build_context_resolves_category_id_to_name` aus Step 1b.
 
 - [ ] **Step 5: Commit**
 
@@ -581,7 +704,7 @@ def test_list_models_returns_ids():
 
 - [ ] **Step 2: Tests laufen lassen, Fehlschlag bestätigen**
 
-Run (aus `backend/`): `.venv/bin/pytest tests/test_assistant.py -q`
+Run (aus `backend/`): `.venv/bin/python -m pytest tests/test_assistant.py -q`
 Expected: FAIL mit `ModuleNotFoundError: No module named 'finance_server.services.assistant.client'`.
 
 - [ ] **Step 3: client.py implementieren**
@@ -672,7 +795,7 @@ async def list_models(
 
 - [ ] **Step 4: Tests laufen lassen, Erfolg bestätigen**
 
-Run (aus `backend/`): `.venv/bin/pytest tests/test_assistant.py -q`
+Run (aus `backend/`): `.venv/bin/python -m pytest tests/test_assistant.py -q`
 Expected: PASS (11 Tests).
 
 - [ ] **Step 5: Commit**
@@ -717,7 +840,7 @@ def test_sse_format():
 
 - [ ] **Step 2: Test laufen lassen, Fehlschlag bestätigen**
 
-Run (aus `backend/`): `.venv/bin/pytest tests/test_assistant.py -q`
+Run (aus `backend/`): `.venv/bin/python -m pytest tests/test_assistant.py -q`
 Expected: FAIL mit `ModuleNotFoundError: No module named 'finance_server.api.assistant'`.
 
 - [ ] **Step 3: Modelle implementieren**
@@ -815,8 +938,6 @@ async def get_assistant_models(payload: ModelsRequest) -> dict[str, Any]:
     config = load_ai_config()
     base_url = (payload.base_url or config["base_url"]).strip()
     api_key = payload.api_key if payload.api_key is not None else config["api_key"]
-    if not base_url:
-        raise HTTPException(status_code=400, detail="Keine Base-URL konfiguriert")
     try:
         models = await list_models(base_url=base_url, api_key=api_key)
     except AssistantError as err:
@@ -827,7 +948,8 @@ async def get_assistant_models(payload: ModelsRequest) -> dict[str, Any]:
 @router.post("/assistant/chat")
 async def assistant_chat(payload: ChatRequest) -> StreamingResponse:
     config = load_ai_config()
-    if not config["enabled"] or not config["base_url"].strip() or not config["model"].strip():
+    # base_url kann nie leer sein: load_ai_config() fällt auf DEFAULT_BASE_URL zurück.
+    if not config["enabled"] or not config["model"].strip():
         raise HTTPException(status_code=400, detail="KI ist nicht konfiguriert")
 
     context = await run_in_threadpool(build_context, payload.date_from, payload.date_to)
@@ -869,7 +991,7 @@ app.include_router(assistant_router, prefix="/api")
 
 - [ ] **Step 6: Tests laufen lassen, Erfolg bestätigen**
 
-Run (aus `backend/`): `.venv/bin/pytest tests/test_assistant.py -q`
+Run (aus `backend/`): `.venv/bin/python -m pytest tests/test_assistant.py -q`
 Expected: PASS (12 Tests).
 
 - [ ] **Step 7: Router-Import prüfen**
@@ -1100,8 +1222,9 @@ export function useAssistantConfig(): AssistantConfig | null {
 
 - [ ] **Step 7: Frontend-Build als Compile-Check**
 
-Run (aus `frontend/`): `pnpm build`
-Expected: Build erfolgreich, keine Importfehler.
+Run (aus `frontend/`): `npx tsc -p tsconfig.json --noEmit`
+Expected: keine Ausgabe, Exit 0. (`pnpm build` ist nur `vite build` ohne `tsc` und
+prüft nichts — neue, noch nicht importierte Dateien werden dort gar nicht geparst.)
 
 - [ ] **Step 8: Commit**
 
@@ -1192,6 +1315,10 @@ export function AssistantTab() {
   }, [baseUrl, apiKey]);
 
   const save = useCallback(async () => {
+    if (enabled && !model.trim()) {
+      toast.error("Ohne Modell kann der Assistent nicht aktiviert werden.");
+      return;
+    }
     setSaving(true);
     try {
       const config = await updateAssistantConfig({
@@ -1210,6 +1337,21 @@ export function AssistantTab() {
       setSaving(false);
     }
   }, [enabled, baseUrl, model, apiKey]);
+
+  const clearApiKey = useCallback(async () => {
+    setSaving(true);
+    try {
+      const config = await updateAssistantConfig({ api_key: "" });
+      setHasApiKey(config.has_api_key);
+      setApiKey("");
+      window.dispatchEvent(new CustomEvent(ASSISTANT_CONFIG_CHANGED_EVENT));
+      toast.success("API-Key entfernt");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Entfernen fehlgeschlagen");
+    } finally {
+      setSaving(false);
+    }
+  }, []);
 
   if (loading) {
     return (
@@ -1249,13 +1391,25 @@ export function AssistantTab() {
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="ai-api-key">API-Key (optional)</Label>
-          <Input
-            id="ai-api-key"
-            type="password"
-            value={apiKey}
-            onChange={(event) => setApiKey(event.target.value)}
-            placeholder={hasApiKey ? "•••••••• (gespeichert)" : "nur falls der Server einen braucht"}
-          />
+          <div className="flex gap-2">
+            <Input
+              id="ai-api-key"
+              type="password"
+              value={apiKey}
+              onChange={(event) => setApiKey(event.target.value)}
+              placeholder={hasApiKey ? "•••••••• (gespeichert)" : "nur falls der Server einen braucht"}
+            />
+            {hasApiKey && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void clearApiKey()}
+                disabled={saving}
+              >
+                Key entfernen
+              </Button>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -1337,7 +1491,7 @@ const SETTINGS_TAB_VALUES = [
 4. Eintrag im `tabs`-Array ergänzen:
 
 ```ts
-  { value: "assistant", label: "KI", icon: Sparkles },
+  { value: "assistant" as const, label: "KI", icon: Sparkles },
 ```
 
 5. Eintrag in `tabComponents` ergänzen:
@@ -1348,12 +1502,13 @@ const SETTINGS_TAB_VALUES = [
 
 - [ ] **Step 3: Build als Compile-Check**
 
-Run (aus `frontend/`): `pnpm build`
-Expected: Build erfolgreich.
+Run (aus `frontend/`): `npx tsc -p tsconfig.json --noEmit`
+Expected: keine Ausgabe, Exit 0. (`pnpm build` ist nur `vite build` ohne `tsc` und
+prüft nichts — neue, noch nicht importierte Dateien werden dort gar nicht geparst.)
 
-- [ ] **Step 4: Manuell verifizieren**
+- [ ] **Step 4: Manuell verifizieren (Voraussetzung: `ollama serve` mit geladenem Modell)**
 
-Backend + Frontend starten (`pnpm run start`), Einstellungen → Tab „KI": Base-URL eintragen, „Modelle laden" klicken.
+Backend + Frontend starten (aus Repo-Wurzel: `pnpm run start`), Einstellungen → Tab „KI": Base-URL eintragen, „Modelle laden" klicken.
 Expected: Bei laufendem Ollama/LM Studio erscheint eine Modell-Liste und der Toast „N Modelle gefunden"; bei falscher URL ein Fehler-Toast.
 
 - [ ] **Step 5: Commit**
@@ -1369,6 +1524,7 @@ git commit -m "feat: Einstellungen-Tab für den KI-Assistenten"
 
 **Files:**
 - Modify: `frontend/src/layouts/sidebar/app-sidebar.tsx`
+- Modify: `frontend/src/layouts/breadcrumb.tsx`
 - Modify: `frontend/src/App.tsx`
 - Create: `frontend/src/pages/assistant/assistant-page.tsx` (nur Platzhalter in diesem Task)
 
@@ -1423,7 +1579,10 @@ import { FileText, Gauge, Repeat, Sparkles, Target, Wallet, Waypoints } from "lu
 import { useAssistantConfig } from "@/hooks/use-assistant-config";
 ```
 
-3. Innerhalb der Komponente `navData` ersetzen. Direkt nach `export function AppSidebar({ ...props }...) {`:
+3. Den Block `const navData = { navMain: [...] };` (aktuell direkt unter
+   `export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {`,
+   ca. Zeile 44-53) **durch** folgendes ersetzen — nicht zusätzlich einfügen, nicht
+   danach noch entfernen:
 
 ```tsx
   const assistantConfig = useAssistantConfig();
@@ -1440,23 +1599,33 @@ import { useAssistantConfig } from "@/hooks/use-assistant-config";
   ];
 ```
 
-4. Die alte `const navData = { navMain: [...] };`-Definition entfernen.
+4. `<NavMain items={navData.navMain} />` zu `<NavMain items={navMain} />` ändern.
 
-5. `<NavMain items={navData.navMain} />` zu `<NavMain items={navMain} />` ändern.
+- [ ] **Step 4: Breadcrumb-Titel ergänzen**
 
-- [ ] **Step 4: Build als Compile-Check**
+In `frontend/src/layouts/breadcrumb.tsx` in die `titles`-Map (aktuell ca. Zeile 100-108)
+einen Eintrag aufnehmen, sonst rendert die Route den rohen Kleinbuchstaben `assistant`:
 
-Run (aus `frontend/`): `pnpm build`
-Expected: Build erfolgreich.
+```ts
+    assistant: "KI-Assistent",
+```
 
-- [ ] **Step 5: Manuell verifizieren**
+- [ ] **Step 5: Build als Compile-Check**
 
-Bei konfigurierter KI (Task 7) erscheint „KI-Assistent" in der Sidebar und die Route lädt den Platzhalter. Ohne Konfiguration ist das Item nicht sichtbar.
+Run (aus `frontend/`): `npx tsc -p tsconfig.json --noEmit`
+Expected: keine Ausgabe, Exit 0. (`pnpm build` ist `vite build` ohne `tsc` und prüft
+nichts — neue, noch nicht importierte Dateien würden dort gar nicht erst geparst.)
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Manuell verifizieren**
+
+Bei konfigurierter KI (Task 7) erscheint „KI-Assistent" in der Sidebar, der Breadcrumb
+zeigt „KI-Assistent" und die Route lädt den Platzhalter. Ohne Konfiguration ist das Item
+nicht sichtbar.
+
+- [ ] **Step 7: Commit**
 
 ```bash
-git add frontend/src/pages/assistant/assistant-page.tsx frontend/src/App.tsx frontend/src/layouts/sidebar/app-sidebar.tsx
+git add frontend/src/pages/assistant/assistant-page.tsx frontend/src/App.tsx frontend/src/layouts/sidebar/app-sidebar.tsx frontend/src/layouts/breadcrumb.tsx
 git commit -m "feat: KI-Assistent-Route und bedingtes Sidebar-Item"
 ```
 
@@ -1684,12 +1853,13 @@ export default function AssistantPage() {
 
 - [ ] **Step 3: Build als Compile-Check**
 
-Run (aus `frontend/`): `pnpm build`
-Expected: Build erfolgreich.
+Run (aus `frontend/`): `npx tsc -p tsconfig.json --noEmit`
+Expected: keine Ausgabe, Exit 0. (`pnpm build` ist nur `vite build` ohne `tsc` und
+prüft nichts — neue, noch nicht importierte Dateien werden dort gar nicht geparst.)
 
-- [ ] **Step 4: Manuell verifizieren**
+- [ ] **Step 4: Manuell verifizieren (Voraussetzung: `ollama serve` mit geladenem Modell)**
 
-`pnpm run start`, KI-Assistent öffnen, eine Frage stellen.
+Aus Repo-Wurzel: `pnpm run start`, KI-Assistent öffnen, eine Frage stellen.
 Expected: Frage erscheint rechts, Antwort streamt Wort für Wort links; „Leeren" setzt den Chat zurück; bei unerreichbarem Server erscheint eine Fehlermeldung.
 
 - [ ] **Step 5: Commit**
@@ -1706,15 +1876,25 @@ git commit -m "feat: Chat-UI mit gestreamten KI-Antworten"
 **Spec coverage:**
 - Ziel / lokaler OpenAI-kompatibler Server → Tasks 4, 5, 6, 7.
 - Nicht-Ziele (keine Cloud, kein Tool-Calling, keine Persistenz) → eingehalten (kein Task nötig).
-- Konfiguration (`ai_enabled`, `ai_base_url`, `ai_model`, `ai_api_key`) + Fernet → Task 2.
+- Konfiguration (`ai_enabled`, `ai_base_url`, `ai_model`, `ai_api_key_enc`) + Fernet → Task 2.
 - Backend-Endpoints (config/models/chat, SSE) → Task 5.
-- Kontext + System-Prompt, 200er-Kappung → Task 3.
+- Kontext + System-Prompt → Task 3. Die 200er-Kappung (`MAX_CONTEXT_TRANSACTIONS`) wird
+  dort gegen die echte DB getestet, ebenso die Auflösung der Kategorie-ID auf den Namen.
 - Frontend Settings-Tab, Chat-Seite, Streaming-Hook → Tasks 6–9.
 - Sidebar nur wenn konfiguriert → Task 8.
 - Chat-Optik wie normale Chat-App (Bubbles, Auto-Scroll, Enter senden, Denkt-Indikator) → Task 9.
 - Fehlerbehandlung (nicht konfiguriert → 400; nicht erreichbar → `error`-Event/Fehlermeldung) → Tasks 4, 5, 9.
-- Tests (Kontext, Maskierung, Fake-Upstream) → Tasks 2–6.
+- Tests (Kontext, Maskierung, Fake-Upstream) → Tasks 2–6. `build_context` wird bewusst
+  DB-gestützt getestet, weil es keine reine Funktion ist.
 - Dependency `httpx` + Build → Task 1.
+
+**Abweichungen:** siehe Abschnitt „Abweichungen von der Spezifikation" — sieben
+Design-Requirements sind bewusst nicht umgesetzt, jeweils mit Grund.
+
+**Pre-Flight-Korrekturen:** Testbefehle (`python -m pytest`, Baseline 2 rot), Task-3
+Kategorie-Auflösung und Kappungs-Test, Task-5 unerreichbare Guards entfernt, Task-7
+Key-Entfernen + Warnung bei aktiv ohne Modell, Task-8 Breadcrumb, `tsc --noEmit` als
+Compile-Check. Details im Abschnitt „Ausführungs-Hinweise (Pre-Flight)".
 
 **Placeholder-Scan:** keine „TBD/TODO"; jeder Code-Schritt enthält vollständigen Code.
 
