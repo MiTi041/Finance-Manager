@@ -78,9 +78,19 @@ Ohne Zeitraum: globaler Date-Filter des Frontends, sonst letzte 12 Monate.
 - `pages/settings/tabs/assistant-tab.tsx` — Base-URL, Modell-Dropdown (aus
   `/models`), optionaler Key, „Verbindung testen", An/Aus-Schalter. Als neuer Tab
   in `settings-page.tsx` registriert.
-- `pages/assistant/` — Chat-Seite mit Sidebar-Eintrag; nutzt bestehende UI-Bausteine.
+- `pages/assistant/` — Chat-Seite im Stil einer normalen Chat-App: scrollbare
+  Nachrichtenliste (Nutzer rechts, Assistent links, Avatar), Markdown-Antworten,
+  Eingabefeld mit Senden-Button (Enter sendet, Shift+Enter neue Zeile),
+  Auto-Scroll, „Denkt nach …"-Indikator während des Streamings.
 - `hooks/use-assistant.ts` — streamt per `fetch` + `ReadableStream` und hängt die
   `token`-Events an die Nachricht an.
+
+### Sichtbarkeit des Sidebar-Items
+
+Das KI-Item in der Sidebar wird **nur angezeigt, wenn der Assistent konfiguriert
+ist**: `ai_enabled == true` **und** `ai_base_url` **und** `ai_model` gesetzt. Ein
+API-Key ist nicht erforderlich (Ollama/LM Studio ohne Key). Andernfalls ist das
+Item ausgeblendet; die Konfiguration erfolgt über den Einstellungen-Tab.
 
 ## Fehlerbehandlung
 
