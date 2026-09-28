@@ -11,6 +11,7 @@ import {
   UserCheck,
   Bell,
   KeyRound,
+  Sparkles,
 } from "lucide-react";
 import {
   Sidebar,
@@ -30,6 +31,7 @@ import { SyncTab } from "./tabs/sync-tab";
 import { NotificationsTab } from "./tabs/notifications-tab";
 import { ApiKeysTab } from "./tabs/api-keys-tab";
 import { AllocationSettingsTab } from "./tabs/allocation/allocation-settings-tab";
+import { AssistantTab } from "./tabs/assistant-tab";
 const SETTINGS_TAB_VALUES = [
   "banking",
   "zahlungspartner",
@@ -39,6 +41,7 @@ const SETTINGS_TAB_VALUES = [
   "sync",
   "notifications",
   "keys",
+  "assistant",
   "productId",
   "database",
 ] as const;
@@ -57,6 +60,7 @@ const tabs = [
   { value: "sync" as const, label: "Sync", icon: RefreshCw },
   { value: "notifications" as const, label: "Benachrichtigungen", icon: Bell },
   { value: "keys" as const, label: "API-Schlüssel", icon: KeyRound },
+  { value: "assistant" as const, label: "KI", icon: Sparkles },
   { value: "productId" as const, label: "Produkt-ID", icon: Fingerprint },
   { value: "database" as const, label: "Datenbank", icon: Database },
 ];
@@ -70,6 +74,7 @@ const tabComponents: Record<SettingsTabValue, () => React.ReactNode> = {
   sync: () => <SyncTab />,
   notifications: () => <NotificationsTab />,
   keys: () => <ApiKeysTab />,
+  assistant: () => <AssistantTab />,
   productId: () => <ProductIdTab />,
   database: () => <DbExportImportTab />,
 };
