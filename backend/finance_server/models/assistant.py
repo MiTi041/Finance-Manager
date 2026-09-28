@@ -10,8 +10,8 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[ChatMessage]
-    date_from: str | None = None
-    date_to: str | None = None
+    # None = Modell-Default. False = Denken abschalten (reasoning_effort "none").
+    think: bool | None = None
 
 
 class AssistantConfigUpdate(BaseModel):

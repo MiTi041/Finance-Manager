@@ -73,13 +73,13 @@ const bucketAccents: Record<
 const bucketDescriptions: Record<string, (pct: number) => string> = {
   spending: () => "Budget nach Sparplänen, Notgroschen, Investieren und Spenden.",
   emergency: (pct) => `${pct}% vom verbleibenden Netto nach Sparplänen.`,
-  invest: (pct) => `${pct}% vom verbleibenden Netto nach Sparplänen.`,
+  invest: (pct) => `${pct}% vom verbleibenden Netto nach Sparplänen, aufgerundet auf ganze Euro.`,
   donation: (pct) => `${pct}% vom Netto-Einkommen.`,
 };
 const bucketDescriptionsBafoeg: Record<string, (pct: number) => string> = {
   spending: () => "Budget nach Bafög, Sparplänen, Notgroschen, Investieren und Spenden.",
   emergency: (pct) => `${pct}% vom verbleibenden Netto nach Bafög und Sparplänen.`,
-  invest: (pct) => `${pct}% vom verbleibenden Netto nach Bafög und Sparplänen.`,
+  invest: (pct) => `${pct}% vom verbleibenden Netto nach Bafög und Sparplänen, aufgerundet auf ganze Euro.`,
   donation: (pct) => `${pct}% vom Netto nach Bafög.`,
 };
 

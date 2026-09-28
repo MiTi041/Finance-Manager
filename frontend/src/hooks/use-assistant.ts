@@ -5,9 +5,25 @@ import { canStartStream, historyForRequest, type ChatMessage } from "@/lib/assis
 
 export type { ChatMessage };
 
-export function useAssistant(dateFrom?: string, dateTo?: string) {
+const TOOL_LABELS: Record<string, string> = {
+  get_summary: "Fasse Einnahmen und Ausgaben zusammen …",
+  get_category_analytics: "Analysiere Kategorien …",
+  get_account_balances: "Lese Kontostände …",
+  get_budgets: "Prüfe Budgets …",
+  get_transactions: "Suche Transaktionen …",
+  get_partner_analytics: "Analysiere Zahlungspartner …",
+  list_accounts: "Lade Konten …",
+  list_categories: "Lade Kategorien …",
+};
+
+function toolLabel(name: string) {
+  return TOOL_LABELS[name] ?? "Rufe Daten ab …";
+}
+
+export function useAssistant() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Nicht null heißt: genau dieser Stream läuft gerade, und der Platz ist
   // damit belegt. Der Send-Wächter hängt hier dran und nicht am State
@@ -16,7 +32,7 @@ export function useAssistant(dateFrom?: string, dateTo?: string) {
   const abortRef = useRef<AbortController | null>(null);
 
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, think = true) => {
       if (!canStartStream(abortRef.current, text)) return;
       const trimmed = text.trim();
 
@@ -52,12 +68,14 @@ export function useAssistant(dateFrom?: string, dateTo?: string) {
       try {
         await streamAssistantChat({
           messages: history,
-          dateFrom,
-          dateTo,
+          think,
           signal: controller.signal,
           onEvent: (event) => {
             if (event.type === "token") {
               appendToken(event.text);
+              setStatus(null);
+            } else if (event.type === "tool") {
+              setStatus(toolLabel(event.name));
             } else if (event.type === "error") {
               // Absichtlich ohne Verwerfen der bisherigen Tokens: eine
               // abgeschnittene Antwort ist besser als eine leere.
@@ -77,10 +95,11 @@ export function useAssistant(dateFrom?: string, dateTo?: string) {
         if (abortRef.current === controller) {
           abortRef.current = null;
           setStreaming(false);
+          setStatus(null);
         }
       }
     },
-    [messages, dateFrom, dateTo],
+    [messages],
   );
 
   const reset = useCallback(() => {
@@ -90,11 +109,12 @@ export function useAssistant(dateFrom?: string, dateTo?: string) {
     abortRef.current?.abort();
     setMessages([]);
     setError(null);
+    setStatus(null);
   }, []);
 
   // Beim Verlassen der Seite den laufenden Stream beenden, sonst liest der
   // Fetch weiter, bis der Modell-Server von sich aus fertig ist.
   useEffect(() => () => abortRef.current?.abort(), []);
 
-  return { messages, streaming, error, send, reset };
+  return { messages, streaming, status, error, send, reset };
 }

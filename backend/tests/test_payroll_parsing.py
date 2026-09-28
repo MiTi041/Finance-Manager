@@ -8,6 +8,7 @@ from finance_server.db.sync import apply_sync_op
 from finance_server.db.transactions import to_row_payload
 from finance_server.services.payroll_parsing import (
     enrich_adyen_merchant,
+    enrich_card_merchant,
     enrich_paypal_merchant,
 )
 
@@ -112,6 +113,79 @@ class TestEnrichAdyenMerchant:
         assert payload["applicant_iban"] == "ADYEN:ZALANDO PAYMENTS GMBH"
         assert payload["gvc_applicant_iban"] == "DE29300600100005021573"
         assert payload["gvc_applicant_bic"] == "GENODEDDXXX"
+
+
+class TestEnrichCardMerchant:
+    def test_abrechnung_karte_gets_enriched(self):
+        data = {
+            "applicant_name": "ABRECHNUNG KARTE",
+            "applicant_iban": "DE77100777770999974900",
+            "applicant_bic": "NORISDEFFXXX",
+            "purpose": "SUBWAY69009-0//BIELEFELD/DE 18-09-2026T19:55:34 Kartennr. 5297999999995777",
+        }
+        enrich_card_merchant(data)
+        assert data["applicant_name"] == "KARTE SUBWAY69009-0"
+        assert data["applicant_iban"] == "KARTE:SUBWAY69009-0"
+        assert data["applicant_bic"] == ""
+        assert data["gvc_applicant_iban"] == "DE77100777770999974900"
+        assert data["gvc_applicant_bic"] == "NORISDEFFXXX"
+        # Verwendungszweck bleibt vollständig erhalten (Kartennr. + Fremdwährung)
+        assert "Kartennr. 5297999999995777" in data["purpose"]
+
+    def test_norisbank_debitkarte_keeps_purpose_tail(self):
+        data = {
+            "applicant_name": "NORISBANK DEBITKARTE",
+            "applicant_iban": "DE24100777770004020400",
+            "applicant_bic": "",
+            "purpose": (
+                "DeepSeek//HONG KONG/HK 24-09-2026T23:18:00 Kartennr. 5354999999996211"
+                "  Original 2,12 USD 1 EUR/1,13368 USD Entgelt 0,02 EUR"
+            ),
+        }
+        enrich_card_merchant(data)
+        assert data["applicant_iban"] == "KARTE:DEEPSEEK"
+        assert data["applicant_name"] == "KARTE DeepSeek"
+
+    def test_card_settlement_without_merchant_untouched(self):
+        data = {
+            "applicant_name": "Lastschrift aus Kartenzahlung",
+            "applicant_iban": "DE24100777770004020400",
+            "purpose": "2023-07-03T22:29      Debitk.17 2026-12",
+        }
+        enrich_card_merchant(data)
+        assert data["applicant_name"] == "Lastschrift aus Kartenzahlung"
+        assert data["applicant_iban"] == "DE24100777770004020400"
+        assert "gvc_applicant_iban" not in data
+
+    def test_non_card_payee_untouched(self):
+        data = {
+            "applicant_name": "Adyen N.V.",
+            "applicant_iban": "DE29300600100005021573",
+            "purpose": "Zalando Payments GmbH/Berlin/DE 18-09-2026T19:55:34",
+        }
+        enrich_card_merchant(data)
+        assert data["applicant_iban"] == "DE29300600100005021573"
+        assert "gvc_applicant_iban" not in data
+
+    def test_card_enriched_through_insert_funnel(self):
+        payload = to_row_payload(
+            {
+                "account": {"iban": "AT111"},
+                "data": {
+                    "account_iban": "AT111",
+                    "applicant_name": "ABRECHNUNG KARTE",
+                    "applicant_iban": "DE77100777770999974900",
+                    "applicant_bic": "NORISDEFFXXX",
+                    "purpose": "REWE Regiemarkt Gm//Leopoldshoehe/DE 24-09-2026T20:10:01 Kartennr. 5354999999996211",
+                    "amount": -6.76,
+                    "currency": "EUR",
+                    "date": "2026-09-28",
+                },
+            }
+        )
+        assert payload["applicant_name"] == "KARTE REWE Regiemarkt Gm"
+        assert payload["applicant_iban"] == "KARTE:REWE REGIEMARKT GM"
+        assert payload["gvc_applicant_iban"] == "DE77100777770999974900"
 
 
 class TestToRowPayload:

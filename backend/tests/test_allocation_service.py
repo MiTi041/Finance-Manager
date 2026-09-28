@@ -274,6 +274,39 @@ class TestBuildRunResponse:
 
         assert result["net_income"] == 2000.0
 
+    def test_invest_target_rounds_up_to_whole_euro(self):
+        service = AllocationService()
+        buckets = [
+            {"bucket_type": "invest", "percentage": 10, "id": 1, "is_active": True, "sort_order": 0, "recipient_account_id": None, "sender_iban": None},
+            {"bucket_type": "spending", "percentage": 90, "id": 2, "is_active": True, "sort_order": 1, "recipient_account_id": None, "sender_iban": None},
+        ]
+        run_buckets = [
+            {"id": 1, "run_id": 1, "bucket_id": 1, "bucket_type": "invest", "target_amount": 227.0, "transferred": 0.0, "is_completed": False},
+            {"id": 2, "run_id": 1, "bucket_id": 2, "bucket_type": "spending", "target_amount": 2042.0, "transferred": 0.0, "is_completed": False},
+        ]
+        run_data = {"id": 1, "month": "2026-07", "net_income": 2269.0, "total_allocated": 2269.0, "status": "pending"}
+        with (
+            patch("finance_server.services.allocation_service.db.list_buckets") as mock_list,
+            patch("finance_server.services.allocation_service.db.get_run_for_month") as mock_run,
+            patch("finance_server.services.allocation_service.db.create_run") as mock_create_run,
+            patch("finance_server.services.allocation_service.db.create_run_bucket") as mock_create_bucket,
+            patch("finance_server.services.allocation_service.db.get_run_buckets") as mock_run_buckets,
+            patch("finance_server.services.allocation_service.AllocationService._detect_income", return_value=2269.0),
+            patch("finance_server.services.allocation_service.AllocationService._detect_income_breakdown",
+                  return_value={"total": 2269.0, "sources": []}),
+            patch("finance_server.services.allocation_service.get_connection") as mock_conn,
+        ):
+            mock_conn.return_value.__enter__.return_value = self._make_conn_mock()
+            mock_list.return_value = buckets
+            mock_run.side_effect = [None, run_data]
+            mock_create_run.return_value = 1
+            mock_create_bucket.return_value = 1
+            mock_run_buckets.return_value = run_buckets
+
+            service.get_or_create_run("2026-07")
+
+        assert call(1, 1, 227.0) in mock_create_bucket.call_args_list
+
 
 class TestManualNetIncome:
     def _make_conn_mock(self):

@@ -45,8 +45,7 @@ export async function fetchAssistantModels(params: {
 
 export async function streamAssistantChat(params: {
   messages: { role: string; content: string }[];
-  dateFrom?: string;
-  dateTo?: string;
+  think?: boolean;
   onEvent: (event: AssistantEvent) => void;
   signal?: AbortSignal;
 }): Promise<void> {
@@ -55,8 +54,7 @@ export async function streamAssistantChat(params: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       messages: params.messages,
-      date_from: params.dateFrom ?? null,
-      date_to: params.dateTo ?? null,
+      think: params.think,
     }),
     signal: params.signal,
   });

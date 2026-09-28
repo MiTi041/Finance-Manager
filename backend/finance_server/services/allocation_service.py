@@ -215,6 +215,9 @@ class AllocationService:
             if bucket["bucket_type"] in ("donation", "spending"):
                 continue
             target = round(remaining * bucket["percentage"] / 100, 2)
+            if bucket["bucket_type"] == "invest":
+                # ponytail: invest always rounds up to a whole euro (226.90 → 227)
+                target = float(math.ceil(target))
             bucket_sum += target
             db.create_run_bucket(run_id, bucket["id"], target)
 

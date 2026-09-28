@@ -1,5 +1,6 @@
 export type AssistantEvent =
   | { type: "token"; text: string }
+  | { type: "tool"; name: string; arguments: string }
   | { type: "error"; message: string }
   | { type: "done" };
 

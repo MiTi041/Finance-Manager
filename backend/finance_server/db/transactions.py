@@ -669,6 +669,10 @@ def fetch_transactions(
     account_iban: str | None = None,
     from_date: str | None = None,
     to_date: str | None = None,
+    *,
+    category_id: int | None = None,
+    search: str | None = None,
+    limit: int | None = None,
 ) -> list[dict[str, Any]]:
     query_parts = [
         "SELECT u.*, "
@@ -702,12 +706,39 @@ def fetch_transactions(
         params.append(cutoff_date)
 
     if account_iban:
-        query_parts.append("AND account_iban = ?")
+        query_parts.append("AND u.account_iban = ?")
         params.append(account_iban)
+
+    if category_id is not None:
+        query_parts.append("AND u.kategorie = ?")
+        params.append(category_id)
+
+    if search:
+        # ponytail: einfaches LIKE, kein Volltext-Index — reicht fuer Chat-Suchen.
+        # Auch den via IBAN aufgeloesten Zahlungspartner matchen, sonst ist ein
+        # Partner (z.B. Deepseek hinter PAYPAL:...) zwar in der Liste sichtbar,
+        # aber nicht ueber den Suchbegriff auffindbar.
+        like = f"%{search}%"
+        query_parts.append(
+            "AND (COALESCE(u.recipient_name, '') LIKE ? "
+            "OR COALESCE(u.applicant_name, '') LIKE ? "
+            "OR COALESCE(u.purpose, '') LIKE ? "
+            "OR COALESCE(u.purpose_edit, '') LIKE ? "
+            "OR EXISTS (SELECT 1 FROM ibans i "
+            "JOIN zahlungspartner z ON z.id = i.f_zahlungspartner_id "
+            "WHERE REPLACE(UPPER(i.iban), ' ', '') = "
+            "REPLACE(UPPER(COALESCE(u.applicant_iban, u.gvc_applicant_iban, '')), ' ', '') "
+            "AND z.name LIKE ?))"
+        )
+        params.extend([like, like, like, like, like])
 
     query_parts.append(
         "ORDER BY COALESCE(entry_date, date, substr(created_at, 1, 10)) DESC, id DESC"
     )
+
+    if limit is not None:
+        query_parts.append("LIMIT ?")
+        params.append(max(1, limit))
 
     with get_connection() as connection:
         rows = connection.execute("\n".join(query_parts), params).fetchall()

@@ -4,7 +4,6 @@ import json
 from typing import Any, AsyncIterator
 
 from fastapi import APIRouter, HTTPException
-from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 
 from finance_server.models.assistant import (
@@ -15,17 +14,14 @@ from finance_server.models.assistant import (
 from finance_server.services.assistant.client import (
     AssistantError,
     list_models,
-    stream_chat,
+    run_chat,
 )
 from finance_server.services.assistant.config import (
     load_ai_config,
     public_ai_config,
     save_ai_config,
 )
-from finance_server.services.assistant.context import (
-    build_context,
-    build_system_prompt,
-)
+from finance_server.services.assistant.context import build_system_prompt
 
 router = APIRouter()
 
@@ -75,30 +71,28 @@ async def assistant_chat(payload: ChatRequest) -> StreamingResponse:
     if not config["enabled"] or not config["model"].strip():
         raise HTTPException(status_code=400, detail="KI ist nicht konfiguriert")
 
-    context = await run_in_threadpool(build_context, payload.date_from, payload.date_to)
-    messages: list[dict[str, str]] = [
-        {"role": "system", "content": build_system_prompt(context)}
-    ]
+    context = build_system_prompt()
+    messages: list[dict[str, str]] = [{"role": "system", "content": context}]
     messages += [{"role": message.role, "content": message.content} for message in payload.messages]
 
     async def event_stream() -> AsyncIterator[str]:
-        # stream_chat ist ein Async-Generator: der Aufruf führt keinen Teil des
+        # run_chat ist ein Async-Generator: der Aufruf führt keinen Teil des
         # Rumpfes aus, erst die Iteration. Ein try/except um den Aufruf herum fängt
         # deshalb weder einen abgelehnten API-Key noch den Abbruch ohne [DONE] —
         # die stehen in der __anext__-Schleife, und die beginnt hier schon.
         # Beides kommt als Event: die StreamingResponse ist unterwegs, ein
         # HTTPException hier käme nicht mehr an.
         try:
-            async for token in stream_chat(
+            async for event in run_chat(
                 base_url=config["base_url"],
                 api_key=config["api_key"],
                 model=config["model"],
                 messages=messages,
+                think=payload.think,
             ):
-                yield _sse({"type": "token", "text": token})
+                yield _sse(event)
         except AssistantError as err:
             yield _sse({"type": "error", "message": str(err)})
             return
-        yield _sse({"type": "done"})
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")

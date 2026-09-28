@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-"""Migrate existing Adyen transactions to use pseud-IBANs.
+"""Migrate existing debit card transactions to use pseud-IBANs.
 
-Der echte Händler steckt bei Adyen in ``deviate_applicant`` ("Händler/Straße/Ort/DE").
+Bei Kartenzahlungen belastet Norisbank das Konto der Karte ("NORISBANK
+DEBITKARTE" / "ABRECHNUNG KARTE"), der echte Händler steckt als erstes Segment
+im ``purpose`` ("Händler/Ort/LAND TT-MM-JJJJTHH:MM:SS Kartennr. ...").
 Das Skript setzt applicant_name/applicant_iban um und legt für jeden Händler ein
-``ADYEN:<HÄNDLER>``-Mapping auf einen Zahlungspartner an.
+``KARTE:<HÄNDLER>``-Mapping auf einen Zahlungspartner an.
+
+Buchungen ohne Händler ("Lastschrift aus Kartenzahlung") bleiben unangetastet.
 
 Run from repository root:
-  python backend/finance_server/scripts/migrate_adyen_transactions.py
+  python backend/finance_server/scripts/migrate_card_transactions.py
 """
 from __future__ import annotations
 
@@ -17,47 +21,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from finance_server.db import get_connection
 from finance_server.db.utils import build_transaction_hash
-from finance_server.services.payroll_parsing import enrich_adyen_merchant
+from finance_server.scripts.migrate_adyen_transactions import (
+    _create_partner,
+    _find_partner,
+)
+from finance_server.services.payroll_parsing import enrich_card_merchant
 
 # Händler ohne bestehenden Zahlungspartner, die automatisch angelegt werden.
-# Händlername (normalisiert) -> (Anzeigename, Website)
-NEW_MERCHANTS: dict[str, tuple[str, str]] = {
-    "DECATHLON BIELEFELD": ("Decathlon", "https://www.decathlon.de/"),
-    "AUTOGRILL DEUTSCHLAND": ("Autogrill", "https://www.autogrill.de/"),
-}
-
-
-def _normalize(value: str) -> str:
-    return "".join(ch for ch in (value or "").lower() if ch.isalnum())
-
-
-def _find_partner(connection, merchant: str) -> int | None:
-    target = _normalize(merchant)
-    best_id = None
-    best_key = None
-    for row in connection.execute("SELECT id, name FROM zahlungspartner"):
-        name = _normalize(row["name"])
-        if len(name) < 4:
-            continue
-        pos = target.find(name)
-        if pos < 0:
-            continue
-        # Längster Treffer gewinnt, bei Gleichstand der am weitesten vorne.
-        # Sonst kippt z. B. "APPLE.COM.BILL" nach Combi, weil "combi" (id 68)
-        # vor "apple" (id 126) in der Tabelle steht.
-        key = (pos, -len(name))
-        if best_key is None or key < best_key:
-            best_id, best_key = row["id"], key
-    return best_id
-
-
-def _create_partner(connection, name: str, website: str) -> int:
-    domain = website.split("//", 1)[-1].strip("/").removeprefix("www.")
-    cursor = connection.execute(
-        "INSERT INTO zahlungspartner (name, website, logo_url) VALUES (?, ?, ?)",
-        (name, website, f"https://logos.hunter.io/{domain}"),
-    )
-    return int(cursor.lastrowid)
+# Leer: der Fuzzy-Match in _find_partner trifft bei Kartenzahlungen (REWE, Subway,
+# Apple, ...) bereits auf vorhandene Partner. Bei neuen Händlern hier eintragen.
+NEW_MERCHANTS: dict[str, tuple[str, str]] = {}
 
 
 def _map_merchant(connection, merchant: str, pseudo_iban: str) -> str:
@@ -81,7 +54,7 @@ def _map_merchant(connection, merchant: str, pseudo_iban: str) -> str:
     return "created" if created else "mapped"
 
 
-def migrate_adyen_transactions() -> dict[str, int]:
+def migrate_card_transactions() -> dict[str, int]:
     stats = {
         "checked": 0, "migrated": 0, "no_merchant": 0, "already_done": 0,
         "mapped": 0, "unmapped": 0, "partners_created": 0,
@@ -89,16 +62,16 @@ def migrate_adyen_transactions() -> dict[str, int]:
 
     with get_connection() as conn:
         rows = conn.execute(
-            "SELECT * FROM umsaetze WHERE applicant_name LIKE '%Adyen%'"
+            "SELECT * FROM umsaetze WHERE applicant_name LIKE '%KARTE%'"
         ).fetchall()
 
         for row in rows:
             tx = dict(row)
             stats["checked"] += 1
 
-            if not tx["applicant_iban"].startswith("ADYEN:"):
-                enrich_adyen_merchant(tx)
-                if not tx["applicant_iban"].startswith("ADYEN:"):
+            if not (tx["applicant_iban"] or "").startswith("KARTE:"):
+                enrich_card_merchant(tx)
+                if not (tx["applicant_iban"] or "").startswith("KARTE:"):
                     stats["no_merchant"] += 1
                     continue
 
@@ -127,7 +100,7 @@ def migrate_adyen_transactions() -> dict[str, int]:
             else:
                 stats["already_done"] += 1
 
-            merchant = tx["applicant_name"].removeprefix("ADYEN ").strip()
+            merchant = tx["applicant_name"].removeprefix("KARTE ").strip()
             result = _map_merchant(conn, merchant, tx["applicant_iban"])
             if result == "unmapped":
                 stats["unmapped"] += 1
@@ -140,9 +113,9 @@ def migrate_adyen_transactions() -> dict[str, int]:
 
 
 def main() -> int:
-    stats = migrate_adyen_transactions()
+    stats = migrate_card_transactions()
     print(
-        f"Adyen-Migration: {stats['checked']} geprüft, "
+        f"Karten-Migration: {stats['checked']} geprüft, "
         f"{stats['migrated']} migriert, "
         f"{stats['no_merchant']} ohne Händler (übersprungen), "
         f"{stats['already_done']} bereits erledigt, "

@@ -162,29 +162,31 @@ export function TransactionsFilterBar({
         </Button>
       )}
 
-      <Button
-        type="button"
-        variant="ghost"
-        aria-pressed={hidePending}
-        className={
-          hidePending
-            ? "!bg-foreground !text-background hover:!bg-foreground/90 hover:!text-background"
-            : "!bg-muted !text-muted-foreground hover:!bg-muted/80 hover:!text-foreground"
-        }
-        onClick={onToggleHidePending}
-      >
-        <Clock className="size-4" />
-        <span>Vorgemerkte Umsätze ausblenden</span>
-        <span
+      {(pendingCount > 0 || hidePending) && (
+        <Button
+          type="button"
+          variant="ghost"
+          aria-pressed={hidePending}
           className={
             hidePending
-              ? "hidden shrink-0 rounded-full bg-blue-500/20 px-1.5 py-px text-[10px] font-medium text-blue-200 sm:inline dark:text-blue-300"
-              : "hidden shrink-0 rounded-full bg-blue-500/10 px-1.5 py-px text-[10px] font-medium text-blue-700 sm:inline dark:text-blue-400"
+              ? "!bg-foreground !text-background hover:!bg-foreground/90 hover:!text-background"
+              : "!bg-muted !text-muted-foreground hover:!bg-muted/80 hover:!text-foreground"
           }
+          onClick={onToggleHidePending}
         >
-          {pendingCount}
-        </span>
-      </Button>
+          <Clock className="size-4" />
+          <span>Vorgemerkte Umsätze ausblenden</span>
+          <span
+            className={
+              hidePending
+                ? "hidden shrink-0 rounded-full bg-blue-500/20 px-1.5 py-px text-[10px] font-medium text-blue-200 sm:inline dark:text-blue-300"
+                : "hidden shrink-0 rounded-full bg-blue-500/10 px-1.5 py-px text-[10px] font-medium text-blue-700 sm:inline dark:text-blue-400"
+            }
+          >
+            {pendingCount}
+          </span>
+        </Button>
+      )}
 
       <Select value={amountFilter} onValueChange={onAmountFilterChange}>
         <SelectTrigger className="h-9 w-[170px]">

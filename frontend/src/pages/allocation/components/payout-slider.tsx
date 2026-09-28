@@ -165,7 +165,9 @@ export function PayoutSlider({
                 setOutOfRange(false);
               }}
               autoFocus
-              className={`h-12 bg-transparent px-0 text-center text-5xl font-bold leading-none text-foreground outline-none ${outOfRange ? "text-orange-500" : ""}`}
+              className={`h-12 bg-transparent p-0 text-center font-mono text-5xl font-bold leading-none tabular-nums text-foreground outline-none ${
+                outOfRange ? "text-orange-500" : ""
+              }`}
             />
           ) : (
             <button
@@ -199,7 +201,7 @@ export function PayoutSlider({
               value={editing ?? formatAmount(value).replace(/\s*€.*$/, "")}
               onChange={(e) => handleInputChange(e.target.value)}
               onFocus={(e) => {
-                setEditing(value.toFixed(2).replace(".", ","));
+                setEditing(formatAmount(value).replace(/\s*€.*$/, ""));
                 setOutOfRange(false);
                 e.target.select();
               }}

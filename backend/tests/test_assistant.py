@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 import traceback
-from contextlib import ExitStack, contextmanager
 from datetime import date
 from unittest.mock import patch
 
@@ -21,15 +20,17 @@ from finance_server.models.assistant import (
 )
 from finance_server.services.assistant import config as ai_config
 from finance_server.services.assistant.client import (
+    MAX_TOOL_ROUNDS,
     AssistantError,
     list_models,
+    run_chat,
     stream_chat,
 )
-from finance_server.services.assistant.context import (
-    MAX_CONTEXT_TRANSACTIONS,
-    build_context,
-    build_system_prompt,
-    resolve_date_range,
+from finance_server.services.assistant.context import build_system_prompt
+from finance_server.services.assistant.tools import (
+    TOOL_SCHEMAS,
+    _partner_name,
+    execute_tool,
 )
 
 
@@ -75,137 +76,64 @@ def test_default_base_url_when_unset(mem_settings):
     assert ai_config.load_ai_config()["base_url"] == "http://localhost:11434/v1"
 
 
-def test_resolve_date_range_defaults_to_last_year():
-    start, end = resolve_date_range(None, None)
-    assert (date.fromisoformat(end) - date.fromisoformat(start)).days == 365
+def test_build_system_prompt_mentions_tools_and_today():
+    prompt = build_system_prompt()
+    assert date.today().isoformat() in prompt
+    assert "Werkzeug" in prompt
+    assert "erfinde keine Zahlen" in prompt
+    # Kein Datendump mehr: der Prompt nennt keine Kontostaende/Kategorien.
+    assert "Kontostände" not in prompt
 
 
-def test_resolve_date_range_honours_explicit_values():
-    assert resolve_date_range("2025-01-01", "2025-03-31") == ("2025-01-01", "2025-03-31")
+def test_tool_schemas_are_valid_openai_functions():
+    names = [tool["function"]["name"] for tool in TOOL_SCHEMAS]
+    assert names == [
+        "get_summary",
+        "get_category_analytics",
+        "get_account_balances",
+        "get_budgets",
+        "get_transactions",
+        "get_partner_analytics",
+        "list_accounts",
+        "list_categories",
+    ]
+    for tool in TOOL_SCHEMAS:
+        assert tool["type"] == "function"
+        function = tool["function"]
+        assert function["name"] and function["description"]
+        params = function["parameters"]
+        assert params["type"] == "object"
+        assert params["required"] == []
+        for prop in params["properties"].values():
+            assert prop["type"] in {"string", "integer"}
 
 
-def test_build_system_prompt_contains_sections():
-    context = {
-        "date_from": "2025-01-01",
-        "date_to": "2025-01-31",
-        "summary": {"incomes": 2000.0, "expenses": 1500.0, "balance": 500.0},
-        "categories": [{"name": "Lebensmittel", "total_amount": 320.5}],
-        "balances": [{"account_iban": "DE12", "balance": 1000.0}],
-        "budgets": [
-            {"name": "Freizeit", "period": "yearly", "spent": 50.0, "amount": 200.0}
-        ],
-        "budgets_month": "2025-01",
-        "transactions": [
-            {
-                "date": "2025-01-05",
-                "amount": -12.5,
-                "recipient": "REWE",
-                "purpose": "Einkauf",
-                "category": "Lebensmittel",
-            }
-        ],
-        "transaction_count": 1,
-        "transactions_truncated": False,
-    }
-    prompt = build_system_prompt(context)
-    assert "Lebensmittel" in prompt
-    assert "REWE" in prompt
-    assert "Freizeit" in prompt
-    assert "2025-01-01 bis 2025-01-31" in prompt
-    # Finding 2: beide Sektionen tragen ihren eigenen Geltungsbereich, nicht den
-    # gefragten Zeitraum — Budgets laufen über den laufenden Monat, Kontostände
-    # sind der aktuelle Stand über ~100 Jahre.
-    assert "Kontostände (EUR, aktueller Stand, nicht auf den Zeitraum bezogen)" in prompt
-    assert "Budgets (EUR, Referenzmonat 2025-01, Zeitraum je Zeile)" in prompt
-    assert "Kontostände (EUR):" not in prompt
-    assert "Budgets (EUR):" not in prompt
+def test_execute_tool_unknown_name_returns_error():
+    assert "error" in json.loads(execute_tool("does_not_exist", {}))
 
 
-def test_build_system_prompt_labels_each_budget_with_its_own_period():
-    """Der Header "Monat 2025-01" gilt nicht für jede Budgetzeile.
-
-    _fetch_spent summiert bei period == "yearly" das laufende Jahr bis Monat 9,
-    nicht den Monat — der Zeitraum gehört deshalb in die Zeile selbst. "yearly"
-    kommt sonst nirgends im Prompt vor, der Assert kann also nicht aus Versehen
-    über einen anderen Text grün werden.
-    """
-    prompt = build_system_prompt(
-        {
-            "date_from": "2025-01-01",
-            "date_to": "2025-01-31",
-            "summary": {"incomes": 0.0, "expenses": 0.0, "balance": 0.0},
-            "categories": [],
-            "balances": [],
-            "budgets": [
-                {"name": "Urlaub", "period": "yearly", "spent": 4800.0, "amount": 12000.0}
-            ],
-            "budgets_month": "2025-01",
-            "transactions": [],
-            "transaction_count": 0,
-            "transactions_truncated": False,
-        }
+def test_execute_tool_get_summary_runs_against_db():
+    result = json.loads(
+        execute_tool("get_summary", {"from_date": "2025-01-01", "to_date": "2025-12-31"})
     )
-    assert "- Urlaub (yearly): 4800.00 von 12000.00" in prompt
+    assert set(result) >= {"incomes", "expenses", "balance", "transaction_count"}
 
 
-def test_build_system_prompt_budget_header_does_not_claim_one_month_for_all_rows():
-    """Der Header nennt den Monat als Referenz, nicht als Geltung aller Zeilen.
-
-    "Budgets (EUR, Monat 2025-01):" behauptete den Monat für jede Zeile und
-    widersprach damit der Periodenangabe direkt darunter. Geprüft wird die
-    vollständige Headerzeile, nicht das Fehlen eines Teilstrings: so fällt
-    jede andere Monatsbehauptung im Header auf, auch eine künftig added.
-    """
-    prompt = build_system_prompt(
-        {
-            "date_from": "2025-01-01",
-            "date_to": "2025-01-31",
-            "summary": {"incomes": 0.0, "expenses": 0.0, "balance": 0.0},
-            "categories": [],
-            "balances": [],
-            "budgets": [
-                {"name": "Miete", "period": "monthly", "spent": 900.0, "amount": 1000.0},
-                {"name": "Urlaub", "period": "yearly", "spent": 4800.0, "amount": 12000.0},
-            ],
-            "budgets_month": "2025-01",
-            "transactions": [],
-            "transaction_count": 0,
-            "transactions_truncated": False,
-        }
-    )
-    header = next(line for line in prompt.splitlines() if line.startswith("Budgets"))
-    assert header == "Budgets (EUR, Referenzmonat 2025-01, Zeitraum je Zeile):"
-    # Zwei Zeilen, zwei Zeiträume, ein Header — der Widerspruch, den die alte
-    # Fassung in aufeinanderfolgenden Zeilen erzeugt hat.
-    assert "- Miete (monthly): 900.00 von 1000.00" in prompt
-    assert "- Urlaub (yearly): 4800.00 von 12000.00" in prompt
-
-
-def test_build_system_prompt_notes_truncation():
-    context = {
-        "date_from": "2025-01-01",
-        "date_to": "2025-01-31",
-        "summary": {"incomes": 0.0, "expenses": 0.0, "balance": 0.0},
-        "categories": [],
-        "balances": [],
-        "budgets": [],
-        "transactions": [],
-        "transaction_count": 500,
-        "transactions_truncated": True,
-    }
-    assert f"nur die ersten {MAX_CONTEXT_TRANSACTIONS}" in build_system_prompt(context)
+def test_execute_tool_survives_invalid_arguments():
+    # Kaputte Argumente werden nicht durchgereicht, sondern laufen in die Defaults.
+    result = json.loads(execute_tool("get_transactions", {"limit": "abc", "category_id": "x"}))
+    assert "transactions" in result
 
 
 _ASSISTANT_IBAN = "DE00ASSISTANT"
-_DELETED_ASSISTANT_IBAN = "DE00ASSISTANTGELOESCHT"
 
 
 def _seed_bank_account(connection, iban: str = _ASSISTANT_IBAN) -> None:
     """Register the account in bank_accounts.
 
     fetch_transactions flags every row whose IBAN is unknown to bank_accounts as
-    bank_deleted, and build_context drops exactly those — an unregistered seed
-    would silently produce an empty transaction list.
+    bank_deleted; das Tool reicht die Zeile trotzdem durch. Ein registriertes
+    Konto macht den Seed realistisch.
     """
     connection.execute(
         "INSERT OR IGNORE INTO bank_credentials (scope, payload, created_at, updated_at) "
@@ -219,107 +147,222 @@ def _seed_bank_account(connection, iban: str = _ASSISTANT_IBAN) -> None:
     connection.commit()
 
 
-def _seed_transactions(
-    connection, count: int, kategorie_id: int | None, iban: str = _ASSISTANT_IBAN
-) -> None:
-    connection.executemany(
-        """
-        INSERT INTO umsaetze
-            (account_iban, transaction_hash, date, amount, recipient_name, purpose, kategorie)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """,
-        [
-            (
-                iban,
-                f"HASH{iban}-{index}",
-                "2025-01-05",
-                -float(index),
-                f"SHOP{iban}-{index}",
-                "Einkauf",
-                kategorie_id,
-            )
-            for index in range(count)
-        ],
-    )
-    connection.commit()
-
-
-_CONTEXT_DB_MODULES = ("analytics", "budgets", "transactions")
-
-
-@contextmanager
-def _patched_context_db(db):
-    """Point every db module build_context touches at the test connection.
-
-    Each db module does `from finance_server.core.database import get_connection`,
-    so the name is bound per module — patching db.settings (or core.database)
-    would not redirect them. db.categories is not listed: build_context takes the
-    id→name map from fetch_category_analytics, it no longer calls a categories
-    function.
-    """
-    with ExitStack() as stack:
-        for module in _CONTEXT_DB_MODULES:
-            stack.enter_context(
-                patch(f"finance_server.db.{module}.get_connection", return_value=db)
-            )
-        yield
-
-
-def test_build_context_caps_transactions(test_db):
-    with _patched_context_db(test_db):
-        _seed_bank_account(test_db)
-        _seed_transactions(test_db, MAX_CONTEXT_TRANSACTIONS + 50, None)
-        context = build_context("2025-01-01", "2025-12-31")
-
-    # Finding 4: die drei Zusicherungen oben interpolieren die Konstante selbst,
-    # ein Wert 1000 ließe sie grün. Nur das Literal pinnt die Planvorgabe.
-    assert MAX_CONTEXT_TRANSACTIONS == 200
-    assert len(context["transactions"]) == MAX_CONTEXT_TRANSACTIONS
-    assert context["transaction_count"] == MAX_CONTEXT_TRANSACTIONS + 50
-    assert context["transactions_truncated"] is True
-
-
-def test_build_context_drops_transactions_of_deleted_accounts(test_db):
-    """fetch_summary zählt nur bekannte Bankkonten; die Liste muss denselben Scope haben.
-
-    Die gelöschten Zeilen werden zuletzt geseedet und damit von fetch_transactions
-    (ORDER BY ... date DESC, id DESC) nach oben sortiert — sie wären also genau die,
-    die der 200er-Cap zuerst zeigen würde.
-    """
-    with _patched_context_db(test_db):
-        _seed_bank_account(test_db)
-        _seed_transactions(test_db, MAX_CONTEXT_TRANSACTIONS + 50, None)
-        _seed_transactions(test_db, 3, None, iban=_DELETED_ASSISTANT_IBAN)
-        context = build_context("2025-01-01", "2025-12-31")
-
-    assert len(context["transactions"]) == MAX_CONTEXT_TRANSACTIONS
-    assert all(
-        transaction["recipient"].startswith(f"SHOP{_ASSISTANT_IBAN}-")
-        for transaction in context["transactions"]
-    )
-    # Zählt die gefilterte, ungekappte Menge — sonst widerspräche der Hinweis
-    # "nur die ersten 200 von N" der direkt darüber gedruckten Liste.
-    assert context["transaction_count"] == MAX_CONTEXT_TRANSACTIONS + 50
-    assert context["transactions_truncated"] is True
-
-
-def test_build_context_resolves_category_id_to_name(test_db):
-    with _patched_context_db(test_db):
+def test_get_transactions_filters_by_search_and_category(test_db):
+    with (
+        patch("finance_server.db.transactions.get_connection", return_value=test_db),
+        patch("finance_server.db.categories.get_connection", return_value=test_db),
+    ):
         _seed_bank_account(test_db)
         cursor = test_db.execute(
             "INSERT INTO kategorien (name, typ) VALUES ('Lebensmittel', 'ausgabe')"
         )
         kategorie_id = cursor.lastrowid
         test_db.commit()
-        _seed_transactions(test_db, 1, kategorie_id)
-        _seed_bank_account(test_db, "DE00OHNEKATEGORIE")
-        _seed_transactions(test_db, 1, None, iban="DE00OHNEKATEGORIE")
-        context = build_context("2025-01-01", "2025-12-31")
+        test_db.executemany(
+            "INSERT INTO umsaetze (account_iban, transaction_hash, date, amount, "
+            "recipient_name, purpose, kategorie) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [
+                (_ASSISTANT_IBAN, "H1", "2025-01-05", -12.5, "REWE", "Einkauf", kategorie_id),
+                (_ASSISTANT_IBAN, "H2", "2025-01-06", -3.0, "Kiosk", "Snack", None),
+            ],
+        )
+        test_db.commit()
 
-    by_recipient = {t["recipient"]: t["category"] for t in context["transactions"]}
-    assert by_recipient[f"SHOP{_ASSISTANT_IBAN}-0"] == "Lebensmittel"
-    # Unauflösbare ID (hier: NULL) -> "" und nie None, nie "None" im Prompt.
-    assert by_recipient["SHOPDE00OHNEKATEGORIE-0"] == ""
+        only_rewe = json.loads(
+            execute_tool(
+                "get_transactions",
+                {"from_date": "2025-01-01", "to_date": "2025-01-31", "search": "REWE"},
+            )
+        )
+        only_category = json.loads(
+            execute_tool(
+                "get_transactions",
+                {
+                    "from_date": "2025-01-01",
+                    "to_date": "2025-01-31",
+                    "category_id": kategorie_id,
+                },
+            )
+        )
+
+    assert [t["partner"] for t in only_rewe["transactions"]] == ["REWE"]
+    assert [t["partner"] for t in only_category["transactions"]] == ["REWE"]
+    assert only_category["transactions"][0]["category"] == "Lebensmittel"
+
+
+def test_partner_name_bevorzugt_aufgeloesten_zahlungspartner():
+    row = {
+        "applicant_iban": "DE89 3704 0044 0532 0130 00",
+        "applicant_name": "DE89370400440532013000",
+        "recipient_name": "Rewe",
+    }
+    names = {"DE89370400440532013000": "REWE Markt GmbH"}
+    assert _partner_name(row, names) == "REWE Markt GmbH"
+    # Ohne Mapping greift die Oberflaeche-Heuristik: IBAN-artiger Auftraggeber
+    # ist kein Name, also faellt es auf den Empfaenger zurueck.
+    assert _partner_name(row, {}) == "Rewe"
+
+
+_NORIS_IBAN = "DE00NORISBANK"
+
+
+def test_list_accounts_liefert_die_iban_zum_filtern(test_db):
+    """Das Modell loest den Kontonamen selbst auf und filtert dann per IBAN.
+
+    list_accounts liefert Kennung *und* lesbaren Namen, damit das Modell
+    'Norisbank Girokonto' einer IBAN zuordnen kann. Geprueft wird darum beides
+    zusammen: das Werkzeug liefert die IBAN, und die zurueckgegebene IBAN
+    schraenkt get_summary wirklich auf ein Konto ein.
+    """
+    with (
+        patch("finance_server.services.assistant.tools.get_connection", return_value=test_db),
+        patch("finance_server.db.analytics.get_connection", return_value=test_db),
+    ):
+        _seed_bank_account(test_db)
+        test_db.execute(
+            "INSERT OR IGNORE INTO bank_accounts (scope, iban, account_name, bank_key) "
+            "VALUES ('assistant', ?, 'Girokonto', 'norisbank')",
+            (_NORIS_IBAN,),
+        )
+        test_db.executemany(
+            "INSERT INTO umsaetze (account_iban, transaction_hash, date, amount, recipient_name) "
+            "VALUES (?, ?, ?, ?, ?)",
+            [
+                (_ASSISTANT_IBAN, "A1", "2025-01-05", -10.0, "Sonstiges"),
+                (_NORIS_IBAN, "N1", "2025-01-06", -20.0, "Noris-Einkauf"),
+            ],
+        )
+        test_db.commit()
+
+        konten = json.loads(execute_tool("list_accounts", {}))
+        noris = next(k for k in konten if k["iban"] == _NORIS_IBAN)
+        ohne_bank = next(k for k in konten if k["iban"] == _ASSISTANT_IBAN)
+        nur_noris = json.loads(execute_tool("get_summary", {"account_iban": _NORIS_IBAN}))
+        # Erfundene/Platzhalter-IBAN: Fehler statt stillschweigend leer.
+        unbekannt = json.loads(
+            execute_tool("get_summary", {"account_iban": "Norisbank Girokonto"})
+        )
+
+    assert noris["iban"] == _NORIS_IBAN
+    assert noris["name"] == "Girokonto"
+    assert noris["bank"] == "Norisbank"
+    # Ohne bank_key darf nicht die erste Bank der Liste erfunden werden.
+    assert ohne_bank["bank"] == ""
+    assert nur_noris["transaction_count"] == 1
+    assert nur_noris["expenses"] == 20.0
+    assert "Unbekannte IBAN" in unbekannt["error"]
+
+
+_TOOL_ROUND = (
+    'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1",'
+    '"type":"function","function":{"name":"list_categories","arguments":"{}"}}]},'
+    '"finish_reason":"tool_calls"}]}\n\n'
+    "data: [DONE]\n\n"
+).encode()
+_ANSWER_ROUND = (
+    'data: {"choices":[{"delta":{"content":"Es gibt "}}]}\n\n'
+    'data: {"choices":[{"delta":{"content":"Kategorien."}}]}\n\n'
+    "data: [DONE]\n\n"
+).encode()
+# Erst erzaehlt das Modell, dann ruft es ein Werkzeug auf — der Text steht im
+# selben Delta-Strom vor dem tool_calls-Fragment.
+_NARRATION_TOOL_ROUND = (
+    'data: {"choices":[{"delta":{"content":"Ich pruefe das."}}]}\n\n'
+    'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1",'
+    '"type":"function","function":{"name":"list_categories","arguments":"{}"}}]},'
+    '"finish_reason":"tool_calls"}]}\n\n'
+    "data: [DONE]\n\n"
+).encode()
+
+
+def test_run_chat_executes_tool_then_streams_answer():
+    aufrufe = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        aufrufe["n"] += 1
+        body = _TOOL_ROUND if aufrufe["n"] == 1 else _ANSWER_ROUND
+        return httpx.Response(200, content=body)
+
+    async def collect() -> list[dict]:
+        return [
+            event
+            async for event in run_chat(
+                base_url="http://x/v1",
+                api_key="",
+                model="m",
+                messages=[],
+                transport=httpx.MockTransport(handler),
+            )
+        ]
+
+    events = asyncio.run(collect())
+    assert aufrufe["n"] == 2
+    # Erst der Tool-Status, dann der finale Text, dann done.
+    assert events[0] == {"type": "tool", "name": "list_categories", "arguments": "{}"}
+    assert [e["text"] for e in events if e["type"] == "token"] == [
+        "Es gibt ",
+        "Kategorien.",
+    ]
+    assert events[-1] == {"type": "done"}
+
+
+def test_run_chat_trennt_erzaehlung_von_der_antwort_mit_absatz():
+    """Text vor einem Werkzeugaufruf darf nicht am Ergebnis danach kleben.
+
+    Nach den Werkzeugergebnissen setzt das Modell wie in einem neuen Turn an;
+    sein erster Token hat dann keine fuehrende Leerstelle. Ohne Trenner stuende
+    in der Blase "...Monat.Die Ausgaben ...".
+    """
+    aufrufe = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        aufrufe["n"] += 1
+        body = _NARRATION_TOOL_ROUND if aufrufe["n"] == 1 else _ANSWER_ROUND
+        return httpx.Response(200, content=body)
+
+    async def collect() -> list[dict]:
+        return [
+            event
+            async for event in run_chat(
+                base_url="http://x/v1",
+                api_key="",
+                model="m",
+                messages=[],
+                transport=httpx.MockTransport(handler),
+            )
+        ]
+
+    tokens = [e["text"] for e in asyncio.run(collect()) if e["type"] == "token"]
+    assert tokens == ["Ich pruefe das.", "\n\n", "Es gibt ", "Kategorien."]
+
+
+def test_run_chat_caps_tool_rounds():
+    """Ein Modell, das dauernd Tools ruft, darf den Stream nicht endlos machen.
+
+    Nach MAX_TOOL_ROUNDS folgt genau eine Runde ohne ``tools`` — der Server
+    bekommt also einen Aufruf mehr als das Limit.
+    """
+    aufrufe = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        aufrufe["n"] += 1
+        return httpx.Response(200, content=_TOOL_ROUND)
+
+    async def collect() -> list[dict]:
+        return [
+            event
+            async for event in run_chat(
+                base_url="http://x/v1",
+                api_key="",
+                model="m",
+                messages=[],
+                transport=httpx.MockTransport(handler),
+            )
+        ]
+
+    events = asyncio.run(collect())
+    assert aufrufe["n"] == MAX_TOOL_ROUNDS + 1
+    assert events[-1] == {"type": "done"}
 
 
 def test_stream_chat_translates_sse():
@@ -334,19 +377,52 @@ def test_stream_chat_translates_sse():
             200, content=body.encode(), headers={"content-type": "text/event-stream"}
         )
 
-    async def collect() -> list[str]:
-        tokens: list[str] = []
-        async for token in stream_chat(
+    async def collect() -> list[dict]:
+        events: list[dict] = []
+        async for event in stream_chat(
             base_url="http://x/v1",
             api_key="",
             model="m",
             messages=[],
             transport=httpx.MockTransport(handler),
         ):
-            tokens.append(token)
-        return tokens
+            events.append(event)
+        return events
 
-    assert asyncio.run(collect()) == ["Hallo", " Welt"]
+    assert asyncio.run(collect()) == [
+        {"type": "token", "text": "Hallo"},
+        {"type": "token", "text": " Welt"},
+        {"type": "tool_calls", "calls": []},
+    ]
+
+
+def test_stream_chat_schaltet_denken_ab():
+    """think=False setzt reasoning_effort "none", sonst wird das Feld weggelassen.
+
+    Beweisstelle ist der tatsaechlich gesendete Request-Body. Ohne den
+    Gegenfall (think=None/True) koennte der Test auch gruen werden, wenn das
+    Feld immer gesetzt waere -- und damit den Denkmodus dauerhaft abschalten.
+    """
+    gesendet: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        gesendet.append(json.loads(request.content))
+        return httpx.Response(200, content=b"data: [DONE]\n\n")
+
+    async def collect(think: bool | None) -> None:
+        async for _ in stream_chat(
+            base_url="http://x/v1",
+            api_key="",
+            model="m",
+            messages=[],
+            think=think,
+            transport=httpx.MockTransport(handler),
+        ):
+            pass
+
+    for think, erwartet in [(False, "none"), (True, None), (None, None)]:
+        asyncio.run(collect(think))
+        assert gesendet[-1].get("reasoning_effort") == erwartet
 
 
 def test_stream_chat_raises_on_error_status():
@@ -788,14 +864,15 @@ def test_stream_ohne_done_liefert_tokens_und_meldet_abschneiden():
     tokens: list[str] = []
 
     async def sammle() -> None:
-        async for token in stream_chat(
+        async for event in stream_chat(
             base_url="http://x/v1",
             api_key="",
             model="m",
             messages=[],
             transport=httpx.MockTransport(_antwort(200, body)),
         ):
-            tokens.append(token)
+            if event["type"] == "token":
+                tokens.append(event["text"])
 
     with pytest.raises(AssistantError) as excinfo:
         asyncio.run(sammle())
@@ -816,14 +893,15 @@ def test_ungueltiger_frame_behaelt_bisherige_tokens():
     tokens: list[str] = []
 
     async def sammle() -> None:
-        async for token in stream_chat(
+        async for event in stream_chat(
             base_url="http://x/v1",
             api_key="",
             model="m",
             messages=[],
             transport=httpx.MockTransport(_antwort(200, body)),
         ):
-            tokens.append(token)
+            if event["type"] == "token":
+                tokens.append(event["text"])
 
     with pytest.raises(AssistantError):
         asyncio.run(sammle())
@@ -982,7 +1060,7 @@ def test_gueltiger_key_erreicht_den_echten_socket_unveraendert():
 async def _echter_aufruf(eintritt: str, base_url: str, key: str):
     if eintritt == "list_models":
         return await list_models(base_url=base_url, api_key=key)
-    return [token async for token in
+    return [event async for event in
             stream_chat(base_url=base_url, api_key=key, model="m", messages=[])]
 
 
@@ -1046,31 +1124,25 @@ _ABGESCHNITTEN_MELDUNG = (
 
 def _nie_aufgerufen(**kwargs):
     """Async-Generator, der nie laufen darf: als Beweisstelle fuer eine Vorpruefung."""
-    raise AssertionError("stream_chat wurde aufgerufen, obwohl es nicht durfte")
+    raise AssertionError("run_chat wurde aufgerufen, obwohl es nicht durfte")
     yield  # macht die Funktion erst zum Async-Generator
 
 
 def _chat_frames(stream):
     """assistant_chat aufrufen und den Stream als SSE-Frames zurueckgeben.
 
-    stream_chat wird im Router-Namespace ersetzt, nicht sein Transport: der
+    run_chat wird im Router-Namespace ersetzt, nicht sein Transport: der
     Aufbau des HTTP-Requests ist Sache des Clients und in Task 4 getestet,
     hier zaehlt die Stelle, an der der Router den Fehler faengt.
 
     Patch und Iteration liegen in einem Block, weil event_stream ein
     Async-Generator ist: assistant_chat liefert nur die leere Huelle zurueck,
     der Rumpf laeuft erst beim Lesen von body_iterator — und loest dabei erst
-    den Namen stream_chat auf.
-
-    build_context laeuft bewusst ungepatcht: der Router schiebt sie per
-    run_in_threadpool in einen Worker-Thread, und get_connection() oeffnet pro
-    Aufruf eine eigene Verbindung. Die test_db-Fixture kann den Thread nicht
-    wechseln (sqlite verbietet das), die autouse-Isolierung aus conftest.py
-    lenkt den echten Pfad auf eine tmp-DB um -- das ist der Produktionsweg.
+    den Namen run_chat auf.
     """
 
     async def lauf() -> list[dict]:
-        with patch.object(assistant_api, "stream_chat", stream):
+        with patch.object(assistant_api, "run_chat", stream):
             antwort = await assistant_api.assistant_chat(_CHAT_REQUEST)
             return [json.loads(rahmen[6:]) async for rahmen in antwort.body_iterator]
 
@@ -1081,8 +1153,9 @@ def test_chat_stromt_tokens_und_beendet_mit_done(mem_settings):
     ai_config.save_ai_config(enabled=True, model="llama3", api_key=_CANARY)
 
     async def stream(**kwargs):
-        yield "Hallo"
-        yield " Welt"
+        yield {"type": "token", "text": "Hallo"}
+        yield {"type": "token", "text": " Welt"}
+        yield {"type": "done"}
 
     assert _chat_frames(stream) == [
         {"type": "token", "text": "Hallo"},
@@ -1094,7 +1167,7 @@ def test_chat_stromt_tokens_und_beendet_mit_done(mem_settings):
 def test_chat_meldet_einen_abgelehnten_key_als_terminales_event(mem_settings):
     """Der Key-Guard laeuft bei der ersten Iteration, nicht beim Aufruf.
 
-    stream_chat ist ein Async-Generator: der Aufruf fuehrt keinen Zeilenteil des
+    run_chat ist ein Async-Generator: der Aufruf fuehrt keinen Zeilenteil des
     Rumpfes aus, das __anext__ der ersten Iteration dagegen schon. Ein
     try/except um den Aufruf herum wuerde eine abgelehnte Tastatur also nicht
     fangen — die AssistantError bräche aus dem Generator durch, mitten im bereits
@@ -1114,7 +1187,7 @@ def test_chat_meldet_einen_abgelehnten_key_als_terminales_event(mem_settings):
 
 
 def test_chat_behaelt_tokens_und_meldet_das_abschneiden_als_terminales_event(mem_settings):
-    """stream_chat liefert die empfangenen Tokens und meldet danach den Abbruch.
+    """run_chat liefert die empfangenen Tokens und meldet danach den Abbruch.
 
     Der Router darf sie nicht verwerfen — der Nutzer hat den Text schon gesehen —
     und darf es auch nicht als HTTP-Fehler behandeln: die StreamingResponse ist
@@ -1123,8 +1196,8 @@ def test_chat_behaelt_tokens_und_meldet_das_abschneiden_als_terminales_event(mem
     ai_config.save_ai_config(enabled=True, model="llama3", api_key=_CANARY)
 
     async def abgeschnitten(**kwargs):
-        yield "Hallo"
-        yield " Welt"
+        yield {"type": "token", "text": "Hallo"}
+        yield {"type": "token", "text": " Welt"}
         raise AssistantError(_ABGESCHNITTEN_MELDUNG)
 
     frames = _chat_frames(abgeschnitten)

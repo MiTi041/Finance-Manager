@@ -243,13 +243,6 @@ export function TransferSetupDialog({
                 </span>
               </div>
             </div>
-
-            <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
-              <Info className="mt-0.5 size-4 shrink-0" />
-              <span>
-                Noch wird nichts überwiesen. Löse die Überweisung erst mit „Jetzt überweisen" aus.
-              </span>
-            </div>
           </div>
         )}
 
