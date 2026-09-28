@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import traceback
 from contextlib import ExitStack, contextmanager
 from datetime import date
 from unittest.mock import patch
@@ -375,10 +376,9 @@ def test_assistant_error_never_carries_the_api_key():
     Zweige, und die Meldung muss den Status nennen -- sonst koennte der Test
     auch mit einer leeren Exception gruen werden.
 
-    Nicht abgedeckt: der Statuszweig uebernimmt den Response-Body des Servers
-    unveraendert in die Meldung. Ein Server, der den Authorization-Header im
-    eigenen Fehlertext wiederholt, schleust den Key so doch hinein. Siehe
-    Concern 1 im Task-4-Report.
+    Abgedeckt sind nur die beiden Transportzweige. Die inhaltlichen Zweige
+    (unerwarteter Servertext, ungueltiger Key, kaputter Payload) laufen ueber
+    test_kein_fehlerpfad_leakt_den_api_key.
     """
     secret = "sk-super-secret"
 
@@ -412,3 +412,317 @@ def test_assistant_error_never_carries_the_api_key():
             )
         )
     assert secret not in str(connect_error.value)
+
+
+# --- Findings aus dem Task-4-Review -------------------------------------------
+
+_CANARY = "sk-LEAK-CANARY-1234"
+_NICHT_ASCII_CANARY = f"{_CANARY}ä"
+# Ein Server, der den Authorization-Header im eigenen Fehlertext wiederholt.
+_ECHO_BODY = f'{{"error":"unauthorized: Bearer {_CANARY}"}}'.encode()
+_FRAME_MIT_TEXT = 'data: {"choices":[{"delta":{"content":"Hallo"}}]}\n\n'
+_FRAME_MIT_WELT = 'data: {"choices":[{"delta":{"content":" Welt"}}]}\n\n'
+
+
+def _antwort(status: int, body: bytes):
+    return lambda request: httpx.Response(status, content=body)
+
+
+def _stream_mit(status: int, body: bytes, api_key: str = _CANARY):
+    """Coroutine: stream_chat starten und den Stream vollstaendig konsumieren."""
+
+    async def lauf() -> None:
+        async for _ in stream_chat(
+            base_url="http://x/v1",
+            api_key=api_key,
+            model="m",
+            messages=[],
+            transport=httpx.MockTransport(_antwort(status, body)),
+        ):
+            pass
+
+    return lauf
+
+
+def _models_mit(status: int, body: bytes, api_key: str = _CANARY):
+    """Coroutine: list_models aufrufen."""
+
+    async def lauf() -> list[str]:
+        return await list_models(
+            base_url="http://x/v1",
+            api_key=api_key,
+            transport=httpx.MockTransport(_antwort(status, body)),
+        )
+
+    return lauf
+
+
+def _verbindung_verweigert(request: httpx.Request) -> httpx.Response:
+    raise httpx.ConnectError("connection refused", request=request)
+
+
+def _stream_abgewiesen(api_key: str = _CANARY):
+    """Coroutine: stream_chat gegen einen Server, der die Verbindung verweigert."""
+
+    async def lauf() -> None:
+        async for _ in stream_chat(
+            base_url="http://x/v1",
+            api_key=api_key,
+            model="m",
+            messages=[],
+            transport=httpx.MockTransport(_verbindung_verweigert),
+        ):
+            pass
+
+    return lauf
+
+
+def _models_abgewiesen(api_key: str = _CANARY):
+    """Coroutine: list_models gegen einen Server, der die Verbindung verweigert."""
+
+    async def lauf() -> list[str]:
+        return await list_models(
+            base_url="http://x/v1",
+            api_key=api_key,
+            transport=httpx.MockTransport(_verbindung_verweigert),
+        )
+
+    return lauf
+
+
+# Bodies, die formal gueltiges JSON sind, aber kein OpenAI-Format tragen.
+_UNERWARTETE_PAYLOADS = {
+    "kein-json": b"<html>404 not found</html>",
+    "null": b"null",
+    "liste": b"[1, 2]",
+    "text": b'"llama3"',
+    "data-null": b'{"data": null}',
+    "data-zahlen": b'{"data": [1, 2]}',
+    "data-text": b'{"data": "llama3"}',
+}
+
+_UNERWARTETE_FRAMES = {
+    "kein-json": "data: {nope}\n\n",
+    "null": "data: null\n\n",
+    "liste": "data: [1, 2]\n\n",
+    "text": 'data: "Hallo"\n\n',
+    "choices-text": 'data: {"choices": ["x"]}\n\n',
+    "choices-zahlen": 'data: {"choices": [1, 2]}\n\n',
+    "delta-text": 'data: {"choices": [{"delta": "x"}]}\n\n',
+}
+
+
+def _leak_params() -> list:
+    """Ein Fall je Fehlerpfad, ueber den der Key wandern koennte."""
+    params = [
+        # Finding 1: Statuszweige, deren Body den Key wiederholt.
+        pytest.param(_stream_mit(401, _ECHO_BODY), _CANARY, id="stream/401"),
+        pytest.param(_stream_mit(500, _ECHO_BODY), _CANARY, id="stream/500"),
+        pytest.param(_models_mit(401, _ECHO_BODY), _CANARY, id="models/401"),
+        pytest.param(_models_mit(500, _ECHO_BODY), _CANARY, id="models/500"),
+        # Finding 2: nicht-ASCII-Key in beide Richtungen.
+        pytest.param(
+            _stream_mit(200, b"data: [DONE]\n\n", _NICHT_ASCII_CANARY),
+            _NICHT_ASCII_CANARY,
+            id="stream/key-umlaut",
+        ),
+        pytest.param(
+            _models_mit(200, b'{"data": []}', _NICHT_ASCII_CANARY),
+            _NICHT_ASCII_CANARY,
+            id="models/key-umlaut",
+        ),
+        # Finding 3: unerwartete Payloads.
+        *[
+            pytest.param(_models_mit(200, body), _CANARY, id=f"models/{name}")
+            for name, body in _UNERWARTETE_PAYLOADS.items()
+        ],
+        *[
+            pytest.param(_stream_mit(200, frame.encode()), _CANARY, id=f"stream/{name}")
+            for name, frame in _UNERWARTETE_FRAMES.items()
+        ],
+        # Finding 4: Stream endet ohne [DONE].
+        pytest.param(
+            _stream_mit(200, _FRAME_MIT_TEXT.encode()), _CANARY, id="stream/ohne-done"
+        ),
+        # Transportzweig, damit der Sweep vollstaendig ist.
+        pytest.param(_models_abgewiesen(), _CANARY, id="models/verbindung"),
+        pytest.param(_stream_abgewiesen(), _CANARY, id="stream/verbindung"),
+    ]
+    return params
+
+
+@pytest.mark.parametrize(("coro", "canary"), _leak_params())
+def test_kein_fehlerpfad_leakt_den_api_key(coro, canary):
+    """Der Key darf in keine AssistantError-Meldung und in keine Exception-Kette.
+
+    Geprueft werden str, repr und die formatierte Traceback -- nicht nur str.
+    Die UnicodeEncodeError aus dem Header-Encoding traegt den Key in ihrem repr()
+    und haengt sich als __context__ an die AssistantError; ein Handler, der die
+    Ausnahmekette protokolliert, haette ihn sonst im Log. Die Kette ist deshalb
+    ausdruecklich mitgeprueft -- ``from None`` unterdrueckt nur die Ausgabe,
+    __context__ bleibt erreichbar.
+    """
+    with pytest.raises(AssistantError) as excinfo:
+        asyncio.run(coro())
+
+    fehler = excinfo.value
+    assert str(fehler)
+    assert canary not in str(fehler)
+    assert canary not in repr(fehler)
+    assert canary not in "".join(
+        traceback.format_exception(type(fehler), fehler, fehler.__traceback__)
+    )
+    for gechelt in (fehler.__cause__, fehler.__context__):
+        if gechelt is not None:
+            assert canary not in f"{gechelt} {gechelt!r}"
+
+
+def test_fehlerstatus_gibt_keinen_servertext_weiter():
+    """Finding 1: der Body eines 4xx/5xx ist nicht vertrauenswuerdig.
+
+    Er wird nicht gekuerzt und nicht maskiert, sondern weggelassen -- ein
+    "Bearer <key>" im Servertext waere sonst in Meldung, Log und HTTP-Response
+    gelandet. Geprueft wird der Statuscode selbst, damit der Test nicht auch
+    mit einer inhaltsleeren Meldung gruen wuerde.
+    """
+    with pytest.raises(AssistantError) as excinfo:
+        asyncio.run(_stream_mit(401, _ECHO_BODY)())
+
+    meldung = str(excinfo.value)
+    assert "401" in meldung
+    assert "unauthorized" not in meldung
+    assert _CANARY not in meldung
+
+
+def test_api_key_mit_umlaut_wird_abgelehnt_ohne_anfrage():
+    """Finding 2: nicht-ASCII wird abgelehnt, nicht umkodiert.
+
+    httpx kodiert Header als ASCII; ohne Vorpruefung bricht der Aufruf mit
+    UnicodeEncodeError ab, der nicht AssistantError ist und vom Router nicht
+    uebersetzt wird. Umkodieren waere kein Fix, sondern ein anderer Key: der
+    Server koennte ihn nicht authentifizieren. Der Handler ist die
+    Beweisstelle -- er darf gar nicht erst aufgerufen werden.
+    """
+    aufgerufen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        aufgerufen.append(request)
+        return httpx.Response(200, content=b'{"data": []}')
+
+    with pytest.raises(AssistantError) as excinfo:
+        asyncio.run(
+            list_models(
+                base_url="http://x/v1",
+                api_key=_NICHT_ASCII_CANARY,
+                transport=httpx.MockTransport(handler),
+            )
+        )
+
+    assert aufgerufen == []
+    assert "API-Key" in str(excinfo.value)
+    assert _NICHT_ASCII_CANARY not in str(excinfo.value)
+
+
+def test_api_key_wird_getrimmt():
+    """Paste-Artefakte: der Key selbst bleibt unveraendert im Header.
+
+    Nur an den Raendern wird entfernt, was nicht zum Key gehoert -- die
+    getrimmte Fassung ist genau die, die der Server ohnehin authentifiziert.
+    """
+    gesendet: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        gesendet.update(request.headers)
+        return httpx.Response(200, json={"data": []})
+
+    asyncio.run(
+        list_models(
+            base_url="http://x/v1",
+            api_key=f"  {_CANARY}\n",
+            transport=httpx.MockTransport(handler),
+        )
+    )
+    assert gesendet["authorization"] == f"Bearer {_CANARY}"
+
+
+@pytest.mark.parametrize("body", _UNERWARTETE_PAYLOADS.values(), ids=list(_UNERWARTETE_PAYLOADS))
+def test_list_models_unexpected_payload_becomes_assistant_error(body):
+    """Finding 3: JSONDecodeError allein fasst nur kaputtes JSON, nicht das Format."""
+    with pytest.raises(AssistantError) as excinfo:
+        asyncio.run(_models_mit(200, body)())
+    assert str(excinfo.value)
+
+
+@pytest.mark.parametrize("frame", list(_UNERWARTETE_FRAMES.values()), ids=list(_UNERWARTETE_FRAMES))
+def test_stream_chat_unexpected_frame_becomes_assistant_error(frame):
+    with pytest.raises(AssistantError) as excinfo:
+        asyncio.run(_stream_mit(200, frame.encode())())
+    assert str(excinfo.value)
+
+
+def test_list_models_meldet_fehlerstatus():
+    """Finding 5: der Statuszweig von list_models war ungetestet.
+
+    Load-bearing: faellt der Zweig weg, laeuft der Aufruf in response.json() und
+    endet mit der Meldung fuer kaputtes JSON -- die den Status nicht nennt.
+    """
+    with pytest.raises(AssistantError) as excinfo:
+        asyncio.run(_models_mit(503, b"model runner restarting")())
+
+    assert "503" in str(excinfo.value)
+    assert "model runner" not in str(excinfo.value)
+
+
+def test_stream_ohne_done_liefert_tokens_und_meldet_abschneiden():
+    """Finding 4: Tokens ausliefern, dann das Signal.
+
+    Der Aufrufer sammelt beim Iterieren; ein Raise erst nach der Schleife
+    laesst ihm den Partialtext und macht die Unvollstaendigkeit sichtbar.
+    Wuerde statt dessen still beendet, erschiene die Antwort im Frontend als
+    fertig.
+    """
+    body = (_FRAME_MIT_TEXT + 'data: {"choices":[{"delta":{"content":" Welt"}}]}\n\n').encode()
+    tokens: list[str] = []
+
+    async def sammle() -> None:
+        async for token in stream_chat(
+            base_url="http://x/v1",
+            api_key="",
+            model="m",
+            messages=[],
+            transport=httpx.MockTransport(_antwort(200, body)),
+        ):
+            tokens.append(token)
+
+    with pytest.raises(AssistantError) as excinfo:
+        asyncio.run(sammle())
+
+    assert tokens == ["Hallo", " Welt"]
+    assert "abgeschnitten" in str(excinfo.value)
+
+
+def test_ungueltiger_frame_behaelt_bisherige_tokens():
+    """Finding 3: das continue im Stream hat generierten Text verworfen.
+
+    Es ist ein stummer Datenverlust: der Nutzer sieht eine kuerzere Antwort und
+    kein Wort dazu. Der Stream endet hier *mit* [DONE] und einem weiteren
+    gueltigen Frame -- ein continue wuerde beides ueberspringen und sauber
+    "fertig" melden, nur eben mit einer Luecke in der Antwort.
+    """
+    body = (_FRAME_MIT_TEXT + "data: {nope\n\n" + _FRAME_MIT_WELT + "data: [DONE]\n\n").encode()
+    tokens: list[str] = []
+
+    async def sammle() -> None:
+        async for token in stream_chat(
+            base_url="http://x/v1",
+            api_key="",
+            model="m",
+            messages=[],
+            transport=httpx.MockTransport(_antwort(200, body)),
+        ):
+            tokens.append(token)
+
+    with pytest.raises(AssistantError):
+        asyncio.run(sammle())
+
+    assert tokens == ["Hallo"]
