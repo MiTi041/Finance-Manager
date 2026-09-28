@@ -23,7 +23,9 @@ export function parseSseBuffer(buffer: string): {
       try {
         events.push(JSON.parse(data) as AssistantEvent);
       } catch {
-        // unvollständiges JSON ignorieren
+        // Ein kaputter Frame darf nicht stumm verschwinden, sonst geht ein Token
+        // lautlos verloren. Unser Backend erzeugt immer valides JSON.
+        console.warn("KI-Stream: JSON-Frame konnte nicht gelesen werden");
       }
     }
     index = rest.indexOf("\n\n");

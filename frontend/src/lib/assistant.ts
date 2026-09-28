@@ -61,14 +61,14 @@ export async function streamAssistantChat(params: {
     signal: params.signal,
   });
 
-  // Nicht parseJsonResponse: das würde response.body konsumieren und der
-  // Stream stünde danach nicht mehr zur Verfügung.
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
     throw new Error(payload?.detail || "KI-Anfrage fehlgeschlagen");
   }
   if (!response.body) throw new Error("Keine Antwort vom Server");
 
+  // Nicht parseJsonResponse: das würde response.body konsumieren und der
+  // Stream stünde danach nicht mehr zur Verfügung.
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
