@@ -77,6 +77,7 @@ def test_build_system_prompt_contains_sections():
         "categories": [{"name": "Lebensmittel", "total_amount": 320.5}],
         "balances": [{"account_iban": "DE12", "balance": 1000.0}],
         "budgets": [{"name": "Freizeit", "spent": 50.0, "amount": 200.0}],
+        "budgets_month": "2025-01",
         "transactions": [
             {
                 "date": "2025-01-05",
@@ -94,6 +95,13 @@ def test_build_system_prompt_contains_sections():
     assert "REWE" in prompt
     assert "Freizeit" in prompt
     assert "2025-01-01 bis 2025-01-31" in prompt
+    # Finding 2: beide Sektionen tragen ihren eigenen Geltungsbereich, nicht den
+    # gefragten Zeitraum — Budgets laufen über den laufenden Monat, Kontostände
+    # sind der aktuelle Stand über ~100 Jahre.
+    assert "Kontostände (EUR, aktueller Stand, nicht auf den Zeitraum bezogen)" in prompt
+    assert "Budgets (EUR, Monat 2025-01)" in prompt
+    assert "Kontostände (EUR):" not in prompt
+    assert "Budgets (EUR):" not in prompt
 
 
 def test_build_system_prompt_notes_truncation():
@@ -111,7 +119,32 @@ def test_build_system_prompt_notes_truncation():
     assert f"nur die ersten {MAX_CONTEXT_TRANSACTIONS}" in build_system_prompt(context)
 
 
-def _seed_transactions(connection, count: int, kategorie_id: int | None) -> None:
+_ASSISTANT_IBAN = "DE00ASSISTANT"
+_DELETED_ASSISTANT_IBAN = "DE00ASSISTANTGELOESCHT"
+
+
+def _seed_bank_account(connection, iban: str = _ASSISTANT_IBAN) -> None:
+    """Register the account in bank_accounts.
+
+    fetch_transactions flags every row whose IBAN is unknown to bank_accounts as
+    bank_deleted, and build_context drops exactly those — an unregistered seed
+    would silently produce an empty transaction list.
+    """
+    connection.execute(
+        "INSERT OR IGNORE INTO bank_credentials (scope, payload, created_at, updated_at) "
+        "VALUES ('assistant', X'00', '2025-01-01', '2025-01-01')"
+    )
+    connection.execute(
+        "INSERT OR IGNORE INTO bank_accounts (scope, iban, account_name) "
+        "VALUES ('assistant', ?, 'Assistant')",
+        (iban,),
+    )
+    connection.commit()
+
+
+def _seed_transactions(
+    connection, count: int, kategorie_id: int | None, iban: str = _ASSISTANT_IBAN
+) -> None:
     connection.executemany(
         """
         INSERT INTO umsaetze
@@ -120,11 +153,11 @@ def _seed_transactions(connection, count: int, kategorie_id: int | None) -> None
         """,
         [
             (
-                "DE00ASSISTANT",
-                f"HASH{index}",
+                iban,
+                f"HASH{iban}-{index}",
                 "2025-01-05",
                 -float(index),
-                f"SHOP{index}",
+                f"SHOP{iban}-{index}",
                 "Einkauf",
                 kategorie_id,
             )
@@ -155,22 +188,56 @@ def _patched_context_db(db):
 
 def test_build_context_caps_transactions(test_db):
     with _patched_context_db(test_db):
+        _seed_bank_account(test_db)
         _seed_transactions(test_db, MAX_CONTEXT_TRANSACTIONS + 50, None)
         context = build_context("2025-01-01", "2025-12-31")
 
+    # Finding 4: die drei Zusicherungen oben interpolieren die Konstante selbst,
+    # ein Wert 1000 ließe sie grün. Nur das Literal pinnt die Planvorgabe.
+    assert MAX_CONTEXT_TRANSACTIONS == 200
     assert len(context["transactions"]) == MAX_CONTEXT_TRANSACTIONS
+    assert context["transaction_count"] == MAX_CONTEXT_TRANSACTIONS + 50
+    assert context["transactions_truncated"] is True
+
+
+def test_build_context_drops_transactions_of_deleted_accounts(test_db):
+    """fetch_summary zählt nur bekannte Bankkonten; die Liste muss denselben Scope haben.
+
+    Die gelöschten Zeilen werden zuletzt geseedet und damit von fetch_transactions
+    (ORDER BY ... date DESC, id DESC) nach oben sortiert — sie wären also genau die,
+    die der 200er-Cap zuerst zeigen würde.
+    """
+    with _patched_context_db(test_db):
+        _seed_bank_account(test_db)
+        _seed_transactions(test_db, MAX_CONTEXT_TRANSACTIONS + 50, None)
+        _seed_transactions(test_db, 3, None, iban=_DELETED_ASSISTANT_IBAN)
+        context = build_context("2025-01-01", "2025-12-31")
+
+    assert len(context["transactions"]) == MAX_CONTEXT_TRANSACTIONS
+    assert all(
+        transaction["recipient"].startswith(f"SHOP{_ASSISTANT_IBAN}-")
+        for transaction in context["transactions"]
+    )
+    # Zählt die gefilterte, ungekappte Menge — sonst widerspräche der Hinweis
+    # "nur die ersten 200 von N" der direkt darüber gedruckten Liste.
     assert context["transaction_count"] == MAX_CONTEXT_TRANSACTIONS + 50
     assert context["transactions_truncated"] is True
 
 
 def test_build_context_resolves_category_id_to_name(test_db):
     with _patched_context_db(test_db):
+        _seed_bank_account(test_db)
         cursor = test_db.execute(
             "INSERT INTO kategorien (name, typ) VALUES ('Lebensmittel', 'ausgabe')"
         )
         kategorie_id = cursor.lastrowid
         test_db.commit()
         _seed_transactions(test_db, 1, kategorie_id)
+        _seed_bank_account(test_db, "DE00OHNEKATEGORIE")
+        _seed_transactions(test_db, 1, None, iban="DE00OHNEKATEGORIE")
         context = build_context("2025-01-01", "2025-12-31")
 
-    assert context["transactions"][0]["category"] == "Lebensmittel"
+    by_recipient = {t["recipient"]: t["category"] for t in context["transactions"]}
+    assert by_recipient[f"SHOP{_ASSISTANT_IBAN}-0"] == "Lebensmittel"
+    # Unauflösbare ID (hier: NULL) -> "" und nie None, nie "None" im Prompt.
+    assert by_recipient["SHOPDE00OHNEKATEGORIE-0"] == ""

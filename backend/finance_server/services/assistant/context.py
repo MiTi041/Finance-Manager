@@ -9,7 +9,6 @@ from finance_server.db.analytics import (
     fetch_summary,
 )
 from finance_server.db.budgets import list_budgets
-from finance_server.db.categories import list_categories
 from finance_server.db.transactions import fetch_transactions
 
 MAX_CONTEXT_TRANSACTIONS = 200
@@ -43,10 +42,24 @@ def _compact_transaction(
 
 def build_context(from_date: str | None, to_date: str | None) -> dict[str, Any]:
     start, end = resolve_date_range(from_date, to_date)
-    transactions = fetch_transactions(None, from_date=start, to_date=end)
-    # umsaetze.kategorie ist eine INTEGER-ID; das Modell braucht den Namen.
+    budgets_month = datetime.now().strftime("%Y-%m")
+    # fetch_summary filtert auf bekannte Bankkonten ("AND ba.iban IS NOT NULL"),
+    # fetch_transactions nicht. Ohne diesen Abgleich widersprächen sich Saldo und
+    # Transaktionsliste, und transaction_count samt Trunkierungs-Hinweis nicht.
+    transactions = [
+        transaction
+        for transaction in fetch_transactions(None, from_date=start, to_date=end)
+        if not transaction.get("bank_deleted")
+    ]
+    categories = fetch_category_analytics(from_date=start, to_date=end)
+    # umsaetze.kategorie ist eine INTEGER-ID; die Analytics-Zeilen bringen den
+    # Namen für genau dasselbe Zeitfenster ohne Kontofilter bereits mit.
+    # list_categories() würde dafür je Kategorie einmal die ganze umsaetze-Tabelle
+    # zählen (kein Index auf kategorie) — der Count wird hier ohnehin verworfen.
     category_names = {
-        category["id"]: category["name"] for category in list_categories()
+        category["category_id"]: category["name"]
+        for category in categories
+        if category.get("name")
     }
     compact = [
         _compact_transaction(transaction, category_names)
@@ -56,9 +69,10 @@ def build_context(from_date: str | None, to_date: str | None) -> dict[str, Any]:
         "date_from": start,
         "date_to": end,
         "summary": fetch_summary(from_date=start, to_date=end),
-        "categories": fetch_category_analytics(from_date=start, to_date=end),
+        "categories": categories,
         "balances": fetch_account_balances(),
-        "budgets": list_budgets(datetime.now().strftime("%Y-%m")),
+        "budgets": list_budgets(budgets_month),
+        "budgets_month": budgets_month,
         "transactions": compact,
         "transaction_count": len(transactions),
         "transactions_truncated": len(transactions) > MAX_CONTEXT_TRANSACTIONS,
@@ -86,14 +100,14 @@ def build_system_prompt(context: dict[str, Any]) -> str:
             )
 
     if context["balances"]:
-        lines += ["", "Kontostände (EUR):"]
+        lines += ["", "Kontostände (EUR, aktueller Stand, nicht auf den Zeitraum bezogen):"]
         for balance in context["balances"]:
             lines.append(
                 f"- {balance.get('account_iban', '?')}: {balance.get('balance', 0):.2f}"
             )
 
     if context["budgets"]:
-        lines += ["", "Budgets (EUR):"]
+        lines += ["", f"Budgets (EUR, Monat {context['budgets_month']}):"]
         for budget in context["budgets"]:
             lines.append(
                 f"- {budget.get('name', '?')}: {budget.get('spent', 0):.2f} "
