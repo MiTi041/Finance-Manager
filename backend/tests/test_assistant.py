@@ -76,7 +76,9 @@ def test_build_system_prompt_contains_sections():
         "summary": {"incomes": 2000.0, "expenses": 1500.0, "balance": 500.0},
         "categories": [{"name": "Lebensmittel", "total_amount": 320.5}],
         "balances": [{"account_iban": "DE12", "balance": 1000.0}],
-        "budgets": [{"name": "Freizeit", "spent": 50.0, "amount": 200.0}],
+        "budgets": [
+            {"name": "Freizeit", "period": "yearly", "spent": 50.0, "amount": 200.0}
+        ],
         "budgets_month": "2025-01",
         "transactions": [
             {
@@ -102,6 +104,33 @@ def test_build_system_prompt_contains_sections():
     assert "Budgets (EUR, Monat 2025-01)" in prompt
     assert "Kontostände (EUR):" not in prompt
     assert "Budgets (EUR):" not in prompt
+
+
+def test_build_system_prompt_labels_each_budget_with_its_own_period():
+    """Der Header "Monat 2025-01" gilt nicht für jede Budgetzeile.
+
+    _fetch_spent summiert bei period == "yearly" das laufende Jahr bis Monat 9,
+    nicht den Monat — der Zeitraum gehört deshalb in die Zeile selbst. "yearly"
+    kommt sonst nirgends im Prompt vor, der Assert kann also nicht aus Versehen
+    über einen anderen Text grün werden.
+    """
+    prompt = build_system_prompt(
+        {
+            "date_from": "2025-01-01",
+            "date_to": "2025-01-31",
+            "summary": {"incomes": 0.0, "expenses": 0.0, "balance": 0.0},
+            "categories": [],
+            "balances": [],
+            "budgets": [
+                {"name": "Urlaub", "period": "yearly", "spent": 4800.0, "amount": 12000.0}
+            ],
+            "budgets_month": "2025-01",
+            "transactions": [],
+            "transaction_count": 0,
+            "transactions_truncated": False,
+        }
+    )
+    assert "- Urlaub (yearly): 4800.00 von 12000.00" in prompt
 
 
 def test_build_system_prompt_notes_truncation():
@@ -167,7 +196,7 @@ def _seed_transactions(
     connection.commit()
 
 
-_CONTEXT_DB_MODULES = ("analytics", "budgets", "categories", "transactions")
+_CONTEXT_DB_MODULES = ("analytics", "budgets", "transactions")
 
 
 @contextmanager
@@ -176,7 +205,9 @@ def _patched_context_db(db):
 
     Each db module does `from finance_server.core.database import get_connection`,
     so the name is bound per module — patching db.settings (or core.database)
-    would not redirect them.
+    would not redirect them. db.categories is not listed: build_context takes the
+    id→name map from fetch_category_analytics, it no longer calls a categories
+    function.
     """
     with ExitStack() as stack:
         for module in _CONTEXT_DB_MODULES:

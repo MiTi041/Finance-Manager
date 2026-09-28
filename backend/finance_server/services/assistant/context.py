@@ -109,9 +109,12 @@ def build_system_prompt(context: dict[str, Any]) -> str:
     if context["budgets"]:
         lines += ["", f"Budgets (EUR, Monat {context['budgets_month']}):"]
         for budget in context["budgets"]:
+            # Der Zeitraum steht pro Zeile, nicht im Header: _fetch_spent summiert
+            # bei period == "yearly" das laufende Jahr, nicht den Monat. Ein
+            # gemeinsamer "Monat"-Header behauptete genau das Gegenteil.
             lines.append(
-                f"- {budget.get('name', '?')}: {budget.get('spent', 0):.2f} "
-                f"von {budget.get('amount', 0):.2f}"
+                f"- {budget.get('name', '?')} ({budget.get('period', '?')}): "
+                f"{budget.get('spent', 0):.2f} von {budget.get('amount', 0):.2f}"
             )
 
     lines += ["", f"Transaktionen ({len(context['transactions'])}):"]
