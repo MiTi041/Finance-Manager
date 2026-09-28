@@ -15,6 +15,7 @@ const SubscriptionsPage = lazy(() => import("@/pages/subscriptions/subscriptions
 const AccountFlowPage = lazy(() => import("@/pages/account-flow/account-flow-page"));
 const AllocationPage = lazy(() => import("@/pages/allocation/allocation-page"));
 const BudgetsPage = lazy(() => import("@/pages/budgets/budgets-page"));
+const AssistantPage = lazy(() => import("@/pages/assistant/assistant-page"));
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8112/api";
 
@@ -117,6 +118,14 @@ export default function App() {
                 element={
                   <ErrorBoundary pageName="Budgets">
                     <BudgetsPage />
+                  </ErrorBoundary>
+                }
+              />
+              <Route
+                path="/assistant"
+                element={
+                  <ErrorBoundary pageName="KI-Assistent">
+                    <AssistantPage />
                   </ErrorBoundary>
                 }
               />

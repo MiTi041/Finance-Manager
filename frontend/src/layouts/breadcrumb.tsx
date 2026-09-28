@@ -105,6 +105,7 @@ function DynamicBreadcrumbs() {
     "finance-plan": "Finanzplan",
     budgets: "Budgets",
     "account-flow": "Kontenfluss",
+    assistant: "KI-Assistent",
   };
 
   return (

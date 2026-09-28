@@ -1,7 +1,8 @@
 import * as React from "react";
-import { FileText, Gauge, Repeat, Target, Wallet, Waypoints } from "lucide-react";
+import { FileText, Gauge, Repeat, Sparkles, Target, Wallet, Waypoints } from "lucide-react";
 
 import { buildAccountOptions, resolveAccountSelection } from "@/lib/utils/accounts";
+import { useAssistantConfig } from "@/hooks/use-assistant-config";
 import { NavMain } from "@/components/nav-main";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
@@ -41,16 +42,20 @@ function parseLatestTimestamp(value: unknown): Date | null {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const navData = {
-    navMain: [
-      { title: "Dashboard", url: "/dashboard", icon: Gauge },
-      { title: "Transaktionen", url: "/transactions", icon: FileText },
-      { title: "Abonnements", url: "/subscriptions", icon: Repeat },
-      { title: "Kontenfluss", url: "/account-flow", icon: Waypoints },
-      { title: "Finanzplan", url: "/finance-plan", icon: Wallet },
-      { title: "Budgets", url: "/budgets", icon: Target },
-    ],
-  };
+  // Solange die Config lädt oder der Abruf fehlschlägt, gibt useAssistantConfig null
+  // zurück; `?.` verbirgt das Item dann wie bei configured: false — kein Aufblitzen.
+  const assistantConfig = useAssistantConfig();
+  const navMain = [
+    { title: "Dashboard", url: "/dashboard", icon: Gauge },
+    { title: "Transaktionen", url: "/transactions", icon: FileText },
+    { title: "Abonnements", url: "/subscriptions", icon: Repeat },
+    { title: "Kontenfluss", url: "/account-flow", icon: Waypoints },
+    { title: "Finanzplan", url: "/finance-plan", icon: Wallet },
+    { title: "Budgets", url: "/budgets", icon: Target },
+    ...(assistantConfig?.configured
+      ? [{ title: "KI-Assistent", url: "/assistant", icon: Sparkles }]
+      : []),
+  ];
 
   const [cacheAgeText, setCacheAgeText] = React.useState<string>("Kein Cache");
   const [scopeSyncTimes, setScopeSyncTimes] = React.useState<Record<string, number>>({});
@@ -226,7 +231,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
       <SidebarContent className="px-2 py-3 group-data-[collapsible=icon]:px-0">
         <div className="group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center [&_ul]:group-data-[collapsible=icon]:w-full [&_ul]:group-data-[collapsible=icon]:flex [&_ul]:group-data-[collapsible=icon]:flex-col [&_ul]:group-data-[collapsible=icon]:items-center [&_li]:group-data-[collapsible=icon]:w-full [&_li]:group-data-[collapsible=icon]:flex [&_li]:group-data-[collapsible=icon]:justify-center [&_a]:group-data-[collapsible=icon]:justify-center [&_button]:group-data-[collapsible=icon]:justify-center [&_button]:group-data-[collapsible=icon]:w-9 [&_a]:group-data-[collapsible=icon]:w-9 [&_button]:group-data-[collapsible=icon]:p-0 [&_a]:group-data-[collapsible=icon]:p-0">
-          <NavMain items={navData.navMain} />
+          <NavMain items={navMain} />
         </div>
       </SidebarContent>
 
