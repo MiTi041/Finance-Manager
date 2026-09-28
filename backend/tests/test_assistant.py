@@ -101,7 +101,7 @@ def test_build_system_prompt_contains_sections():
     # gefragten Zeitraum — Budgets laufen über den laufenden Monat, Kontostände
     # sind der aktuelle Stand über ~100 Jahre.
     assert "Kontostände (EUR, aktueller Stand, nicht auf den Zeitraum bezogen)" in prompt
-    assert "Budgets (EUR, Monat 2025-01)" in prompt
+    assert "Budgets (EUR, Referenzmonat 2025-01, Zeitraum je Zeile)" in prompt
     assert "Kontostände (EUR):" not in prompt
     assert "Budgets (EUR):" not in prompt
 
@@ -130,6 +130,39 @@ def test_build_system_prompt_labels_each_budget_with_its_own_period():
             "transactions_truncated": False,
         }
     )
+    assert "- Urlaub (yearly): 4800.00 von 12000.00" in prompt
+
+
+def test_build_system_prompt_budget_header_does_not_claim_one_month_for_all_rows():
+    """Der Header nennt den Monat als Referenz, nicht als Geltung aller Zeilen.
+
+    "Budgets (EUR, Monat 2025-01):" behauptete den Monat für jede Zeile und
+    widersprach damit der Periodenangabe direkt darunter. Geprüft wird die
+    vollständige Headerzeile, nicht das Fehlen eines Teilstrings: so fällt
+    jede andere Monatsbehauptung im Header auf, auch eine künftig added.
+    """
+    prompt = build_system_prompt(
+        {
+            "date_from": "2025-01-01",
+            "date_to": "2025-01-31",
+            "summary": {"incomes": 0.0, "expenses": 0.0, "balance": 0.0},
+            "categories": [],
+            "balances": [],
+            "budgets": [
+                {"name": "Miete", "period": "monthly", "spent": 900.0, "amount": 1000.0},
+                {"name": "Urlaub", "period": "yearly", "spent": 4800.0, "amount": 12000.0},
+            ],
+            "budgets_month": "2025-01",
+            "transactions": [],
+            "transaction_count": 0,
+            "transactions_truncated": False,
+        }
+    )
+    header = next(line for line in prompt.splitlines() if line.startswith("Budgets"))
+    assert header == "Budgets (EUR, Referenzmonat 2025-01, Zeitraum je Zeile):"
+    # Zwei Zeilen, zwei Zeiträume, ein Header — der Widerspruch, den die alte
+    # Fassung in aufeinanderfolgenden Zeilen erzeugt hat.
+    assert "- Miete (monthly): 900.00 von 1000.00" in prompt
     assert "- Urlaub (yearly): 4800.00 von 12000.00" in prompt
 
 
