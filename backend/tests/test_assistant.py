@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import traceback
 from contextlib import ExitStack, contextmanager
 from datetime import date
@@ -9,7 +10,15 @@ from unittest.mock import patch
 import httpx
 import pytest
 from cryptography.fernet import Fernet
+from fastapi import HTTPException
 
+from finance_server.api import assistant as assistant_api
+from finance_server.api.assistant import _sse
+from finance_server.models.assistant import (
+    AssistantConfigUpdate,
+    ChatMessage,
+    ChatRequest,
+)
 from finance_server.services.assistant import config as ai_config
 from finance_server.services.assistant.client import (
     AssistantError,
@@ -950,3 +959,165 @@ def test_roher_upstream_text_ist_ueber_die_kette_nicht_erreichbar(pfad):
         if type(knoten).__name__ == "JSONDecodeError":
             # Nicht "weg", sondern geleert: der Rohbody darf nicht mehr drinstehen.
             assert rohtext == ""
+
+
+# --- Task 5: Router ------------------------------------------------------------
+
+
+def test_sse_format():
+    frame = _sse({"type": "token", "text": "Hi"})
+    assert frame == 'data: {"type": "token", "text": "Hi"}\n\n'
+    assert frame.endswith("\n\n")
+
+
+_CHAT_REQUEST = ChatRequest(
+    messages=[ChatMessage(role="user", content="Wie viel habe ich ausgegeben?")]
+)
+_KEY_GUARD_MELDUNG = "Der API-Key enthält Zeichen, die nicht übertragen werden können."
+_ABGESCHNITTEN_MELDUNG = (
+    "Die Verbindung zum Modell-Server wurde unterbrochen — die Antwort wurde "
+    "abgeschnitten."
+)
+
+
+def _nie_aufgerufen(**kwargs):
+    """Async-Generator, der nie laufen darf: als Beweisstelle fuer eine Vorpruefung."""
+    raise AssertionError("stream_chat wurde aufgerufen, obwohl es nicht durfte")
+    yield  # macht die Funktion erst zum Async-Generator
+
+
+def _chat_frames(stream):
+    """assistant_chat aufrufen und den Stream als SSE-Frames zurueckgeben.
+
+    stream_chat wird im Router-Namespace ersetzt, nicht sein Transport: der
+    Aufbau des HTTP-Requests ist Sache des Clients und in Task 4 getestet,
+    hier zaehlt die Stelle, an der der Router den Fehler faengt.
+
+    Patch und Iteration liegen in einem Block, weil event_stream ein
+    Async-Generator ist: assistant_chat liefert nur die leere Huelle zurueck,
+    der Rumpf laeuft erst beim Lesen von body_iterator — und loest dabei erst
+    den Namen stream_chat auf.
+
+    build_context laeuft bewusst ungepatcht: der Router schiebt sie per
+    run_in_threadpool in einen Worker-Thread, und get_connection() oeffnet pro
+    Aufruf eine eigene Verbindung. Die test_db-Fixture kann den Thread nicht
+    wechseln (sqlite verbietet das), die autouse-Isolierung aus conftest.py
+    lenkt den echten Pfad auf eine tmp-DB um -- das ist der Produktionsweg.
+    """
+
+    async def lauf() -> list[dict]:
+        with patch.object(assistant_api, "stream_chat", stream):
+            antwort = await assistant_api.assistant_chat(_CHAT_REQUEST)
+            return [json.loads(rahmen[6:]) async for rahmen in antwort.body_iterator]
+
+    return asyncio.run(lauf())
+
+
+def test_chat_stromt_tokens_und_beendet_mit_done(mem_settings):
+    ai_config.save_ai_config(enabled=True, model="llama3", api_key=_CANARY)
+
+    async def stream(**kwargs):
+        yield "Hallo"
+        yield " Welt"
+
+    assert _chat_frames(stream) == [
+        {"type": "token", "text": "Hallo"},
+        {"type": "token", "text": " Welt"},
+        {"type": "done"},
+    ]
+
+
+def test_chat_meldet_einen_abgelehnten_key_als_terminales_event(mem_settings):
+    """Der Key-Guard laeuft bei der ersten Iteration, nicht beim Aufruf.
+
+    stream_chat ist ein Async-Generator: der Aufruf fuehrt keinen Zeilenteil des
+    Rumpfes aus, das __anext__ der ersten Iteration dagegen schon. Ein
+    try/except um den Aufruf herum wuerde eine abgelehnte Tastatur also nicht
+    fangen — die AssistantError bräche aus dem Generator durch, mitten im bereits
+    begonnenen Stream, ohne Event und ohne Moeglichkeit, den Statuscode zu
+    aendern. Der Test belegt die richtige Stelle: der Fehler muss als letztes
+    Event ankommen, und ein "done" darf es danach nicht mehr geben.
+    """
+    ai_config.save_ai_config(enabled=True, model="llama3", api_key=_NICHT_ASCII_CANARY)
+
+    async def abgelehnt(**kwargs):
+        raise AssistantError(_KEY_GUARD_MELDUNG)
+        yield  # macht die Funktion erst zum Async-Generator
+
+    frames = _chat_frames(abgelehnt)
+    # Genau ein Frame, und er ist der Fehler: kein Token, kein "done" danach.
+    assert frames == [{"type": "error", "message": _KEY_GUARD_MELDUNG}]
+
+
+def test_chat_behaelt_tokens_und_meldet_das_abschneiden_als_terminales_event(mem_settings):
+    """stream_chat liefert die empfangenen Tokens und meldet danach den Abbruch.
+
+    Der Router darf sie nicht verwerfen — der Nutzer hat den Text schon gesehen —
+    und darf es auch nicht als HTTP-Fehler behandeln: die StreamingResponse ist
+    laengst mit Status 200 unterwegs. Der Abbruch kommt als letztes Event.
+    """
+    ai_config.save_ai_config(enabled=True, model="llama3", api_key=_CANARY)
+
+    async def abgeschnitten(**kwargs):
+        yield "Hallo"
+        yield " Welt"
+        raise AssistantError(_ABGESCHNITTEN_MELDUNG)
+
+    frames = _chat_frames(abgeschnitten)
+    assert [frame["text"] for frame in frames if frame["type"] == "token"] == [
+        "Hallo",
+        " Welt",
+    ]
+    assert frames[-1] == {"type": "error", "message": _ABGESCHNITTEN_MELDUNG}
+    assert all(frame["type"] != "done" for frame in frames)
+
+
+@pytest.mark.parametrize(
+    "speicher",
+    [{}, {"enabled": False, "model": "llama3"}, {"enabled": True, "model": ""}],
+    ids=["standard", "aus", "ohne-modell"],
+)
+def test_chat_bricht_ohne_konfiguration_mit_400_ab(mem_settings, speicher):
+    """Beide Seiten der Bedingung — und der Stream darf gar nicht erst starten.
+
+    ``base_url`` steht bewusst nicht in der Liste: load_ai_config() faellt fuer
+    jeden falsy Wert auf DEFAULT_BASE_URL zurueck, eine leere Base-URL gibt es
+    nicht zu pruefen. ``_nie_aufgerufen`` ist die Beweisstelle fuer die
+    Reihenfolge: faellt die Vorpruefung weg, kommt der Aufruf durch.
+    """
+    ai_config.save_ai_config(**speicher)
+
+    with pytest.raises(HTTPException) as excinfo:
+        _chat_frames(_nie_aufgerufen)
+
+    assert excinfo.value.status_code == 400
+    assert "nicht konfiguriert" in excinfo.value.detail
+
+
+def test_config_antworten_enthalten_den_api_key_nicht(mem_settings):
+    """Beide Antwortpfade der Config-Endpunkte, und zwar beide gerichtete.
+
+    GET liest, PATCH schreibt und liest danach; der Key wird verschluesselt
+    gespeichert. Ueber die Antwort darf er trotzdem nicht herauskommen — deshalb
+    wird nicht nur der gespeicherte Wert geprueft, sondern das, was der Client
+    tatsaechlich serialisiert bekommt. Der Allowlist-Assert unten verhindert,
+    dass der Test auch mit einem zusaetzlichen Schluessel gruen wuerde.
+    """
+    gespeichert = assistant_api.update_assistant_config(
+        AssistantConfigUpdate(
+            enabled=True, base_url="http://x/v1", model="llama3", api_key=_CANARY
+        )
+    )
+    gelesen = assistant_api.get_assistant_config()
+
+    for antwort in (gespeichert, gelesen):
+        assert _CANARY not in json.dumps(antwort)
+        assert "api_key" not in antwort
+    assert gespeichert == {
+        "enabled": True,
+        "base_url": "http://x/v1",
+        "model": "llama3",
+        "has_api_key": True,
+        "configured": True,
+    }
+    assert gelesen == gespeichert

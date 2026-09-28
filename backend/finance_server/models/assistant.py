@@ -1,0 +1,26 @@
+from __future__ import annotations
+
+from pydantic import BaseModel
+
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class ChatRequest(BaseModel):
+    messages: list[ChatMessage]
+    date_from: str | None = None
+    date_to: str | None = None
+
+
+class AssistantConfigUpdate(BaseModel):
+    enabled: bool | None = None
+    base_url: str | None = None
+    model: str | None = None
+    api_key: str | None = None
+
+
+class ModelsRequest(BaseModel):
+    base_url: str | None = None
+    api_key: str | None = None
