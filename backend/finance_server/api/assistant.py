@@ -53,7 +53,13 @@ def update_assistant_config(payload: AssistantConfigUpdate) -> dict[str, Any]:
 @router.post("/assistant/models")
 async def get_assistant_models(payload: ModelsRequest) -> dict[str, Any]:
     config = load_ai_config()
+    # Nur der gespeicherte Wert faellt auf DEFAULT_BASE_URL zurueck. Ein
+    # Body-Feld aus reinen Leerzeichen ist dagegen truthy und wird hier erst zu
+    # "" — ohne diese Pruefung kaeme unten "/models" heraus, und die Meldung
+    # spräche vom fehlenden http://-Protokoll statt vom leeren Feld.
     base_url = (payload.base_url or config["base_url"]).strip()
+    if not base_url:
+        raise HTTPException(status_code=400, detail="Die Base-URL darf nicht leer sein.")
     api_key = payload.api_key if payload.api_key is not None else config["api_key"]
     try:
         models = await list_models(base_url=base_url, api_key=api_key)
@@ -64,8 +70,8 @@ async def get_assistant_models(payload: ModelsRequest) -> dict[str, Any]:
 
 @router.post("/assistant/chat")
 async def assistant_chat(payload: ChatRequest) -> StreamingResponse:
-    config = load_ai_config()
     # base_url kann nie leer sein: load_ai_config() fällt auf DEFAULT_BASE_URL zurück.
+    config = load_ai_config()
     if not config["enabled"] or not config["model"].strip():
         raise HTTPException(status_code=400, detail="KI ist nicht konfiguriert")
 

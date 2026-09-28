@@ -10,7 +10,7 @@ from unittest.mock import patch
 import httpx
 import pytest
 from cryptography.fernet import Fernet
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
 
 from finance_server.api import assistant as assistant_api
 from finance_server.api.assistant import _sse
@@ -1121,3 +1121,138 @@ def test_config_antworten_enthalten_den_api_key_nicht(mem_settings):
         "configured": True,
     }
     assert gelesen == gespeichert
+
+
+# --- Task-5-Review: POST /assistant/models -----------------------------------
+#
+# Die einzige Route, die einen Klartext-Key im Request-Body annimmt (Verbindung
+# testen, bevor gespeichert wird), und bis hierher ohne jeden Test. Der Key wird
+# nicht persistiert — er darf aber auch nicht in die Antwort wandern. Geprueft
+# wird deshalb der vollstaendige serialisierte Body, nicht ein einzelnes Feld:
+# {"models": ...} koennte morgen aus der geladenen Config gebaut sein und trotzdem
+# einen Key enthalten.
+
+
+def _models_antwort(list_models_stub, koerper: dict) -> httpx.Response:
+    """POST /assistant/models ueber den echten ASGI-Stack.
+
+    Kein Aufruf der Routenfunktion: die Beweisstelle ist die Serialisierung.
+    Nur ueber FastAPI wird aus dem zurueckgegebenen dict ein HTTP-Body und aus
+    dem HTTPException.detail ein JSON-Feld — dort erst waere ein Key sichtbar,
+    und genau dort prueft der Test.
+
+    list_models_stub wird im Router-Namespace ersetzt, nicht sein Transport: der
+    Aufbau der HTTP-Anfrage ist Sache des Clients und in Task 4 getestet, hier
+    zaehlt der Weg vom Request zur Antwort.
+    """
+
+    async def lauf() -> httpx.Response:
+        app = FastAPI()
+        app.include_router(assistant_api.router)
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            with patch.object(assistant_api, "list_models", list_models_stub):
+                return await client.post("/assistant/models", json=koerper)
+
+    return asyncio.run(lauf())
+
+
+def test_models_liefert_die_liste_und_leakt_den_api_key_nicht(mem_settings):
+    """Erfolgspfad: die Modelle kommen zurueck, der Klartext-Key nicht.
+
+    Derselbe Canary liegt in der gespeicherten Config und im Request-Body, weil
+    beide Wege in dieselbe Antwort laufen koennten. Ohne den gespeicherten Key
+    waere eine Antwort, die aus der Config gebaut wird, hier gruen geblieben.
+    """
+    ai_config.save_ai_config(base_url="http://x/v1", model="llama3", api_key=_CANARY)
+    gesendet: dict[str, str] = {}
+
+    async def list_models_stub(*, base_url, api_key, **kwargs):
+        gesendet.update(base_url=base_url, api_key=api_key)
+        return ["llama3", "qwen"]
+
+    antwort = _models_antwort(
+        list_models_stub, {"base_url": "http://x/v1", "api_key": _CANARY}
+    )
+
+    assert antwort.status_code == 200
+    # Gegenprobe: der Klartext-Key ist wirklich angekommen. Ohne sie koennte der
+    # Canary-Assert auch gruen sein, weil der Key nirgends gelesen wurde.
+    assert gesendet["api_key"] == _CANARY
+    # Der ganze serialisierte Body, nicht das models-Feld. Steht bewusst vor den
+    # Form-Asserts: der Key darf nicht herauskommen, unabhaengig davon, wie die
+    # Antwort sonst aufgebaut ist.
+    assert _CANARY not in antwort.text
+    assert antwort.json() == {"models": ["llama3", "qwen"]}
+    # Allowlist statt nur Abwesenheit: ein zusaetzlicher Schluessel faellt auf,
+    # auch einer ohne den Key im Namen ("has_api_key", "modelle").
+    assert set(antwort.json()) == {"models"}
+    # Und er wird auch nicht persistiert: "testen ohne speichern" heisst genau das.
+    assert _CANARY not in json.dumps(dict(mem_settings))
+
+
+class _KeyInArgsError(AssistantError):
+    """AssistantError, deren str() den Key nicht zeigt und deren repr() schon.
+
+    Genau der Unterschied, an dem ``detail=str(err)`` unauffaellig bleibt und
+    ``detail=repr(err)`` den Key in die HTTP-Antwort traegt. Der Key steckt in
+    args — dort, wo ihn eine AssistantError aus einem fremden Client auch haben
+    koennte, ohne dass str() etwas anzeigt.
+    """
+
+    def __str__(self) -> str:
+        return "Modell-Server antwortete mit 401"
+
+
+_UPSSTREAM_FEHLER = {
+    # Der Normalfall: die Form, die der Client heute liefert.
+    "einfach": lambda: AssistantError("Modell-Server antwortete mit 401"),
+    # Der Fall aus dem Review: ein detail=repr(err) zeigt den Key, str(err) nicht.
+    "key-in-args": lambda: _KeyInArgsError(
+        f"Modell-Server antwortete mit 401 (Key: {_CANARY})"
+    ),
+}
+
+
+@pytest.mark.parametrize("fehler", _UPSSTREAM_FEHLER.values(), ids=list(_UPSSTREAM_FEHLER))
+def test_models_meldet_upstream_fehler_als_502_und_leakt_den_api_key_nicht(mem_settings, fehler):
+    """AssistantError -> 502, und der Body nennt weder den Key noch die Exception.
+
+    Status und Inhalt des details werden mitgeprueft: eine 502 mit leerem oder
+    generischem detail koennte den Key nicht zeigen und der Test waere trotzdem
+    gruen. Der Key steckt in der zweiten Variante in args, also genau dort, wo er
+    bei einem Wechsel auf repr(err) sichtbar wuerde.
+    """
+    ai_config.save_ai_config(base_url="http://x/v1", model="llama3", api_key=_CANARY)
+
+    async def list_models_stub(*, base_url, api_key, **kwargs):
+        raise fehler()
+
+    antwort = _models_antwort(
+        list_models_stub, {"base_url": "http://x/v1", "api_key": _CANARY}
+    )
+
+    assert antwort.status_code == 502
+    assert "401" in antwort.json()["detail"]
+    assert _CANARY not in antwort.text
+
+
+def test_models_lehnt_eine_nur_aus_leerzeichen_bestehende_base_url_ab(mem_settings):
+    """Whitespace-only ist truthy, strip() macht "" daraus — und "/models" ist
+    keine gueltige URL. Der Aufruf scheitert dann an einer Meldung ueber das
+    fehlende http://-Protokoll, die dem Nutzer nicht sagt, was er tippen soll.
+
+    Stattdessen 400 mit Klartext, und list_models wird gar nicht erst aufgerufen.
+    """
+    aufgerufen: list[str] = []
+
+    async def list_models_stub(*, base_url, api_key, **kwargs):
+        aufgerufen.append(base_url)
+        return []
+
+    antwort = _models_antwort(list_models_stub, {"base_url": "   ", "api_key": _CANARY})
+
+    assert antwort.status_code == 400
+    assert aufgerufen == []
+    assert "Base-URL" in antwort.json()["detail"]
+    assert _CANARY not in antwort.text
