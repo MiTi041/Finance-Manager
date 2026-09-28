@@ -74,7 +74,16 @@ export default function AssistantPage() {
       </div>
 
       <ScrollArea className="min-h-0 flex-1 px-6">
-        <div className="mx-auto flex max-w-3xl flex-col gap-4 py-6">
+        {/* aria-live="polite" allein würde bei einem Token-Strom, der sich
+            mehrmals pro Sekunde ändert, unlesbar werden. aria-busy hält die
+            Ansagen zurück, solange der Stream läuft; beim Wechsel auf false
+            wird der fertige Text einmal vorgelesen. */}
+        <div
+          className="mx-auto flex max-w-3xl flex-col gap-4 py-6"
+          role="log"
+          aria-live="polite"
+          aria-busy={streaming}
+        >
           {messages.length === 0 && !nichtKonfiguriert && (
             <p className="py-16 text-center text-sm text-muted-foreground">
               Stell eine Frage zu deinen Finanzen, z. B. „Wie viel habe ich letzten Monat für

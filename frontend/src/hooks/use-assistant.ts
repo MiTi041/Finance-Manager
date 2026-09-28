@@ -1,25 +1,33 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { streamAssistantChat } from "@/lib/assistant";
+import { canStartStream, historyForRequest, type ChatMessage } from "@/lib/assistant-send";
 
-export type ChatMessage = { role: "user" | "assistant"; content: string };
+export type { ChatMessage };
 
 export function useAssistant(dateFrom?: string, dateTo?: string) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Nicht null heißt: genau dieser Stream läuft gerade. Zwei Gründe:
-  // ein zweiter send() bricht ab, und die Events eines veralteten Streams
-  // werden verworfen, statt in die nächste Antwort geschrieben zu werden.
+  // Nicht null heißt: genau dieser Stream läuft gerade, und der Platz ist
+  // damit belegt. Der Send-Wächter hängt hier dran und nicht am State
+  // "streaming": zwei send() im selben Tick lesen denselben State, die Ref
+  // ist aber nach dem ersten Aufruf schon gefüllt.
   const abortRef = useRef<AbortController | null>(null);
 
   const send = useCallback(
     async (text: string) => {
+      if (!canStartStream(abortRef.current, text)) return;
       const trimmed = text.trim();
-      if (!trimmed || abortRef.current) return;
 
       setError(null);
-      const history: ChatMessage[] = [...messages, { role: "user", content: trimmed }];
+      // Die Platzhalter-Blase gehört nicht in den Request: sie würde beim
+      // nächsten send() als leere Nachricht mitgehen und vom Modell-Server
+      // mit 400 abgelehnt.
+      const history: ChatMessage[] = historyForRequest([
+        ...messages,
+        { role: "user", content: trimmed },
+      ]);
       setMessages([...history, { role: "assistant", content: "" }]);
       setStreaming(true);
 
@@ -30,7 +38,10 @@ export function useAssistant(dateFrom?: string, dateTo?: string) {
       // Fehlerfall nach dem error-Frame ab und sendet es nie. Das Ende des
       // Streams ist das Abschlusssignal, streamAssistantChat löst sich dann auf.
       const appendToken = (chunk: string) => {
-        if (abortRef.current !== controller) return;
+        // Nur an die letzte Nachricht hängen, und nur wenn das eine Antwort ist.
+        // Das ist zugleich der Schutz gegen einen Token, der nach reset()
+        // eintrifft: reset() leert messages und lässt den Controller in der Ref
+        // stehen, last ist dann undefined und der Token wird verworfen.
         setMessages((previous) => {
           const last = previous[previous.length - 1];
           if (last?.role !== "assistant") return previous;
