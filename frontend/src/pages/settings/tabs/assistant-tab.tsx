@@ -24,19 +24,26 @@ export function AssistantTab() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  // Erst nach erfolgreichem Laden true: sonst zeigen die Felder ihre
+  // useState-Defaults und ein Speichern überschreibt die echte Konfiguration.
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const config = await fetchAssistantConfig();
       setEnabled(config.enabled);
       setBaseUrl(config.base_url);
       setModel(config.model);
       setHasApiKey(config.has_api_key);
+      setLoaded(true);
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Konfiguration konnte nicht geladen werden",
-      );
+      const msg =
+        err instanceof Error ? err.message : "Konfiguration konnte nicht geladen werden";
+      setLoadError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -63,6 +70,14 @@ export function AssistantTab() {
   }, [baseUrl, apiKey]);
 
   const save = useCallback(async () => {
+    if (!loaded) return;
+    // Symmetrisch zum Modell-Guard: is_configured() verlangt beide Felder
+    // gefüllt. Dieselbe Meldung wie POST /assistant/models, damit beide Wege
+    // dasselbe sagen.
+    if (enabled && !baseUrl.trim()) {
+      toast.error("Die Base-URL darf nicht leer sein.");
+      return;
+    }
     if (enabled && !model.trim()) {
       toast.error("Ohne Modell kann der Assistent nicht aktiviert werden.");
       return;
@@ -84,7 +99,7 @@ export function AssistantTab() {
     } finally {
       setSaving(false);
     }
-  }, [enabled, baseUrl, model, apiKey]);
+  }, [loaded, enabled, baseUrl, model, apiKey]);
 
   const clearApiKey = useCallback(async () => {
     setSaving(true);
@@ -116,15 +131,17 @@ export function AssistantTab() {
         description="Verbinde einen lokalen, OpenAI-kompatiblen Modell-Server (Ollama, LM Studio, llama.cpp)."
       />
 
+      {loadError && <p className="text-sm text-destructive mb-4">{loadError}</p>}
+
       <div className="flex flex-col gap-4 rounded-lg border border-muted bg-muted/70 px-4 py-4">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <div className="text-sm font-medium">Assistent aktiv</div>
+            <Label htmlFor="ai-enabled">Assistent aktiv</Label>
             <div className="text-xs text-muted-foreground">
               Zeigt den KI-Chat in der Seitenleiste an.
             </div>
           </div>
-          <Switch checked={enabled} onCheckedChange={setEnabled} />
+          <Switch id="ai-enabled" checked={enabled} onCheckedChange={setEnabled} />
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -133,7 +150,6 @@ export function AssistantTab() {
             id="ai-base-url"
             value={baseUrl}
             onChange={(event) => setBaseUrl(event.target.value)}
-            placeholder="http://localhost:11434/v1"
           />
         </div>
 
@@ -169,7 +185,12 @@ export function AssistantTab() {
               onChange={(event) => setModel(event.target.value)}
               placeholder="z. B. llama3.1:8b"
             />
-            <Button variant="outline" onClick={() => void testConnection()} disabled={testing}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void testConnection()}
+              disabled={testing}
+            >
               {testing ? <Loader2 className="size-4 animate-spin" /> : "Modelle laden"}
             </Button>
           </div>
@@ -191,7 +212,11 @@ export function AssistantTab() {
         </div>
 
         <div className="flex justify-end">
-          <Button onClick={() => void save()} disabled={saving}>
+          <Button
+            type="button"
+            onClick={() => void save()}
+            disabled={saving || !loaded}
+          >
             {saving ? <Loader2 className="size-4 animate-spin" /> : "Speichern"}
           </Button>
         </div>
