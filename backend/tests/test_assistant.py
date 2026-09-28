@@ -633,6 +633,70 @@ def test_fehlerstatus_gibt_keinen_servertext_weiter():
     assert _CANARY not in meldung
 
 
+_NETZWERKFEHLER = [
+    pytest.param(
+        lambda request: httpx.ConnectTimeout("", request=request),
+        "KI nicht erreichbar: Zeitüberschreitung",
+        id="connect-timeout-leer",
+    ),
+    pytest.param(
+        lambda request: httpx.ReadTimeout("", request=request),
+        "KI nicht erreichbar: Zeitüberschreitung",
+        id="read-timeout-leer",
+    ),
+    pytest.param(
+        lambda request: httpx.ReadError("", request=request),
+        "KI nicht erreichbar: Verbindung unterbrochen",
+        id="read-error-leer",
+    ),
+    pytest.param(
+        lambda request: httpx.ConnectError("connection refused", request=request),
+        "KI nicht erreichbar: connection refused",
+        id="connect-error-mit-text",
+    ),
+]
+
+
+@pytest.mark.parametrize(("werfen", "erwartet"), _NETZWERKFEHLER)
+def test_netzwerkfehler_hat_immer_eine_meldung(werfen, erwartet):
+    """httpx-Timeout-Ausnahmen tragen eine leere Meldung.
+
+    httpcore wirft TimeoutError ohne Argument, httpx reicht str(err) durch. Ohne
+    eigenen Zweig stand im Frontend nur "KI nicht erreichbar: " ohne Text, und der
+    Nutzer konnte die Ursache nicht erkennen. Beide Transportzweige (stream_chat,
+    list_models) muessen eine nicht-leere Meldung liefern.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise werfen(request)
+
+    async def stream() -> None:
+        async for _ in stream_chat(
+            base_url="http://x/v1",
+            api_key="",
+            model="m",
+            messages=[],
+            transport=httpx.MockTransport(handler),
+        ):
+            pass
+
+    with pytest.raises(AssistantError) as stream_error:
+        asyncio.run(stream())
+    stream_meldung = str(stream_error.value)
+    assert stream_meldung.strip() == erwartet
+    assert not stream_meldung.rstrip().endswith(":")
+
+    with pytest.raises(AssistantError) as models_error:
+        asyncio.run(
+            list_models(
+                base_url="http://x/v1",
+                api_key="",
+                transport=httpx.MockTransport(handler),
+            )
+        )
+    assert str(models_error.value).strip() == erwartet
+
+
 def test_api_key_mit_umlaut_wird_abgelehnt_ohne_anfrage():
     """Finding 2: nicht-ASCII wird abgelehnt, nicht umkodiert.
 

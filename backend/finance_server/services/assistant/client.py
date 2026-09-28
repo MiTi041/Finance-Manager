@@ -82,6 +82,20 @@ def _token_aus_frame(frame: str) -> str:
     return content if isinstance(content, str) else ""
 
 
+def _nicht_erreichbar(err: httpx.HTTPError) -> AssistantError:
+    """Netzwerkfehler in eine AssistantError mit nie leerer Meldung übersetzen.
+
+    httpx-Timeout-Ausnahmen tragen eine leere Meldung: httpcore wirft TimeoutError
+    ohne Argument, und httpx reicht str(err) durch. Ohne eigenen Zweig stünde im
+    Frontend nur "KI nicht erreichbar: " ohne Text. Der Fallback deckt die übrigen
+    leeren Fälle (z. B. ReadError aus einem abgerissenen Stream) ab.
+    """
+    if isinstance(err, httpx.TimeoutException):
+        return AssistantError("KI nicht erreichbar: Zeitüberschreitung")
+    detail = str(err) or "Verbindung unterbrochen"
+    return AssistantError(f"KI nicht erreichbar: {detail}")
+
+
 async def stream_chat(
     *,
     base_url: str,
@@ -123,7 +137,7 @@ async def stream_chat(
                     if token:
                         yield token
     except httpx.HTTPError as err:
-        raise AssistantError(f"KI nicht erreichbar: {err}") from err
+        raise _nicht_erreichbar(err) from err
 
     # Die bereits ausgelieferten Tokens bleiben beim Aufrufer; ohne [DONE] ist die
     # Antwort aber unvollständig, und eine unerkennte Endlosschleife sieht im
@@ -149,7 +163,7 @@ async def list_models(
         async with httpx.AsyncClient(timeout=timeout, transport=transport) as client:
             response = await client.get(url, headers=headers)
     except httpx.HTTPError as err:
-        raise AssistantError(f"KI nicht erreichbar: {err}") from err
+        raise _nicht_erreichbar(err) from err
 
     if response.status_code != 200:
         raise AssistantError(f"Modell-Server antwortete mit {response.status_code}")
