@@ -10,6 +10,11 @@ import pytest
 from cryptography.fernet import Fernet
 
 from finance_server.services.assistant import config as ai_config
+from finance_server.services.assistant.client import (
+    AssistantError,
+    list_models,
+    stream_chat,
+)
 from finance_server.services.assistant.context import (
     MAX_CONTEXT_TRANSACTIONS,
     build_context,
@@ -305,3 +310,105 @@ def test_build_context_resolves_category_id_to_name(test_db):
     assert by_recipient[f"SHOP{_ASSISTANT_IBAN}-0"] == "Lebensmittel"
     # Unauflösbare ID (hier: NULL) -> "" und nie None, nie "None" im Prompt.
     assert by_recipient["SHOPDE00OHNEKATEGORIE-0"] == ""
+
+
+def test_stream_chat_translates_sse():
+    body = (
+        'data: {"choices":[{"delta":{"content":"Hallo"}}]}\n\n'
+        'data: {"choices":[{"delta":{"content":" Welt"}}]}\n\n'
+        "data: [DONE]\n\n"
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, content=body.encode(), headers={"content-type": "text/event-stream"}
+        )
+
+    async def collect() -> list[str]:
+        tokens: list[str] = []
+        async for token in stream_chat(
+            base_url="http://x/v1",
+            api_key="",
+            model="m",
+            messages=[],
+            transport=httpx.MockTransport(handler),
+        ):
+            tokens.append(token)
+        return tokens
+
+    assert asyncio.run(collect()) == ["Hallo", " Welt"]
+
+
+def test_stream_chat_raises_on_error_status():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, content=b"boom")
+
+    async def consume() -> None:
+        async for _ in stream_chat(
+            base_url="http://x/v1",
+            api_key="",
+            model="m",
+            messages=[],
+            transport=httpx.MockTransport(handler),
+        ):
+            pass
+
+    with pytest.raises(AssistantError):
+        asyncio.run(consume())
+
+
+def test_list_models_returns_ids():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"data": [{"id": "llama3"}, {"id": "qwen"}]})
+
+    models = asyncio.run(
+        list_models(base_url="http://x/v1", api_key="", transport=httpx.MockTransport(handler))
+    )
+    assert models == ["llama3", "qwen"]
+
+
+def test_assistant_error_never_carries_the_api_key():
+    """Der Key steht ausschliesslich im Authorization-Header.
+
+    Keine Fehlerverzweigung gibt Header oder Anfrage aus, deshalb darf er in
+    weder Status- noch Verbindungsfehler auftauchen. Geprueft werden beide
+    Zweige, und die Meldung muss den Status nennen -- sonst koennte der Test
+    auch mit einer leeren Exception gruen werden.
+
+    Nicht abgedeckt: der Statuszweig uebernimmt den Response-Body des Servers
+    unveraendert in die Meldung. Ein Server, der den Authorization-Header im
+    eigenen Fehlertext wiederholt, schleust den Key so doch hinein. Siehe
+    Concern 1 im Task-4-Report.
+    """
+    secret = "sk-super-secret"
+
+    def status_handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, content=b"boom")
+
+    async def consume() -> None:
+        async for _ in stream_chat(
+            base_url="http://x/v1",
+            api_key=secret,
+            model="m",
+            messages=[],
+            transport=httpx.MockTransport(status_handler),
+        ):
+            pass
+
+    with pytest.raises(AssistantError) as status_error:
+        asyncio.run(consume())
+    assert "500" in str(status_error.value)
+    assert secret not in str(status_error.value)
+
+    def connect_handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused", request=request)
+
+    with pytest.raises(AssistantError) as connect_error:
+        asyncio.run(
+            list_models(
+                base_url="http://x/v1",
+                api_key=secret,
+                transport=httpx.MockTransport(connect_handler),
+            )
+        )
+    assert secret not in str(connect_error.value)
