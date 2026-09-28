@@ -418,6 +418,16 @@ def test_assistant_error_never_carries_the_api_key():
 
 _CANARY = "sk-LEAK-CANARY-1234"
 _NICHT_ASCII_CANARY = f"{_CANARY}ä"
+# Re-Review Finding 1: Keys, die isascii() bestehen, aber kein einzeiliger
+# Headerwert sind. strip() raeumt nur die Raender, ein Mehrzeilen-Paste laesst den
+# Umbruch also innen stehen — genau daran scheitert h11 erst beim Senden.
+_STEUERZEICHEN_KEYS = {
+    "zeilenumbruch": f"{_CANARY}\nsecond-line",
+    "wagenruecklauf": f"{_CANARY}\rsecond-line",
+    "tabulator": f"{_CANARY}\tsecond-line",
+    "nullbyte": f"{_CANARY}\x00second-line",
+    "esc-sequenz": f"{_CANARY}\x1b[31m",
+}
 # Ein Server, der den Authorization-Header im eigenen Fehlertext wiederholt.
 _ECHO_BODY = f'{{"error":"unauthorized: Bearer {_CANARY}"}}'.encode()
 _FRAME_MIT_TEXT = 'data: {"choices":[{"delta":{"content":"Hallo"}}]}\n\n'
@@ -499,6 +509,9 @@ _UNERWARTETE_PAYLOADS = {
     "data-null": b'{"data": null}',
     "data-zahlen": b'{"data": [1, 2]}',
     "data-text": b'{"data": "llama3"}',
+    # Kaputtes JSON, das den zurueckgespielten Key enthaelt: genau der Fall, in dem
+    # der Rohbody ueber .doc der verketteten JSONDecodeError erreichbar war.
+    "key-im-body": f'{{"error":"unauthorized: Bearer {_CANARY}"'.encode(),
 }
 
 _UNERWARTETE_FRAMES = {
@@ -509,6 +522,7 @@ _UNERWARTETE_FRAMES = {
     "choices-text": 'data: {"choices": ["x"]}\n\n',
     "choices-zahlen": 'data: {"choices": [1, 2]}\n\n',
     "delta-text": 'data: {"choices": [{"delta": "x"}]}\n\n',
+    "key-im-frame": f'data: {{"choices":[{{"delta":"Bearer {_CANARY}"\n\n',
 }
 
 
@@ -530,6 +544,18 @@ def _leak_params() -> list:
             _models_mit(200, b'{"data": []}', _NICHT_ASCII_CANARY),
             _NICHT_ASCII_CANARY,
             id="models/key-umlaut",
+        ),
+        # Re-Review Finding 1: ASCII-Steuerzeichen im Key. Geprueft wird der
+        # druckbare Teil des Keys — genau ihn bettet h11 in seine Fehlermeldung.
+        pytest.param(
+            _stream_mit(200, b"data: [DONE]\n\n", _STEUERZEICHEN_KEYS["zeilenumbruch"]),
+            _CANARY,
+            id="stream/key-zeilenumbruch",
+        ),
+        pytest.param(
+            _models_mit(200, b'{"data": []}', _STEUERZEICHEN_KEYS["zeilenumbruch"]),
+            _CANARY,
+            id="models/key-zeilenumbruch",
         ),
         # Finding 3: unerwartete Payloads.
         *[
@@ -575,6 +601,10 @@ def test_kein_fehlerpfad_leakt_den_api_key(coro, canary):
     for gechelt in (fehler.__cause__, fehler.__context__):
         if gechelt is not None:
             assert canary not in f"{gechelt} {gechelt!r}"
+            # Re-Review Finding 2: JSONDecodeError traegt den kompletten Rohbody
+            # des Servers in .doc. str() und repr() zeigen ihn nicht, ein Logger,
+            # der die Exceptionkette traversiert, schon.
+            assert canary not in str(getattr(gechelt, "doc", "") or "")
 
 
 def test_fehlerstatus_gibt_keinen_servertext_weiter():
@@ -726,3 +756,197 @@ def test_ungueltiger_frame_behaelt_bisherige_tokens():
         asyncio.run(sammle())
 
     assert tokens == ["Hallo"]
+
+
+# --- Re-Review zu Task 4 ---------------------------------------------------
+
+
+def _rekursiv_ueber_die_kette(fehler: BaseException) -> list[BaseException]:
+    """Die Exception mit __cause__ und __context__, Tiefensuche mit Schleifenschutz."""
+    kette: list[BaseException] = []
+    knoten: BaseException | None = fehler
+    while knoten is not None and knoten not in kette:
+        kette.append(knoten)
+        knoten = knoten.__cause__ or knoten.__context__
+    return kette
+
+
+@pytest.mark.parametrize("key", list(_STEUERZEICHEN_KEYS.values()), ids=list(_STEUERZEICHEN_KEYS))
+@pytest.mark.parametrize("eintritt", ["list_models", "stream_chat"])
+def test_api_key_mit_steuerzeichen_wird_abgelehnt_ohne_anfrage(eintritt, key):
+    """Re-Review Finding 1: isascii() allein lässt \n, \t, \r und \x00 durch.
+
+    strip() raeumt nur die Raender, ein Mehrzeilen-Paste laesst den Umbruch innen
+    stehen. Der Key passierte die alte Pruefung, httpx reichte ihn an h11 weiter,
+    und h11 lehnte ihn beim Senden ab -- mit dem kompletten Headerwert in seiner
+    eigenen Fehlermeldung. Ein MockTransport sieht das nicht: er umgeht die
+    Headerkodierung vollstaendig. Deshalb ist hier der Handler die Beweisstelle,
+    er darf gar nicht erst aufgerufen werden. Beide Aufrufwege werden geprueft,
+    weil stream_chat als Generator erst beim Iterieren den Guard erreicht.
+    """
+    aufgerufen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        aufgerufen.append(request)
+        return httpx.Response(200, content=b'{"data": []}')
+
+    async def models() -> None:
+        await list_models(
+            base_url="http://x/v1", api_key=key, transport=httpx.MockTransport(handler)
+        )
+
+    async def stream() -> None:
+        async for _ in stream_chat(
+            base_url="http://x/v1",
+            api_key=key,
+            model="m",
+            messages=[],
+            transport=httpx.MockTransport(handler),
+        ):
+            pass
+
+    with pytest.raises(AssistantError) as excinfo:
+        asyncio.run(models() if eintritt == "list_models" else stream())
+
+    assert aufgerufen == []
+    # Die Meldung muss die actionable bleiben und den Key selbst nicht nennen.
+    assert "API-Key" in str(excinfo.value)
+    assert key not in str(excinfo.value)
+    assert _CANARY not in repr(excinfo.value)
+    for gechelt in _rekursiv_ueber_die_kette(excinfo.value)[1:]:
+        assert _CANARY not in f"{gechelt} {gechelt!r}"
+
+
+async def _loopback_server(protokoll: dict):
+    """127.0.0.1 auf einem freien Port — kein Egress, kein fremder Dienst.
+
+    Der Stub beantwortet jede Anfrage mit einer leeren Model-Liste, damit der
+    Gegenpol des Tests (ein gueltiger Key kommt an) ein echter Roundtrip ist.
+    """
+    body = b'{"data": []}'
+
+    async def handle(reader, writer):
+        protokoll["verbindungen"] += 1
+        try:
+            roh = await asyncio.wait_for(reader.read(4096), timeout=1.0)
+        except (asyncio.TimeoutError, OSError):
+            roh = b""
+        protokoll["anfragen"].append(roh)
+        writer.write(
+            b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
+            + str(len(body)).encode()
+            + b"\r\n\r\n"
+            + body
+        )
+        await writer.drain()
+        writer.close()
+
+    server = await asyncio.start_server(handle, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    return f"http://127.0.0.1:{port}/v1", server
+
+
+@pytest.mark.parametrize("key", list(_STEUERZEICHEN_KEYS.values()), ids=list(_STEUERZEICHEN_KEYS))
+def test_steuerzeichen_im_key_erreicht_keinen_echten_socket(key):
+    """Re-Review Finding 1 am echten Socket: der Weg, den ein MockTransport nicht sieht.
+
+    Der obige Test beweist, dass der Handler nicht aufgerufen wird. Hier laeuft
+    derselbe Key ueber eine echte TCP-Verbindung, weil genau dort h11 die
+    Headerkodierung macht. Faellt der Guard zurueck, baut der Client den Header,
+    verbindet sich und bricht mit "Illegal header value b'Bearer <key>'" ab —
+    die Meldung enthaelt den Key, und der Listener hat eine Verbindung gesehen.
+    Zwei unabhaengige Signale, damit der Test nicht nur an einem haengt.
+    """
+    async def lauf() -> None:
+        protokoll = {"verbindungen": 0, "anfragen": []}
+        base_url, server = await _loopback_server(protokoll)
+        try:
+            for aufruf in ("list_models", "stream_chat"):
+                with pytest.raises(AssistantError) as excinfo:
+                    # wait_for: kehrt der Guard nicht zurueck, haengt der Test nicht.
+                    await asyncio.wait_for(_echter_aufruf(aufruf, base_url, key), timeout=5.0)
+                fehler = excinfo.value
+                assert protokoll["verbindungen"] == 0, f"{aufruf}: Verbindung kam an"
+                assert "API-Key" in str(fehler)
+                assert _CANARY not in str(fehler)
+                assert _CANARY not in repr(fehler)
+                assert _CANARY not in "".join(
+                    traceback.format_exception(type(fehler), fehler, fehler.__traceback__)
+                )
+        finally:
+            server.close()
+            await server.wait_closed()
+
+    asyncio.run(lauf())
+
+
+def test_gueltiger_key_erreicht_den_echten_socket_unveraendert():
+    """Gegenprobe: die Straffung des Guards darf keinen echten Key aussperren.
+
+    ``isascii() and isprintable()`` schliesst unter ASCII genau die
+    Steuerzeichen C0/C1 aus — Zeichen, die in einem Headerwert nie gueltig sind
+    und die kein Modell-Server in einen Key schreibt. Geprueft wird das am
+    echten Socket gegen die rohen Bytes, die der Client wirklich sendet: ein
+    Server, der einen solchen Key ausstellt, muss ihn unveraendert bekommen.
+    """
+    protokoll = {"verbindungen": 0, "anfragen": []}
+
+    async def lauf() -> list[str]:
+        base_url, server = await _loopback_server(protokoll)
+        try:
+            return await asyncio.wait_for(
+                _echter_aufruf("list_models", base_url, _CANARY), timeout=5.0
+            )
+        finally:
+            server.close()
+            await server.wait_closed()
+
+    assert asyncio.run(lauf()) == []
+    assert protokoll["verbindungen"] == 1
+    assert f"Authorization: Bearer {_CANARY}".encode() in protokoll["anfragen"][0]
+
+
+async def _echter_aufruf(eintritt: str, base_url: str, key: str):
+    if eintritt == "list_models":
+        return await list_models(base_url=base_url, api_key=key)
+    return [token async for token in
+            stream_chat(base_url=base_url, api_key=key, model="m", messages=[])]
+
+
+@pytest.mark.parametrize("pfad", ["models", "stream"])
+def test_roher_upstream_text_ist_ueber_die_kette_nicht_erreichbar(pfad):
+    """Re-Review Finding 2: ``from None`` loescht die Ausnahme nicht, nur die Anzeige.
+
+    Die JSONDecodeError bleibt als __context__ in der Kette und traegt den
+    kompletten Rohbody in .doc. str(), repr() und der Traceback zeigen ihn nicht —
+    ein strukturierter Logger, der die Kette traversiert, schon. Geprueft wird
+    deshalb die Kette als Kette, ueber __cause__ und __context__, und je Knoten
+    str, repr, args und .doc. Dass die Meldung selbst noch die inhaltliche ist,
+    wird mitgeprueft, sonst koennte der Test auch mit einer leeren Ausnahme gruen
+    werden.
+    """
+    koerper = f'{{"error":"unauthorized: Bearer {_CANARY}"'.encode()
+    aufruf = (
+        (lambda: _models_mit(200, koerper)())
+        if pfad == "models"
+        else (lambda: _stream_mit(200, f'data: {{"choices":[{{"delta":"{_CANARY}"\n\n'.encode())())
+    )
+
+    with pytest.raises(AssistantError) as excinfo:
+        asyncio.run(aufruf())
+
+    kette = _rekursiv_ueber_die_kette(excinfo.value)
+    assert "unerwartete Antwort" in str(excinfo.value)
+    assert _CANARY not in str(excinfo.value)
+    # Die Kette ist nicht leer und enthaelt weiterhin eine JSONDecodeError —
+    # der Test darf nicht durch eine geaenderte Kettenform gruen werden.
+    assert any(type(knoten).__name__ == "JSONDecodeError" for knoten in kette)
+    for knoten in kette:
+        rohtext = str(getattr(knoten, "doc", "") or "")
+        assert _CANARY not in rohtext
+        assert "unauthorized" not in rohtext
+        assert all(_CANARY not in str(teil) for teil in knoten.args)
+        assert _CANARY not in f"{knoten!r}"
+        if type(knoten).__name__ == "JSONDecodeError":
+            # Nicht "weg", sondern geleert: der Rohbody darf nicht mehr drinstehen.
+            assert rohtext == ""

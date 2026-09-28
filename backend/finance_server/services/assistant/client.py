@@ -27,17 +27,24 @@ def _authorization(api_key: str) -> dict[str, str]:
     nicht authentifizieren kann, und ein 401 darauf ist schwerer zu deuten als eine
     klare Meldung. Nicht-ASCII wird deshalb abgelehnt, bevor eine Anfrage rausgeht.
     Umgebender Whitespace wird getrimmt, der kommt beim Einfügen aus der Zwischenablage.
+
+    strip() räumt nur die Ränder. Ein Key aus einem Mehrzeilen-Paste (zwei
+    eingefügte Keys, eine umbrochene Zeile) behält innen seinen Zeilenumbruch, und
+    den lehnt h11 erst beim Senden ab — mit dem kompletten Headerwert in der
+    eigenen Fehlermeldung. Deshalb wird zusätzlich gefordert, dass der Key
+    druckbar ist: Steuerzeichen innen sind in einem Headerwert nie gültig, und
+    ASCII-Steuerzeichen kann ein Server nicht ausstellen.
     """
     key = api_key.strip()
     if not key:
         return {}
     # isascii() statt encode(): ein except-Block hier haette die UnicodeEncodeError
     # mit dem Key im repr() als __context__ an die AssistantError gehaengt.
-    if not key.isascii():
+    if not key.isascii() or not key.isprintable():
         raise AssistantError(
             "Der API-Key enthält Zeichen, die nicht übertragen werden können "
-            "(z. B. Umlaute oder typografische Anführungszeichen). Bitte den Key "
-            "noch einmal einfügen."
+            "(z. B. Umlaute, typografische Anführungszeichen oder ein Zeilenumbruch "
+            "in der eingefügten Zeile). Bitte den Key noch einmal einfügen."
         )
     return {"Authorization": f"Bearer {key}"}
 
@@ -53,7 +60,12 @@ def _token_aus_frame(frame: str) -> str:
     """Ein SSE-Frame zu einem Token; leer bedeutet "Frame ohne Text"."""
     try:
         chunk = json.loads(frame)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as err:
+        # ``from None`` unterdrueckt nur die Anzeige: das Objekt bleibt als
+        # __context__ erreichbar und .doc traegt den kompletten Rohbody des
+        # Servers. Genau den Text, der dort zurueckgespielt wird, will die
+        # Fehlermeldung nicht mehr preisgeben — er wird hier geleert.
+        err.doc = ""
         raise AssistantError(_UNERWARTETE_ANTWORT) from None
 
     choices = _als_dict(chunk).get("choices")
@@ -144,7 +156,10 @@ async def list_models(
 
     try:
         payload = response.json()
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as err:
+        # Siehe _token_aus_frame: ``from None`` loescht das Ausnahmeobjekt nicht,
+        # nur seine Anzeige. Ohne das Leeren haelt die Kette den Rohbody.
+        err.doc = ""
         raise AssistantError(_UNERWARTETE_ANTWORT) from None
 
     data = _als_dict(payload).get("data")
