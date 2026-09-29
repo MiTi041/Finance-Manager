@@ -47,10 +47,9 @@ def mem_settings(monkeypatch):
 
 
 def test_public_config_masks_api_key(mem_settings):
-    ai_config.save_ai_config(enabled=True, base_url="http://x/v1", model="m", api_key="secret")
+    ai_config.save_ai_config(base_url="http://x/v1", model="m", api_key="secret")
     public = ai_config.public_ai_config()
     assert public == {
-        "enabled": True,
         "base_url": "http://x/v1",
         "model": "m",
         "has_api_key": True,
@@ -65,8 +64,8 @@ def test_api_key_is_encrypted_at_rest(mem_settings):
     assert ai_config.load_ai_config()["api_key"] == "secret"
 
 
-def test_is_configured_requires_enabled_url_and_model(mem_settings):
-    ai_config.save_ai_config(enabled=True, base_url="http://x/v1", model="")
+def test_is_configured_requires_url_and_model(mem_settings):
+    ai_config.save_ai_config(base_url="http://x/v1", model="")
     assert ai_config.public_ai_config()["configured"] is False
     ai_config.save_ai_config(model="llama3")
     assert ai_config.public_ai_config()["configured"] is True
@@ -1150,7 +1149,7 @@ def _chat_frames(stream):
 
 
 def test_chat_stromt_tokens_und_beendet_mit_done(mem_settings):
-    ai_config.save_ai_config(enabled=True, model="llama3", api_key=_CANARY)
+    ai_config.save_ai_config(model="llama3", api_key=_CANARY)
 
     async def stream(**kwargs):
         yield {"type": "token", "text": "Hallo"}
@@ -1175,7 +1174,7 @@ def test_chat_meldet_einen_abgelehnten_key_als_terminales_event(mem_settings):
     aendern. Der Test belegt die richtige Stelle: der Fehler muss als letztes
     Event ankommen, und ein "done" darf es danach nicht mehr geben.
     """
-    ai_config.save_ai_config(enabled=True, model="llama3", api_key=_NICHT_ASCII_CANARY)
+    ai_config.save_ai_config(model="llama3", api_key=_NICHT_ASCII_CANARY)
 
     async def abgelehnt(**kwargs):
         raise AssistantError(_KEY_GUARD_MELDUNG)
@@ -1193,7 +1192,7 @@ def test_chat_behaelt_tokens_und_meldet_das_abschneiden_als_terminales_event(mem
     und darf es auch nicht als HTTP-Fehler behandeln: die StreamingResponse ist
     laengst mit Status 200 unterwegs. Der Abbruch kommt als letztes Event.
     """
-    ai_config.save_ai_config(enabled=True, model="llama3", api_key=_CANARY)
+    ai_config.save_ai_config(model="llama3", api_key=_CANARY)
 
     async def abgeschnitten(**kwargs):
         yield {"type": "token", "text": "Hallo"}
@@ -1211,16 +1210,18 @@ def test_chat_behaelt_tokens_und_meldet_das_abschneiden_als_terminales_event(mem
 
 @pytest.mark.parametrize(
     "speicher",
-    [{}, {"enabled": False, "model": "llama3"}, {"enabled": True, "model": ""}],
-    ids=["standard", "aus", "ohne-modell"],
+    [{}, {"model": ""}],
+    ids=["standard", "ohne-modell"],
 )
 def test_chat_bricht_ohne_konfiguration_mit_400_ab(mem_settings, speicher):
-    """Beide Seiten der Bedingung — und der Stream darf gar nicht erst starten.
+    """Ohne Modell darf der Stream gar nicht erst starten.
 
     ``base_url`` steht bewusst nicht in der Liste: load_ai_config() faellt fuer
     jeden falsy Wert auf DEFAULT_BASE_URL zurueck, eine leere Base-URL gibt es
-    nicht zu pruefen. ``_nie_aufgerufen`` ist die Beweisstelle fuer die
-    Reihenfolge: faellt die Vorpruefung weg, kommt der Aufruf durch.
+    nicht zu pruefen. Zwei Faelle, weil ein ungesetztes und ein explizit leeres
+    Modell denselben Effekt haben muessen. ``_nie_aufgerufen`` ist die
+    Beweisstelle fuer die Reihenfolge: faellt die Vorpruefung weg, kommt der
+    Aufruf durch.
     """
     ai_config.save_ai_config(**speicher)
 
@@ -1242,7 +1243,7 @@ def test_config_antworten_enthalten_den_api_key_nicht(mem_settings):
     """
     gespeichert = assistant_api.update_assistant_config(
         AssistantConfigUpdate(
-            enabled=True, base_url="http://x/v1", model="llama3", api_key=_CANARY
+            base_url="http://x/v1", model="llama3", api_key=_CANARY
         )
     )
     gelesen = assistant_api.get_assistant_config()
@@ -1251,7 +1252,6 @@ def test_config_antworten_enthalten_den_api_key_nicht(mem_settings):
         assert _CANARY not in json.dumps(antwort)
         assert "api_key" not in antwort
     assert gespeichert == {
-        "enabled": True,
         "base_url": "http://x/v1",
         "model": "llama3",
         "has_api_key": True,

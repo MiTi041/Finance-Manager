@@ -262,6 +262,7 @@ class SyncService:
 
         self._pull_total = 0
         self._pull_progress = 0
+        applied_transactions = False
         is_first_sync = not self._remote_seqs
 
         for remote_id in remote_devices:
@@ -291,6 +292,8 @@ class SyncService:
                 for op in ops:
                     try:
                         result = apply_sync_op(op, is_first_sync=is_first_sync)
+                        if result and op.get("table_name") in {"umsaetze", "ibans"}:
+                            applied_transactions = True
                         if not result:
                             logger.warning("Sync op skipped: %s/%s id=%s",
                                            op.get("table_name"), op.get("op_type"), op.get("row_id"))
@@ -304,6 +307,16 @@ class SyncService:
         # persist remote seqs
         for remote_id, seq in self._remote_seqs.items():
             set_sync_state(f"remote_{remote_id}_seq", str(seq))
+
+        if applied_transactions:
+            try:
+                from finance_server.core.database import get_connection
+                from finance_server.services.pseudo_iban_mapping import ensure_card_mappings
+
+                with get_connection() as connection:
+                    ensure_card_mappings(connection)
+            except Exception:
+                logger.exception("Karten-Mapping nach Sync fehlgeschlagen")
 
     def key_id(self) -> str | None:
         return get_setting("sync_key_id")

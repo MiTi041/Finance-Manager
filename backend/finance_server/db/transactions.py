@@ -275,6 +275,16 @@ def insert_transactions(rows: Iterable[dict[str, Any]]) -> dict[str, int]:
                 (before_max, after_max),
             ).fetchall()
 
+            card_ibans = [
+                row["applicant_iban"]
+                for row in new_rows
+                if (row["applicant_iban"] or "").startswith("KARTE:")
+            ]
+            if card_ibans:
+                from finance_server.services.pseudo_iban_mapping import ensure_card_mappings
+
+                ensure_card_mappings(connection, card_ibans)
+
     if inserted > 0:
         for new_row in new_rows:
             _log("umsaetze", new_row["id"], "INSERT", dict(new_row))

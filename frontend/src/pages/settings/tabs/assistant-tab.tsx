@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2, RefreshCw, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import { SettingsTabHeader } from "@/components/settings-tab-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   fetchAssistantConfig,
   fetchAssistantModels,
@@ -15,7 +15,6 @@ import {
 import { ASSISTANT_CONFIG_CHANGED_EVENT } from "@/hooks/use-assistant-config";
 
 export function AssistantTab() {
-  const [enabled, setEnabled] = useState(false);
   const [baseUrl, setBaseUrl] = useState("http://localhost:11434/v1");
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -34,11 +33,17 @@ export function AssistantTab() {
     setLoadError(null);
     try {
       const config = await fetchAssistantConfig();
-      setEnabled(config.enabled);
       setBaseUrl(config.base_url);
       setModel(config.model);
       setHasApiKey(config.has_api_key);
       setLoaded(true);
+      // Modelle leise mitladen, damit die Auswahl-Toggles sofort stehen.
+      // Ohne Key im Body greift serverseitig der gespeicherte Key.
+      try {
+        setModels(await fetchAssistantModels({ base_url: config.base_url }));
+      } catch {
+        // Server nicht erreichbar: Liste bleibt leer, Button lädt manuell nach.
+      }
     } catch (err) {
       const msg =
         err instanceof Error ? err.message : "Konfiguration konnte nicht geladen werden";
@@ -74,18 +79,17 @@ export function AssistantTab() {
     // Symmetrisch zum Modell-Guard: is_configured() verlangt beide Felder
     // gefüllt. Dieselbe Meldung wie POST /assistant/models, damit beide Wege
     // dasselbe sagen.
-    if (enabled && !baseUrl.trim()) {
+    if (!baseUrl.trim()) {
       toast.error("Die Base-URL darf nicht leer sein.");
       return;
     }
-    if (enabled && !model.trim()) {
-      toast.error("Ohne Modell kann der Assistent nicht aktiviert werden.");
+    if (!model.trim()) {
+      toast.error("Ohne Modell kann der Assistent nicht gespeichert werden.");
       return;
     }
     setSaving(true);
     try {
       const config = await updateAssistantConfig({
-        enabled,
         base_url: baseUrl,
         model,
         ...(apiKey ? { api_key: apiKey } : {}),
@@ -99,7 +103,7 @@ export function AssistantTab() {
     } finally {
       setSaving(false);
     }
-  }, [loaded, enabled, baseUrl, model, apiKey]);
+  }, [loaded, baseUrl, model, apiKey]);
 
   const clearApiKey = useCallback(async () => {
     setSaving(true);
@@ -134,16 +138,6 @@ export function AssistantTab() {
       {loadError && <p className="text-sm text-destructive mb-4">{loadError}</p>}
 
       <div className="flex flex-col gap-4 rounded-lg border border-muted bg-muted/70 px-4 py-4">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <Label htmlFor="ai-enabled">Assistent aktiv</Label>
-            <div className="text-xs text-muted-foreground">
-              Zeigt den KI-Chat in der Seitenleiste an.
-            </div>
-          </div>
-          <Switch id="ai-enabled" checked={enabled} onCheckedChange={setEnabled} />
-        </div>
-
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="ai-base-url">Base-URL</Label>
           <Input
@@ -177,22 +171,28 @@ export function AssistantTab() {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="ai-model">Modell</Label>
-          <div className="flex gap-2">
-            <Input
-              id="ai-model"
-              value={model}
-              onChange={(event) => setModel(event.target.value)}
-              placeholder="z. B. llama3.1:8b"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => void testConnection()}
-              disabled={testing}
-            >
-              {testing ? <Loader2 className="size-4 animate-spin" /> : "Modelle laden"}
-            </Button>
+          <div className="flex items-center gap-1.5">
+            <Label>Modell</Label>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-6 text-muted-foreground"
+                  onClick={() => void testConnection()}
+                  disabled={testing}
+                  aria-label="Modelle laden"
+                >
+                  {testing ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="size-3.5" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Modelle laden</TooltipContent>
+            </Tooltip>
           </div>
           {models.length > 0 && (
             <div className="mt-1 flex flex-wrap gap-1.5">
@@ -200,8 +200,14 @@ export function AssistantTab() {
                 <Button
                   key={name}
                   type="button"
-                  variant={name === model ? "default" : "outline"}
+                  variant="ghost"
                   size="sm"
+                  aria-pressed={name === model}
+                  className={
+                    name === model
+                      ? "!bg-foreground !text-background hover:!bg-foreground/90 hover:!text-background"
+                      : "!bg-muted !text-muted-foreground hover:!bg-muted/80 hover:!text-foreground"
+                  }
                   onClick={() => setModel(name)}
                 >
                   {name}

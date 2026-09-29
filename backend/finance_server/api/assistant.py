@@ -38,7 +38,6 @@ def get_assistant_config() -> dict[str, Any]:
 @router.patch("/assistant/config")
 def update_assistant_config(payload: AssistantConfigUpdate) -> dict[str, Any]:
     save_ai_config(
-        enabled=payload.enabled,
         base_url=payload.base_url,
         model=payload.model,
         api_key=payload.api_key,
@@ -68,7 +67,7 @@ async def get_assistant_models(payload: ModelsRequest) -> dict[str, Any]:
 async def assistant_chat(payload: ChatRequest) -> StreamingResponse:
     # base_url kann nie leer sein: load_ai_config() fällt auf DEFAULT_BASE_URL zurück.
     config = load_ai_config()
-    if not config["enabled"] or not config["model"].strip():
+    if not config["model"].strip():
         raise HTTPException(status_code=400, detail="KI ist nicht konfiguriert")
 
     context = build_system_prompt()

@@ -445,8 +445,8 @@ export function TransferSetupDialog({
                 Abbrechen
               </Button>
               <Button type="button" onClick={handleReview} disabled={!canSubmit}>
-                <Lock className="size-4" />
-                Jetzt überweisen
+                <Search className="size-4" />
+                Überprüfen
               </Button>
             </>
           ) : (

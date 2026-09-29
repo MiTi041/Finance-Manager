@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from finance_server.db import get_connection
 from finance_server.db.utils import build_transaction_hash
 from finance_server.services.payroll_parsing import enrich_adyen_merchant
+from finance_server.services.pseudo_iban_mapping import find_partner as _find_partner
 
 # Händler ohne bestehenden Zahlungspartner, die automatisch angelegt werden.
 # Händlername (normalisiert) -> (Anzeigename, Website)
@@ -25,30 +26,6 @@ NEW_MERCHANTS: dict[str, tuple[str, str]] = {
     "DECATHLON BIELEFELD": ("Decathlon", "https://www.decathlon.de/"),
     "AUTOGRILL DEUTSCHLAND": ("Autogrill", "https://www.autogrill.de/"),
 }
-
-
-def _normalize(value: str) -> str:
-    return "".join(ch for ch in (value or "").lower() if ch.isalnum())
-
-
-def _find_partner(connection, merchant: str) -> int | None:
-    target = _normalize(merchant)
-    best_id = None
-    best_key = None
-    for row in connection.execute("SELECT id, name FROM zahlungspartner"):
-        name = _normalize(row["name"])
-        if len(name) < 4:
-            continue
-        pos = target.find(name)
-        if pos < 0:
-            continue
-        # Längster Treffer gewinnt, bei Gleichstand der am weitesten vorne.
-        # Sonst kippt z. B. "APPLE.COM.BILL" nach Combi, weil "combi" (id 68)
-        # vor "apple" (id 126) in der Tabelle steht.
-        key = (pos, -len(name))
-        if best_key is None or key < best_key:
-            best_id, best_key = row["id"], key
-    return best_id
 
 
 def _create_partner(connection, name: str, website: str) -> int:

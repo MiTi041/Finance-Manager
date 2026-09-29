@@ -4,7 +4,6 @@ import { parseSseBuffer, type AssistantEvent } from "./assistant-sse";
 export type { AssistantEvent } from "./assistant-sse";
 
 export type AssistantConfig = {
-  enabled: boolean;
   base_url: string;
   model: string;
   has_api_key: boolean;
@@ -17,7 +16,6 @@ export async function fetchAssistantConfig(): Promise<AssistantConfig> {
 }
 
 export async function updateAssistantConfig(payload: {
-  enabled?: boolean;
   base_url?: string;
   model?: string;
   api_key?: string;

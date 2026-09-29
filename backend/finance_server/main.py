@@ -1,4 +1,5 @@
 from pathlib import Path
+import logging
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -27,6 +28,7 @@ from finance_server.api.keys import router as keys_router
 from finance_server.api.account_flow import router as account_flow_router
 from finance_server.api.app_settings import router as app_settings_router
 from finance_server.api.assistant import router as assistant_router
+from finance_server.services.pseudo_iban_mapping import run_card_backfill
 from finance_server.services.sync_service import SyncService
 
 # .env laden
@@ -35,11 +37,19 @@ load_dotenv(BASE_DIR / ".env")
 
 app = FastAPI(title="FinTS Server", version="1.0.0")
 
+logger = logging.getLogger(__name__)
+
 sync_service = SyncService()
 
 
 @app.on_event("startup")
 def start_sync_service() -> None:
+    try:
+        stats = run_card_backfill()
+        if stats["enriched"] or stats["mapped"]:
+            logger.info("Karten-Mapping-Backfill: %s", stats)
+    except Exception:
+        logger.exception("Karten-Mapping-Backfill fehlgeschlagen")
     sync_service.start()
 
 
