@@ -128,7 +128,6 @@ function computeMonthlyRate(
   entnahmenTotal: number,
   currentMonth: string,
   payoutDays: number[],
-  isFirstMonth: boolean,
   holidays: Set<string>,
 ): number | null {
   const amount = parseFloat(targetAmount.replace(",", "."));
@@ -140,7 +139,7 @@ function computeMonthlyRate(
   if (remaining <= 0) return 0;
   const events = Math.max(
     1,
-    countIncomeEventsUntil(targetDate, payoutDays, fromDate, 0, holidays) + (isFirstMonth ? 0 : 1),
+    countIncomeEventsUntil(targetDate, payoutDays, fromDate, 0, holidays),
   );
   return Math.round((remaining / events) * 100) / 100;
 }
@@ -159,7 +158,6 @@ function PlanFormFields({
   currentMonth,
   payoutDays,
   holidays,
-  isFirstMonth,
   savedAmount = 0,
   entnahmenTotal = 0,
 }: {
@@ -181,7 +179,6 @@ function PlanFormFields({
   currentMonth: string;
   payoutDays: number[];
   holidays: Set<string>;
-  isFirstMonth: boolean;
   savedAmount?: number;
   entnahmenTotal?: number;
 }) {
@@ -205,7 +202,6 @@ function PlanFormFields({
           entnahmenTotal,
           currentMonth,
           payoutDays,
-          isFirstMonth,
           holidays,
         ),
       );
@@ -220,7 +216,6 @@ function PlanFormFields({
     currentMonth,
     payoutDays,
     holidays,
-    isFirstMonth,
   ]);
 
   const hasTargetInput = values.targetAmount.trim() !== "" && values.targetDate != null;
@@ -770,7 +765,6 @@ export function SavingsPlansCard({
                   currentMonth={currentMonth}
                   payoutDays={payoutDays}
                   holidays={holidaySet}
-                  isFirstMonth={true}
                 />
                 {createError && (
                   <p className="flex items-center gap-1.5 text-sm text-destructive">
@@ -1224,8 +1218,7 @@ export function SavingsPlansCard({
               currentMonth={currentMonth}
               payoutDays={payoutDays}
               holidays={holidaySet}
-              isFirstMonth={editingPlan?.created_at?.slice(0, 7) === currentMonth}
-              savedAmount={editingPlan?.saved_amount ?? 0}
+              savedAmount={(editingPlan?.saved_amount ?? 0) - (editingPlan?.this_month ?? 0)}
               entnahmenTotal={editingPlan?.saved_entnahmen ?? 0}
             />
             {editError && (

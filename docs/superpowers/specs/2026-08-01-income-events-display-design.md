@@ -19,20 +19,22 @@ Raten-Basis falsch: `max(1, 0) + 1 = 2`, korrekt wäre `0 + 1 = 1`.
 ## Entscheidung
 
 Die Anzeige zeigt nur zukünftige Einkommen („erwartete Einkommen" wörtlich).
-Die Ratenberechnung bleibt unverändert am Bonus-Modell, bekommt aber die
-Phantom-Korrektur.
+Die Ratenberechnung nutzt exakt dieselbe Zahl (kein Bonus). Der ursprüngliche
+`+1`-Bonus wurde entfernt, weil er die Rate-Basis eine höher als die Anzeige
+setzte und den laufenden Monat doppelt zählte.
 
 ## Lösung
 
 ### Semantik
 
-- **Neu** `future_income_events`: echte zukünftige Einkommen vom 1. des
-  Monats bis Zieldatum, ohne Bonus, ohne Minimum. Wird in der UI angezeigt.
-- `income_events_left` bleibt Basis der Ratenberechnung, korrigiert von
-  `max(1, future) + bonus` → `max(1, future + bonus)`.
+- `future_income_events`: echte zukünftige Einkommen vom 1. des Monats bis
+  Zieldatum, ohne Minimum. Wird in der UI angezeigt.
+- `income_events_left` ist Basis der Ratenberechnung: `max(1, future)`.
+  Anzeige und Rate-Basis sind damit identisch (außer im Phantom-Fall
+  `future == 0`).
 
-Ergebnis: Ziel 31.08. → Anzeige 1, Rate-Basis 2 (unverändert).
-Ziel 16.08. → Anzeige 0, Rate-Basis 1 (korrigiert).
+Ergebnis: Ziel 31.08. → Anzeige 1, Rate-Basis 1.
+Ziel 16.08. → Anzeige 0, Rate-Basis 1.
 
 ### Backend
 
@@ -41,10 +43,10 @@ Ziel 16.08. → Anzeige 0, Rate-Basis 1 (korrigiert).
    `if td <= now: return min_result`. Bestehende Caller unverändert.
 2. `allocation_service.py` `_enrich_savings_plan`:
    `future = count_income_events_until(..., min_result=0)`;
-   `income_events_left = max(1, future + bonus)`;
+   `income_events_left = max(1, future)`;
    Return um `future_income_events` erweitert.
 3. `allocation_service.py` Bafög-Bucket: analog,
-   `income_events_left = max(1, future + 1)`, Feld `future_income_events`.
+   `income_events_left = max(1, future)`, Feld `future_income_events`.
 
 ### Frontend
 
@@ -53,7 +55,7 @@ Ziel 16.08. → Anzeige 0, Rate-Basis 1 (korrigiert).
 5. `utils.ts` `countIncomeEventsUntil`: Spiegel-Parameter `minResult = 1`.
 6. `savings-plans-card.tsx`: Anzeige nutzt `plan.future_income_events`;
    Form-Vorschau nutzt `minResult=0`; `computeMonthlyRate` gespiegelt
-   `max(1, future + (isFirstMonth ? 0 : 1))`.
+   `max(1, future)` (kein `isFirstMonth`-Bonus mehr).
 7. `bucket-card.tsx` + `bucket-details.tsx`: Bafög-Detail nutzt
    `future_income_events`.
 

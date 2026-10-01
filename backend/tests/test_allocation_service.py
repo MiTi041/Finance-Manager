@@ -774,11 +774,11 @@ class TestEnrichSavingsPlan:
         assert result["future_income_events"] == 2
         assert result["required_monthly_rate"] == 500.0
 
-    def test_later_month_adds_bonus(self):
+    def test_later_month_no_bonus(self):
         result = self._enrich("2026-07-05T10:00:00+00:00", "2026-08", count=1)
-        assert result["income_events_left"] == 2
+        assert result["income_events_left"] == 1
         assert result["future_income_events"] == 1
-        assert result["required_monthly_rate"] == 500.0
+        assert result["required_monthly_rate"] == 1000.0
 
     def test_completed_when_target_reached(self):
         result = self._enrich("2026-07-05T10:00:00+00:00", "2026-08", count=1, saved=1000.0)
@@ -1134,6 +1134,39 @@ class TestBuildRunResponseSenderScope:
             (-50.0, "Tilgung tag.bafoegschulden.entnahme", "DE_GIRO"),
         ])
         assert bucket["transferred"] == 200.0
+
+    def test_transferred_not_doubled_by_dispatch_guard(self, test_db):
+        # Regression: the persisted dispatch guard must not be added to the
+        # real transaction scan, or a synced payment shows up twice.
+        for amount, purpose, iban in [(-100.0, "Allokation invest tag.investieren", "DE_GIRO")]:
+            test_db.execute(
+                "INSERT INTO umsaetze (amount, purpose, date, entry_date, account_iban, transaction_hash) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (amount, purpose, "2026-07-15", "2026-07-15", iban, "h-double"),
+            )
+        test_db.commit()
+        service = AllocationService()
+        run_buckets = [{
+            "id": 1, "run_id": 1, "bucket_id": 1, "bucket_type": "invest",
+            "target_amount": 1000.0, "transferred": 100.0, "is_completed": 1,
+        }]
+        config = [{
+            "id": 1, "bucket_type": "invest", "percentage": 10.0,
+            "sender_iban": "DE_GIRO", "sender_iban_history": None,
+        }]
+        run = {"id": 1, "month": "2026-07", "net_income": 1000.0, "total_allocated": 0.0, "status": "pending"}
+        with (
+            patch("finance_server.services.allocation_service.get_connection", lambda: test_db),
+            patch("finance_server.db.savings.get_connection", lambda: test_db),
+            patch("finance_server.services.allocation_service.db.get_run_buckets", return_value=run_buckets),
+            patch("finance_server.services.allocation_service.db.list_buckets", return_value=config),
+            patch("finance_server.services.allocation_service.db.get_bafoeg_config", return_value=None),
+            patch("finance_server.services.allocation_service.list_plans", return_value=[]),
+            patch("finance_server.services.allocation_service.get_income_payout_days", return_value=[1]),
+            patch("finance_server.services.allocation_service.holiday_dates", return_value=[]),
+        ):
+            bucket = service._build_run_response(run)["buckets"][0]
+        assert bucket["transferred"] == 100.0
 
 
 def test_bafoeg_partial_update_keeps_unsent_fields():

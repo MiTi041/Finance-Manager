@@ -148,6 +148,8 @@ def execute_transfer(
             raise HTTPException(status_code=408, detail=str(e))
         raise HTTPException(status_code=502, detail=f"Überweisung fehlgeschlagen: {e}")
 
+    # ponytail: only a resend-guard until the payment shows up in umsaetze — it
+    # is not counted as paid; the API derives "paid" from real transactions.
     if not transfer_data.get("is_tilgung"):
         service.mark_transferred(run_bucket_id, transfer_data["amount"])
     return {"status": "ok", "transfer": result}

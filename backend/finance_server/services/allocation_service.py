@@ -298,7 +298,10 @@ class AllocationService:
                            AND date >= ? AND date <= ?{sender_sql}""",
                         (f"%{tag}%", start, end, *sender_params),
                     ).fetchone()
-                bucket["transferred"] = round(bucket["transferred"] + row[0], 2)
+                # ponytail: display uses real transactions only. The persisted
+                # `transferred` is the dispatch guard (see mark_transferred), it
+                # must never be added here or a synced payment counts twice.
+                bucket["transferred"] = round(row[0], 2)
                 if bucket["bucket_type"] == "emergency":
                     breakdown = get_saved_breakdown(tag, senders)
                     month_breakdown = get_month_breakdown(tag, run["month"], senders)
@@ -338,7 +341,7 @@ class AllocationService:
                             payout_days = get_income_payout_days(run["month"])
                             future = count_income_events_until(bafoeg_cfg["payout_date"], payout_days, f"{run['month']}-01", min_result=0)
                             bucket["future_income_events"] = future
-                            bucket["income_events_left"] = max(1, future + 1)
+                            bucket["income_events_left"] = max(1, future)
                             bucket["required_monthly_rate"] = round(req_rate, 2)
                             bucket["months_left"] = bucket["income_events_left"]
                 if bucket["bucket_type"] == "invest":
@@ -723,10 +726,7 @@ class AllocationService:
             verschuldung_before = max(0.0, verschuldung_total - month_versch)
             remaining = max(0.0, target_amount_f - einzahlungen_before + verschuldung_before)
             future = count_income_events_until(target_date, payout_days, from_date, min_result=0)
-            # ponytail: +1 income event once the plan has been running for a month — the
-            # salary that arrived last month already funds the current month's rate
-            bonus = 0 if month and (plan.get("created_at") or "")[:7] == month else 1
-            income_events_left = max(1, future + bonus)
+            income_events_left = max(1, future)
             required_rate = 0.0 if remaining == 0.0 else round(remaining / income_events_left, 2)
         else:
             required_rate = None if not target_amount else 0.0
