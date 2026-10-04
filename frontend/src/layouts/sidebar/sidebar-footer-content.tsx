@@ -6,6 +6,7 @@ import { Settings } from "lucide-react";
 
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
 import { ModeToggle } from "@/components/dark-mode-toggle";
+import type { BankSyncOption } from "@/lib/utils/accounts";
 import { SyncButton, type SyncStatusRow } from "./sync-button";
 
 export type SidebarFooterContentProps = {
@@ -14,6 +15,9 @@ export type SidebarFooterContentProps = {
   cacheAgeText: string;
   syncStatusRows?: SyncStatusRow[];
   refreshFinanceData: () => void;
+  bankOptions: BankSyncOption[];
+  activeSyncScope: string | null;
+  syncBank: (scope: string) => void;
 };
 
 export function SidebarFooterContent({
@@ -22,6 +26,9 @@ export function SidebarFooterContent({
   cacheAgeText,
   syncStatusRows,
   refreshFinanceData,
+  bankOptions,
+  activeSyncScope,
+  syncBank,
 }: SidebarFooterContentProps) {
   return (
     <>
@@ -32,6 +39,9 @@ export function SidebarFooterContent({
           cacheAgeText={cacheAgeText}
           syncStatusRows={syncStatusRows}
           refreshFinanceData={refreshFinanceData}
+          bankOptions={bankOptions}
+          activeSyncScope={activeSyncScope}
+          syncBank={syncBank}
         />
 
         <SidebarMenuItem className="group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center">

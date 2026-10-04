@@ -76,11 +76,26 @@ export function SearchableSelect({
   height,
 }: SearchableSelectProps) {
   const [open, setOpen] = React.useState(false);
+  const [query, setQuery] = React.useState("");
 
   const selected = options.find((o) => o.value === value);
 
+  // ponytail: cmdk's filter reorders DOM nodes by score and never restores
+  // order when the query is cleared; filter ourselves to keep tree order.
+  const filteredOptions = React.useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter((option) => option.label.toLowerCase().includes(q));
+  }, [options, query]);
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setQuery("");
+      }}
+    >
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -125,8 +140,12 @@ export function SearchableSelect({
         align="start"
         sideOffset={4}
       >
-        <Command className="overflow-visible">
-          <CommandInput placeholder={searchPlaceholder} />
+        <Command shouldFilter={false} className="overflow-visible">
+          <CommandInput
+            placeholder={searchPlaceholder}
+            value={query}
+            onValueChange={setQuery}
+          />
           <CommandList
             className="max-h-80"
             onWheel={(e) => {
@@ -152,7 +171,7 @@ export function SearchableSelect({
                   />
                 </CommandItem>
               )}
-              {options.map((option) => (
+              {filteredOptions.map((option) => (
                 <CommandItem
                   key={option.value}
                   value={option.label}

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   FINTS_SYNC_REQUEST_EVENT,
   FINTS_SYNC_STATUS_EVENT,
+  type FintsSyncRequestDetail,
   type FintsSyncSource,
   type FintsSyncStatusDetail,
 } from "@/lib/sync-events";
@@ -49,16 +50,24 @@ declare global {
 
 export default function FintsAutoSync() {
   useEffect(() => {
-    const runSync = async (source: FintsSyncSource) => {
+    const runSync = async (source: FintsSyncSource, scope?: string) => {
       if (window.__fintsSyncInProgress) return;
 
       window.__fintsSyncInProgress = true;
       emitSyncStatus(source, true);
 
       try {
-        const banksToSync = await fetchBankCredentials().catch(() => []);
+        const allBanks = await fetchBankCredentials().catch(() => []);
+        const banksToSync = scope
+          ? allBanks.filter((bank) => bank.scope === scope)
+          : allBanks;
 
         if (banksToSync.length === 0) {
+          if (scope) {
+            toast.error("Bank nicht gefunden oder nicht synchronisierbar");
+            return;
+          }
+
           const daysToSync = await getDaysToSync();
           await importFromFintsServer(
             (percent) => {
@@ -174,8 +183,9 @@ export default function FintsAutoSync() {
       return Date.now() - cache.syncedAt >= AUTO_SYNC_INTERVAL_MS;
     };
 
-    const onManualSyncRequest = () => {
-      void runSync("manual");
+    const onManualSyncRequest = (event: Event) => {
+      const scope = (event as CustomEvent<FintsSyncRequestDetail>).detail?.scope;
+      void runSync("manual", scope);
     };
 
     window.addEventListener(FINTS_SYNC_REQUEST_EVENT, onManualSyncRequest);

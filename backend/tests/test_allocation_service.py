@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 from contextlib import ExitStack
 from datetime import datetime
 from typing import Any
@@ -20,8 +21,19 @@ from finance_server.db.savings import (
 from finance_server.services.allocation_service import AllocationService, _sender_ibans
 
 
+_row_id = itertools.count(1)
+
+
 def _row(applicant_name: str, purpose: str, amount: float, date: str) -> dict[str, Any]:
-    return {"applicant_name": applicant_name, "purpose": purpose, "amount": amount, "date": date}
+    return {
+        "id": next(_row_id),
+        "applicant_name": applicant_name,
+        "purpose": purpose,
+        "amount": amount,
+        "date": date,
+        "account_iban": "",
+        "applicant_iban": "",
+    }
 
 class TestTransferRunBucketGuard:
     def _service(self, row: dict[str, Any]):
@@ -150,6 +162,20 @@ class TestDetectIncome:
             _row("Employer GmbH", "Gehalt Januar", 3400.0, "2026-04-01"),
             _row("Employer GmbH", "Gehalt Januar", 3400.0, "2026-05-01"),
             _row("Employer GmbH", "Gehalt Januar", 3500.0, "2026-06-01"),
+        ]
+        with patch("finance_server.services.allocation_service.get_connection") as mock_conn:
+            cursor = Mock()
+            cursor.fetchall.return_value = rows
+            mock_conn.return_value.__enter__.return_value.execute.return_value = cursor
+            result = service._detect_income("2026-07")
+        assert result == 3500.0
+
+    def test_detects_recurring_despite_purpose_prefix(self):
+        service = AllocationService()
+        rows = [
+            _row("Employer GmbH", "Verdienstabrechnung 04.26/1", 3400.0, "2026-04-01"),
+            _row("Employer GmbH", "SALA Verdienstabrechnung 05.26/1", 3400.0, "2026-05-01"),
+            _row("Employer GmbH", "Verdienstabrechnung 06.26/1", 3500.0, "2026-06-01"),
         ]
         with patch("finance_server.services.allocation_service.get_connection") as mock_conn:
             cursor = Mock()

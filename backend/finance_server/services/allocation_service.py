@@ -434,7 +434,7 @@ class AllocationService:
 
         with get_connection() as conn:
             rows = conn.execute(
-                """SELECT applicant_name, COALESCE(purpose_edit, purpose) AS purpose, amount, date,
+                """SELECT id, applicant_name, COALESCE(purpose_edit, purpose) AS purpose, amount, date,
                           account_iban, applicant_iban
                    FROM umsaetze
                    WHERE amount > 0
@@ -445,14 +445,17 @@ class AllocationService:
                 (lookback_start, month_end),
             ).fetchall()
 
-        groups: dict[str, list[tuple[float, str, str, str, str, str]]] = {}
+        groups: dict[str, list[tuple[float, str, str, str, str, str, int]]] = {}
         for row in rows:
             name = (row["applicant_name"] or "").strip()
             purpose = (row["purpose"] or "").strip()
-            purpose_clean = re.sub(r"[^a-zäöüß]", "", purpose.lower())
-            if not name or not purpose_clean:
+            # ponytail: longest word as fingerprint ignores prefixes like "SALA ".
+            # Ceiling: unusual purpose layouts may over/undergroup; use categorization if it matters.
+            tokens = re.findall(r"[a-zäöüß]+", purpose.lower())
+            if not name or not tokens:
                 continue
-            groups.setdefault(f"{name.lower()} | {purpose_clean}", []).append(
+            fingerprint = max(tokens, key=len)
+            groups.setdefault(f"{name.lower()} | {fingerprint}", []).append(
                 (
                     row["amount"],
                     row["date"],
@@ -460,6 +463,7 @@ class AllocationService:
                     purpose,
                     (row["account_iban"] or "").strip(),
                     (row["applicant_iban"] or "").strip(),
+                    row["id"],
                 )
             )
 
@@ -478,7 +482,7 @@ class AllocationService:
                     break
             if recurring:
                 total += txs[-1][0]
-                _, _, name, purpose, account_iban, applicant_iban = txs[-1]
+                _, _, name, purpose, account_iban, applicant_iban, _ = txs[-1]
                 sources.append({
                     "name": name,
                     "purpose": purpose,
@@ -487,7 +491,7 @@ class AllocationService:
                     "account_iban": account_iban,
                     "applicant_iban": applicant_iban,
                     "transactions": [
-                        {"date": t[1], "amount": round(t[0], 2)} for t in txs
+                        {"id": t[6], "date": t[1], "amount": round(t[0], 2)} for t in txs
                     ],
                 })
 

@@ -97,6 +97,10 @@ def _patch_connections(monkeypatch, test_db):
         "finance_server.db.transactions.get_connection",
         lambda: test_db,
     )
+    monkeypatch.setattr(
+        "finance_server.services.allocation_service.get_connection",
+        lambda: test_db,
+    )
 
 
 class TestSubscriptionServiceInactiveAndDismissed:
@@ -140,6 +144,51 @@ class TestIncomeSubscriptions:
         salary = next(s for s in subs if s["name"] == "Arbeitgeber")
         assert salary["direction"] == "income"
         assert salary["amount"] == 2500.0
+
+    def test_variable_income_uses_latest_amount(self, monkeypatch, test_db):
+        _insert_monthly_credits(test_db, "Arbeitgeber", 2500.0, last_offset_days=65, count=1)
+        _insert_monthly_credits(test_db, "Arbeitgeber", 2600.0, last_offset_days=35, count=1)
+        _insert_monthly_credits(test_db, "Arbeitgeber", 2400.0, last_offset_days=5, count=1)
+        _patch_connections(monkeypatch, test_db)
+        subs = SubscriptionService().get_subscriptions()
+        salary = next(s for s in subs if s["name"] == "Arbeitgeber")
+        assert salary["amount"] == 2400.0
+        assert salary["transactionCount"] == 3
+        # newest first, like the expense path
+        assert [t["amount"] for t in salary["transactions"]] == [2400.0, 2600.0, 2500.0]
+        assert salary["transactions"][0]["date"] == salary["lastDate"]
+
+    def test_income_sub_enriched_with_partner_and_category(self, monkeypatch, test_db):
+        partner = test_db.execute(
+            "INSERT INTO zahlungspartner (name) VALUES ('Arbeitgeber GmbH')"
+        ).lastrowid
+        test_db.execute(
+            "INSERT INTO ibans (iban, f_zahlungspartner_id) VALUES ('DE00EMPLOYER', ?)",
+            (partner,),
+        )
+        cat = test_db.execute(
+            "INSERT INTO kategorien (name, typ) VALUES ('Gehalt', 'einnahme')"
+        ).lastrowid
+        today = date.today()
+        for i in range(3):
+            d = today - timedelta(days=30 * i)
+            test_db.execute(
+                "INSERT INTO umsaetze "
+                "(account_iban, applicant_iban, amount, purpose, date, entry_date, "
+                "applicant_name, recipient_name, transaction_hash, kategorie) "
+                "VALUES ('iban', 'DE00EMPLOYER', ?, 'Gehalt', ?, ?, 'Arbeitgeber', "
+                "'Zahlempfaenger', ?, ?)",
+                (2500.0, d.isoformat(), d.isoformat(), f"emp-{i}", cat),
+            )
+        test_db.commit()
+        _patch_connections(monkeypatch, test_db)
+        subs = SubscriptionService().get_subscriptions()
+        salary = next(s for s in subs if s["direction"] == "income")
+        assert salary["recipientId"] == partner
+        assert salary["datenbankName"] == "Arbeitgeber GmbH"
+        assert salary["name"] == "Arbeitgeber GmbH"
+        assert salary["categoryId"] == cat
+        assert salary["categoryName"] == "Gehalt"
 
     def test_income_and_expense_same_name_do_not_merge(self, monkeypatch, test_db):
         _insert_monthly_debits(test_db, "Bank", 50.0, last_offset_days=5)

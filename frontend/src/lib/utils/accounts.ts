@@ -90,6 +90,46 @@ export function buildAccountOptions(
   return items.sort((a, b) => Number(b.isPrimary === true) - Number(a.isPrimary === true));
 }
 
+export type BankSyncOption = {
+  scope: string;
+  label: string;
+  bankLogo?: string;
+  bankLogoDark?: string;
+  logoPadding?: number;
+  manual: boolean;
+  lastSyncAt?: number;
+};
+
+/**
+ * Eine Option pro Bank-Login (scope) – auch wenn die Bank mehrere Konten/IBANs
+ * hat. Grundlage für das gezielte Syncen einzelner Banken.
+ */
+export function buildBankSyncOptions(
+  linkedBanks: StoredBankCredentials[],
+  scopeSyncTimes: Record<string, number> = {},
+): BankSyncOption[] {
+  return linkedBanks
+    .filter((bank) => {
+      // Archivierte Bankzugänge: alle Konten archiviert → nicht mehr syncbar.
+      const accounts = bank.accounts ?? [];
+      if (accounts.length > 0) {
+        return accounts.some(
+          (account) => account.archived !== true && Boolean(account.iban),
+        );
+      }
+      return Boolean(bank.account_iban);
+    })
+    .map((bank) => ({
+      scope: bank.scope,
+      label: bank.bank_name || bank.account_name || bank.username || bank.scope,
+      bankLogo: bank.bank_logo || undefined,
+      bankLogoDark: bank.bank_logo_dark || undefined,
+      logoPadding: bank.logo_padding || undefined,
+      manual: bank.manual === true || bank.bank_key === "manual",
+      lastSyncAt: scopeSyncTimes[bank.scope] || undefined,
+    }));
+}
+
 export function resolveAccountSelection(
   selection: string,
   accountOptions: BankAccountOption[],

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FinanceCategory } from "@/lib/categories/types";
@@ -25,10 +25,27 @@ export function CategoryMultiSelect({
   placeholder?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const selectedCats = categories.filter((c) => selected.has(c.id));
 
+  // ponytail: cmdk's filter reorders DOM nodes by score and never restores
+  // order when the query is cleared; filter ourselves to keep tree order.
+  const filteredCategories = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return categories;
+    return categories.filter((c) =>
+      `${c.parent_name ?? ""} ${c.name}`.toLowerCase().includes(q),
+    );
+  }, [categories, query]);
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setQuery("");
+      }}
+    >
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -60,8 +77,12 @@ export function CategoryMultiSelect({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="p-0" align="start" sideOffset={4}>
-        <Command>
-          <CommandInput placeholder="Kategorie suchen …" />
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder="Kategorie suchen …"
+            value={query}
+            onValueChange={setQuery}
+          />
           <CommandList
             className="max-h-60"
             onWheel={(e) => {
@@ -71,7 +92,7 @@ export function CategoryMultiSelect({
           >
             <CommandEmpty>Keine Kategorie gefunden</CommandEmpty>
             <CommandGroup>
-              {categories.map((c) => {
+              {filteredCategories.map((c) => {
                 const isSelected = selected.has(c.id);
                 return (
                   <CommandItem

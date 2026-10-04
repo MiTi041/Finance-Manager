@@ -519,6 +519,21 @@ class SubscriptionService:
                     }
                 )
 
+        # ── Step 3b: Income subscriptions reuse the allocation income detection ──
+        # ponytail: expenses keep amount clustering (fixed prices); income uses the
+        # Netto-Berechnung logic (purpose grouping, latest amount). Duplicating that
+        # algorithm here would let the two views drift apart again.
+        results = [r for r in results if r["direction"] != "income"]
+        results.extend(
+            self._income_subscriptions(
+                bookings,
+                iban_to_zahlungspartner=iban_to_zahlungspartner,
+                all_zahlungspartner=all_zahlungspartner,
+                category_names=category_names,
+                top_category_name=top_category_name,
+            )
+        )
+
         # ── Step 4: Add refund info ──
         all_tx_ids = [tid for r in results for tid in r["transactionIds"]]
         if all_tx_ids:
@@ -651,3 +666,125 @@ class SubscriptionService:
         results = selected
         results.sort(key=lambda r: r["nextDate"])
         return results
+
+    def _income_subscriptions(
+        self,
+        transactions: list[dict[str, Any]],
+        *,
+        iban_to_zahlungspartner: dict[str, dict[str, Any]],
+        all_zahlungspartner: list[dict[str, Any]],
+        category_names: dict[int, str],
+        top_category_name: Any,
+    ) -> list[dict[str, Any]]:
+        months = [str(t.get("date") or "")[:7] for t in transactions if t.get("date")]
+        if not months:
+            return []
+
+        kategorie_by_id = {t["id"]: t.get("kategorie") for t in transactions}
+
+        from finance_server.services.allocation_service import AllocationService
+
+        sources = AllocationService().get_income_breakdown(max(months))["sources"]
+        subs: list[dict[str, Any]] = []
+        for source in sources:
+            txs = source.get("transactions") or []
+            if not txs:
+                continue
+            last = _to_date(txs[-1]["date"])
+            first = _to_date(txs[0]["date"])
+            if last is None:
+                continue
+
+            # Same enrichment as the expense path: IBAN lookup, then name fallback.
+            iban = (source.get("applicant_iban") or "").strip()
+            zahlungspartner = iban_to_zahlungspartner.get(iban) if iban else None
+            if zahlungspartner is None:
+                nl = (source["name"] or "").lower()
+                best = None
+                best_len = 0
+                for k in all_zahlungspartner:
+                    kn = (k.get("name") or "").lower()
+                    if kn and kn in nl and len(kn) > best_len:
+                        best = k
+                        best_len = len(kn)
+                zahlungspartner = best
+
+            sub_name = source["name"]
+            sub_logo = None
+            sub_datenbank = ""
+            sub_logo_background = "dark"
+            sub_logo_padding = True
+            sub_is_company = True
+            sub_recipient_id = None
+            if zahlungspartner:
+                sub_logo = resolve_zahlungspartner_logo(
+                    zahlungspartner["id"],
+                    zahlungspartner["website"],
+                    zahlungspartner["logo_url"],
+                    zahlungspartner["local_logo_path"],
+                )
+                sub_datenbank = zahlungspartner["name"] or ""
+                sub_logo_background = zahlungspartner["logo_background"]
+                sub_logo_padding = zahlungspartner["logo_padding"]
+                sub_is_company = zahlungspartner["is_company"]
+                sub_recipient_id = zahlungspartner["id"]
+                sub_name = zahlungspartner["name"] or sub_name
+
+            category_counts: dict[int, int] = {}
+            for t in txs:
+                cat = kategorie_by_id.get(t["id"])
+                if cat is not None:
+                    category_counts[cat] = category_counts.get(cat, 0) + 1
+            category_id = (
+                max(category_counts, key=category_counts.get) if category_counts else None
+            )
+
+            next_month = last.month % 12 + 1
+            next_year = last.year + (last.month // 12)
+            next_day = min(last.day, calendar.monthrange(next_year, next_month)[1])
+            next_date = date(next_year, next_month, next_day)
+
+            subs.append(
+                {
+                    "name": sub_name,
+                    "_counterpartyName": source["name"],
+                    "recipientLogo": sub_logo,
+                    "recipientName": source["name"],
+                    "recipientId": sub_recipient_id,
+                    "datenbankName": sub_datenbank,
+                    "logoBackground": sub_logo_background,
+                    "logoPadding": sub_logo_padding,
+                    "isCompany": sub_is_company,
+                    "categoryId": category_id,
+                    "categoryName": (
+                        category_names.get(category_id) if category_id is not None else None
+                    ),
+                    "categoryTopName": (
+                        top_category_name(category_id) if category_id is not None else None
+                    ),
+                    "amount": float(source["amount"]),
+                    "direction": "income",
+                    "frequency": FREQUENCY_MONTHLY,
+                    "frequencyLabel": FREQUENCY_LABELS[FREQUENCY_MONTHLY],
+                    "firstDate": (first or last).isoformat(),
+                    "lastDate": last.isoformat(),
+                    "nextDate": next_date.isoformat(),
+                    "transactionCount": len(txs),
+                    "transactionIds": [t["id"] for t in txs],
+                    "sequenztyp": "",
+                    # ponytail: match the expense path's newest-first convention.
+                    "transactions": [
+                        {
+                            "id": t["id"],
+                            "amount": t["amount"],
+                            "date": t["date"],
+                            "purpose": source.get("purpose") or "",
+                            "applicantName": source["name"],
+                            "recipientName": "",
+                            "note": None,
+                        }
+                        for t in reversed(txs)
+                    ],
+                }
+            )
+        return subs

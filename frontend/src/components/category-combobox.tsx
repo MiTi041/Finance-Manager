@@ -47,9 +47,20 @@ export function CategoryCombobox({
   height = 10,
 }: CategoryComboboxProps) {
   const [open, setOpen] = React.useState(false);
+  const [query, setQuery] = React.useState("");
   const navigate = useNavigate();
 
   const selected = options.find((o) => o.value === value);
+
+  // ponytail: cmdk's filter reorders DOM nodes by score and never restores
+  // order when the query is cleared; filter ourselves to keep tree order.
+  const filteredOptions = React.useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter((option) =>
+      option.label.replace(/\u00A0/g, "").toLowerCase().includes(q),
+    );
+  }, [options, query]);
 
   const displayLabel = selected
     ? selected.label.replace(/\u00A0/g, "").trim()
@@ -58,7 +69,13 @@ export function CategoryCombobox({
       : null;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setQuery("");
+      }}
+    >
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -81,8 +98,12 @@ export function CategoryCombobox({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="p-0" align="start" sideOffset={4}>
-        <Command>
-          <CommandInput placeholder="Kategorie suchen..." />
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder="Kategorie suchen..."
+            value={query}
+            onValueChange={setQuery}
+          />
           <CommandList className="max-h-80">
             <CommandEmpty>Keine Kategorie gefunden</CommandEmpty>
             <CommandGroup className="[&_[cmdk-item]]:my-1">
@@ -103,7 +124,7 @@ export function CategoryCombobox({
                   />
                 </CommandItem>
               )}
-              {options.map((option, index) => (
+              {filteredOptions.map((option, index) => (
                 <React.Fragment key={option.value}>
                   {index > 0 && option.depth === 0 && <CommandSeparator />}
                   <CommandItem

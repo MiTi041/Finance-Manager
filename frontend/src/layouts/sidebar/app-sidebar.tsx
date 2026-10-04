@@ -1,7 +1,7 @@
 import * as React from "react";
 import { FileText, Gauge, Repeat, Sparkles, Target, Wallet, Waypoints } from "lucide-react";
 
-import { buildAccountOptions, resolveAccountSelection } from "@/lib/utils/accounts";
+import { buildAccountOptions, buildBankSyncOptions, resolveAccountSelection } from "@/lib/utils/accounts";
 import { useAssistantConfig } from "@/hooks/use-assistant-config";
 import { NavMain } from "@/components/nav-main";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader } from "@/components/ui/sidebar";
@@ -9,8 +9,8 @@ import { Separator } from "@/components/ui/separator";
 import { fetchLatestDbTransaction } from "@/lib/transactions";
 import { fetchBankCredentials, type StoredBankCredentials } from "@/lib/bank/credentials";
 import {
-  FINTS_SYNC_REQUEST_EVENT,
   FINTS_SYNC_STATUS_EVENT,
+  emitSyncRequest,
   type FintsSyncStatusDetail,
 } from "@/lib/sync-events";
 import { UpdateBanner } from "@/components/update-banner";
@@ -62,11 +62,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [isSyncing, setIsSyncing] = React.useState(false);
   const [syncStatusText, setSyncStatusText] = React.useState<string>("");
   const [linkedBanks, setLinkedBanks] = React.useState<StoredBankCredentials[]>([]);
+  const [activeSyncScope, setActiveSyncScope] = React.useState<string | null>(null);
   const [activeAccountIban, setActiveAccountIban] = React.useState<string>(() =>
     readActiveAccountIban(),
   );
 
   const accountOptions = React.useMemo(() => buildAccountOptions(linkedBanks), [linkedBanks]);
+  const bankOptions = React.useMemo(
+    () => buildBankSyncOptions(linkedBanks, scopeSyncTimes),
+    [linkedBanks, scopeSyncTimes],
+  );
 
   const syncStatusRows = React.useMemo<SyncStatusRow[]>(() => {
     const byScope = new Map<string, { label: string; ts: number }>();
@@ -177,6 +182,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       const customEvent = event as CustomEvent<FintsSyncStatusDetail>;
       setIsSyncing(Boolean(customEvent.detail?.running));
       setSyncStatusText(customEvent.detail?.message ?? "");
+      setActiveSyncScope(customEvent.detail?.scope ?? null);
     };
 
     const onBankCredentialsChanged = () => {
@@ -214,8 +220,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   const refreshFinanceData = () => {
     if (isSyncing) return;
-    window.dispatchEvent(new CustomEvent(FINTS_SYNC_REQUEST_EVENT));
+    emitSyncRequest();
   };
+
+  const syncBank = React.useCallback(
+    (scope: string) => {
+      if (isSyncing) return;
+      emitSyncRequest(scope);
+    },
+    [isSyncing],
+  );
 
   return (
     <Sidebar className="border-r border-border/50" collapsible="icon" {...props}>
@@ -245,6 +259,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           cacheAgeText={cacheAgeText}
           syncStatusRows={syncStatusRows}
           refreshFinanceData={refreshFinanceData}
+          bankOptions={bankOptions}
+          activeSyncScope={activeSyncScope}
+          syncBank={syncBank}
         />
       </SidebarFooter>
     </Sidebar>
