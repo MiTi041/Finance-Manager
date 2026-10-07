@@ -77,6 +77,31 @@ test("projectSubscriptions steps monthly through the range", () => {
   assert.equal(items[0].amount, -15);
 });
 
+test("projectSubscriptions does not drift on month-end anchor dates", () => {
+  const subscriptions = [
+    {
+      name: "Rente",
+      amount: 10,
+      effectiveAmount: 10,
+      direction: "expense",
+      frequency: "MONTHLY",
+      nextDate: "2026-01-31",
+      recipientId: 1,
+    },
+  ];
+
+  const items = projectSubscriptions(
+    subscriptions as never,
+    new Date(2026, 0, 1),
+    new Date(2026, 2, 30),
+  );
+
+  assert.deepEqual(
+    items.map((item) => item.date),
+    ["2026-01-31", "2026-02-28"],
+  );
+});
+
 test("buildAutoItems includes pending transactions within the range", () => {
   const items = buildAutoItems({
     subscriptions: [],

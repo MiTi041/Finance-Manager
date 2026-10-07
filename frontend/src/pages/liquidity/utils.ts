@@ -61,20 +61,21 @@ export function projectSubscriptions(
     if (amount <= 0) continue;
     const step = FREQUENCY_MONTHS[subscription.frequency] ?? 1;
     const signed = subscription.direction === "expense" ? -amount : amount;
-    let cursor = parseIsoDate(subscription.nextDate);
-    let guard = 0;
-    while (cursor <= endDate && guard < 1200) {
+    const anchor = parseIsoDate(subscription.nextDate);
+    let occurrence = 0;
+    let cursor = anchor;
+    while (cursor <= endDate && occurrence < 1200) {
       if (cursor >= fromDate) {
         items.push({
-          id: `sub-${subscription.name}-${formatIsoDate(cursor)}-${guard}`,
+          id: `sub-${subscription.name}-${formatIsoDate(cursor)}-${occurrence}`,
           label: subscription.name,
           amount: signed,
           date: formatIsoDate(cursor),
           source: "subscription",
         });
       }
-      cursor = addMonths(cursor, step);
-      guard += 1;
+      occurrence += 1;
+      cursor = addMonths(anchor, occurrence * step);
     }
   }
   return items;
