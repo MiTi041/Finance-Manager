@@ -54,6 +54,7 @@ export function projectSubscriptions(
   endDate: Date,
 ): LiquidityAutoItem[] {
   const items: LiquidityAutoItem[] = [];
+  let seq = 0;
   for (const subscription of subscriptions) {
     if (subscription.dismissed || subscription.ended || subscription.active === false) continue;
     if (!subscription.nextDate) continue;
@@ -67,7 +68,7 @@ export function projectSubscriptions(
     while (cursor <= endDate && occurrence < 1200) {
       if (cursor >= fromDate) {
         items.push({
-          id: `sub-${subscription.name}-${formatIsoDate(cursor)}-${occurrence}`,
+          id: `sub-${seq++}`,
           label: subscription.name,
           amount: signed,
           date: formatIsoDate(cursor),

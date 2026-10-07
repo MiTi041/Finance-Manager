@@ -100,12 +100,16 @@ def update_entry(
         params.append(_validate_amount(amount))
     if kind is not None:
         sets.append("kind = ?")
-        params.append(_validate_enum(kind, _KINDS, "Ungültige Art. Nur 'income' oder 'expense' erlaubt."))
+        params.append(
+            _validate_enum(kind, _KINDS, "Ungültige Art. Nur 'income' oder 'expense' erlaubt.")
+        )
     if certainty is not None:
         sets.append("certainty = ?")
         params.append(
             _validate_enum(
-                certainty, _CERTAINTIES, "Ungültige Sicherheit. Nur 'certain' oder 'expected' erlaubt."
+                certainty,
+                _CERTAINTIES,
+                "Ungültige Sicherheit. Nur 'certain' oder 'expected' erlaubt.",
             )
         )
     if not sets:

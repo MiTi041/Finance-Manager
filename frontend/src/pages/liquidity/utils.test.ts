@@ -102,6 +102,31 @@ test("projectSubscriptions does not drift on month-end anchor dates", () => {
   );
 });
 
+test("projectSubscriptions includes an occurrence dated exactly on the start day", () => {
+  const subscriptions = [
+    {
+      name: "Netflix",
+      amount: 15,
+      effectiveAmount: 15,
+      direction: "expense",
+      frequency: "MONTHLY",
+      nextDate: "2026-11-07",
+      recipientId: 1,
+    },
+  ];
+
+  const items = projectSubscriptions(
+    subscriptions as never,
+    new Date(2026, 10, 7),
+    new Date(2026, 11, 31),
+  );
+
+  assert.deepEqual(
+    items.map((item) => item.date),
+    ["2026-11-07", "2026-12-07"],
+  );
+});
+
 test("buildAutoItems includes pending transactions within the range", () => {
   const items = buildAutoItems({
     subscriptions: [],

@@ -25,17 +25,19 @@ function defaultEndDate(): Date {
 export default function LiquidityPage() {
   const { entries, subscriptions, pending, balanceTotal, loading, error, create, update, remove } =
     useLiquidity();
-  const today = useMemo(() => new Date(), []);
+  const today = useMemo(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  }, []);
   const [endDate, setEndDate] = useState<Date | null>(defaultEndDate);
   const [startOverride, setStartOverride] = useState("");
   const [includeSubscriptions, setIncludeSubscriptions] = useState(true);
   const [includePending, setIncludePending] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
 
+  const parsedStart = Number(startOverride.trim().replace(",", "."));
   const startBalance =
-    startOverride.trim() === ""
-      ? balanceTotal
-      : Number(startOverride.replace(",", ".")) || 0;
+    startOverride.trim() === "" || !Number.isFinite(parsedStart) ? balanceTotal : parsedStart;
 
   const autoItems = useMemo<LiquidityAutoItem[]>(
     () =>
@@ -71,7 +73,6 @@ export default function LiquidityPage() {
       toast.success("Eintrag aktualisiert");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Fehler");
-      throw err;
     }
   };
 
