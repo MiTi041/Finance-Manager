@@ -21,23 +21,34 @@ export function useLiquidity() {
   const [entries, setEntries] = useState<LiquidityEntry[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [pending, setPending] = useState<PendingTransactionDto[]>([]);
-  const [balanceTotal, setBalanceTotal] = useState(0);
+  const [balanceTotal, setBalanceTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sourcesError, setSourcesError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
+    setSourcesError(null);
     try {
-      const [entryList, subs, total, pendingTransactions] = await Promise.all([
-        fetchLiquidityEntries(),
-        fetchChartSubscriptions().catch(() => []),
-        fetchBalanceTotal().catch(() => 0),
-        fetchPendingTransactions().catch(() => []),
+      const entryList = await fetchLiquidityEntries();
+      const [subsResult, balanceResult, pendingResult] = await Promise.allSettled([
+        fetchChartSubscriptions(),
+        fetchBalanceTotal(),
+        fetchPendingTransactions(),
       ]);
       setEntries(entryList);
-      setSubscriptions(subs);
-      setBalanceTotal(total);
-      setPending(pendingTransactions);
+      setSubscriptions(subsResult.status === "fulfilled" ? subsResult.value : []);
+      setBalanceTotal(balanceResult.status === "fulfilled" ? balanceResult.value : null);
+      setPending(pendingResult.status === "fulfilled" ? pendingResult.value : []);
+      if (
+        subsResult.status === "rejected" ||
+        balanceResult.status === "rejected" ||
+        pendingResult.status === "rejected"
+      ) {
+        setSourcesError(
+          "Automatische Daten (Kontostände, Abos, Vorgemerkte) konnten nicht vollständig geladen werden.",
+        );
+      }
       setLoading(false);
     } catch (err) {
       setError(getErrorMessage(err));
@@ -71,6 +82,7 @@ export function useLiquidity() {
     balanceTotal,
     loading,
     error,
+    sourcesError,
     reload: load,
     create,
     update,

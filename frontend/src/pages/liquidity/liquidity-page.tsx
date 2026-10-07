@@ -23,8 +23,18 @@ function defaultEndDate(): Date {
 }
 
 export default function LiquidityPage() {
-  const { entries, subscriptions, pending, balanceTotal, loading, error, create, update, remove } =
-    useLiquidity();
+  const {
+    entries,
+    subscriptions,
+    pending,
+    balanceTotal,
+    loading,
+    error,
+    sourcesError,
+    create,
+    update,
+    remove,
+  } = useLiquidity();
   const today = useMemo(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -37,7 +47,9 @@ export default function LiquidityPage() {
 
   const parsedStart = Number(startOverride.trim().replace(",", "."));
   const startBalance =
-    startOverride.trim() === "" || !Number.isFinite(parsedStart) ? balanceTotal : parsedStart;
+    startOverride.trim() === "" || !Number.isFinite(parsedStart)
+      ? (balanceTotal ?? 0)
+      : parsedStart;
 
   const autoItems = useMemo<LiquidityAutoItem[]>(
     () =>
@@ -95,12 +107,14 @@ export default function LiquidityPage() {
               id="start-balance"
               inputMode="decimal"
               className="w-40"
-              placeholder={formatAmount(balanceTotal)}
+              placeholder={balanceTotal === null ? "—" : formatAmount(balanceTotal)}
               value={startOverride}
               onChange={(event) => setStartOverride(event.target.value)}
             />
             <span className="text-xs text-muted-foreground">
-              Leer = aktueller Kontostand ({formatAmount(balanceTotal)})
+              {balanceTotal === null
+                ? "Kontostand nicht verfügbar — bitte manuell eintragen"
+                : `Leer = aktueller Kontostand (${formatAmount(balanceTotal)})`}
             </span>
           </div>
           <div className="flex flex-col gap-2">
@@ -111,6 +125,8 @@ export default function LiquidityPage() {
       </Card>
 
       <LiquidityResultCard result={result} />
+
+      {sourcesError ? <p className="text-xs text-destructive">{sourcesError}</p> : null}
 
       <Card>
         <CardContent className="flex flex-col gap-4 p-4 sm:p-5">
