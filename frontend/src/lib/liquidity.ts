@@ -20,15 +20,6 @@ export type LiquidityEntryInput = {
   certainty: LiquidityCertainty;
 };
 
-export type PendingTransactionDto = {
-  amount: number;
-  date: string | null;
-  entry_date?: string | null;
-  purpose?: string | null;
-  recipient_name?: string | null;
-  applicant_name?: string | null;
-};
-
 export async function fetchLiquidityEntries(): Promise<LiquidityEntry[]> {
   const response = await fetch(`${getApiBaseUrl()}/db/liquidity-entries`);
   const data = await parseJsonResponse(response);
@@ -70,10 +61,4 @@ export async function fetchBalanceTotal(): Promise<number> {
   const data = await parseJsonResponse(response);
   const balances: AccountBalanceDto[] = Array.isArray(data) ? data : (data.balances ?? []);
   return balances.reduce((sum, balance) => sum + Number(balance.balance ?? 0), 0);
-}
-
-export async function fetchPendingTransactions(): Promise<PendingTransactionDto[]> {
-  const response = await fetch(`${getApiBaseUrl()}/db/transactions?days=1`);
-  const data = await parseJsonResponse(response);
-  return Array.isArray(data?.pending) ? data.pending : [];
 }

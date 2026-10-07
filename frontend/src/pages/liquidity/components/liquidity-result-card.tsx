@@ -1,21 +1,24 @@
-import { Card, CardContent } from "@/components/ui/card";
 import { formatAmount } from "@/lib/utils/format";
 import type { LiquidityResult } from "../utils";
 
-const STATUS: Record<LiquidityResult["status"], { label: string; className: string }> = {
-  covered: { label: "Garantiert gedeckt", className: "text-emerald-600 dark:text-emerald-400" },
-  best_case: {
-    label: "Nur im Best Case gedeckt",
-    className: "text-amber-600 dark:text-amber-400",
+const STATUS: Record<LiquidityResult["status"], { label: string; text: string; dot: string }> = {
+  covered: {
+    label: "Gedeckt",
+    text: "text-emerald-600 dark:text-emerald-400",
+    dot: "bg-emerald-500",
   },
-  shortfall: { label: "Nicht gedeckt", className: "text-destructive" },
+  shortfall: {
+    label: "Nicht gedeckt",
+    text: "text-destructive",
+    dot: "bg-destructive",
+  },
 };
 
 function Row({ label, value }: { label: string; value: number }) {
   return (
-    <div className="flex items-center justify-between text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="tabular-nums">{formatAmount(value)}</span>
+    <div className="flex items-baseline justify-between gap-4 py-1.5 text-sm">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="tabular-nums">{formatAmount(value)}</dd>
     </div>
   );
 }
@@ -23,25 +26,23 @@ function Row({ label, value }: { label: string; value: number }) {
 export function LiquidityResultCard({ result }: { result: LiquidityResult }) {
   const status = STATUS[result.status];
   return (
-    <Card className="border-none bg-muted/40 shadow-none">
-      <CardContent className="flex flex-col gap-4 p-5">
-        <div className="flex flex-col gap-1">
-          <span className={`text-sm font-medium ${status.className}`}>{status.label}</span>
-          <span className={`text-3xl font-semibold tabular-nums ${status.className}`}>
-            {formatAmount(result.discrepancy)}
-          </span>
+    <section aria-live="polite" className="flex flex-col gap-6">
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span className={`size-2 rounded-full ${status.dot}`} aria-hidden />
+          {status.label}
         </div>
-        <div className="grid gap-1.5 sm:grid-cols-2">
-          <Row label="Sichere Einnahmen" value={result.certainIncome} />
-          <Row label="Sichere Ausgaben" value={-result.certainExpense} />
-          <Row
-            label="Erwarteter Saldo"
-            value={result.expectedIncome - result.expectedExpense}
-          />
-          <Row label="Saldo garantiert" value={result.certainBalance} />
-          <Row label="Saldo Best Case" value={result.bestBalance} />
+        <p className={`text-5xl font-semibold tracking-tight tabular-nums ${status.text}`}>
+          {formatAmount(result.discrepancy)}
+        </p>
+      </div>
+
+      <dl className="grid gap-x-10 border-t border-border/60 pt-3 sm:grid-cols-2">
+        <div>
+          <Row label="Einnahmen" value={result.income} />
+          <Row label="Ausgaben" value={-result.expense} />
         </div>
-      </CardContent>
-    </Card>
+      </dl>
+    </section>
   );
 }

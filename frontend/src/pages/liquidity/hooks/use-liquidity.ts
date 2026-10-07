@@ -5,50 +5,25 @@ import {
   deleteLiquidityEntry,
   fetchBalanceTotal,
   fetchLiquidityEntries,
-  fetchPendingTransactions,
   updateLiquidityEntry,
   type LiquidityEntry,
   type LiquidityEntryInput,
-  type PendingTransactionDto,
 } from "@/lib/liquidity";
 import { getErrorMessage } from "@/lib/utils/error";
-import {
-  fetchChartSubscriptions,
-  type Subscription,
-} from "@/pages/subscriptions/hooks/use-subscriptions";
 
 export function useLiquidity() {
   const [entries, setEntries] = useState<LiquidityEntry[]>([]);
-  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
-  const [pending, setPending] = useState<PendingTransactionDto[]>([]);
   const [balanceTotal, setBalanceTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sourcesError, setSourcesError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
-    setSourcesError(null);
     try {
       const entryList = await fetchLiquidityEntries();
-      const [subsResult, balanceResult, pendingResult] = await Promise.allSettled([
-        fetchChartSubscriptions(),
-        fetchBalanceTotal(),
-        fetchPendingTransactions(),
-      ]);
+      const balance = await fetchBalanceTotal().catch(() => null);
       setEntries(entryList);
-      setSubscriptions(subsResult.status === "fulfilled" ? subsResult.value : []);
-      setBalanceTotal(balanceResult.status === "fulfilled" ? balanceResult.value : null);
-      setPending(pendingResult.status === "fulfilled" ? pendingResult.value : []);
-      if (
-        subsResult.status === "rejected" ||
-        balanceResult.status === "rejected" ||
-        pendingResult.status === "rejected"
-      ) {
-        setSourcesError(
-          "Automatische Daten (Kontostände, Abos, Vorgemerkte) konnten nicht vollständig geladen werden.",
-        );
-      }
+      setBalanceTotal(balance);
       setLoading(false);
     } catch (err) {
       setError(getErrorMessage(err));
@@ -77,12 +52,9 @@ export function useLiquidity() {
 
   return {
     entries,
-    subscriptions,
-    pending,
     balanceTotal,
     loading,
     error,
-    sourcesError,
     reload: load,
     create,
     update,
