@@ -524,6 +524,20 @@ def create_budgets_table(connection: sqlite3.Connection) -> None:
         connection.execute("DROP TABLE budgets_old")
 
 
+def create_liquidity_entries_table(connection: sqlite3.Connection) -> None:
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS liquidity_entries (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            label       TEXT NOT NULL,
+            amount      REAL NOT NULL CHECK(amount >= 0),
+            kind        TEXT NOT NULL DEFAULT 'expense' CHECK(kind IN ('income', 'expense')),
+            certainty   TEXT NOT NULL DEFAULT 'certain' CHECK(certainty IN ('certain', 'expected')),
+            created_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+
 def create_allocation_runs_table(connection: sqlite3.Connection) -> None:
     connection.execute("""
         CREATE TABLE IF NOT EXISTS allocation_runs (
@@ -740,6 +754,7 @@ def initialize_database(connection: sqlite3.Connection) -> None:
     create_allocation_runs_table(connection)
     create_allocation_run_buckets_table(connection)
     create_budgets_table(connection)
+    create_liquidity_entries_table(connection)
 
     row_count = connection.execute("SELECT COUNT(*) FROM allocation_buckets").fetchone()[0]
     if row_count == 0:

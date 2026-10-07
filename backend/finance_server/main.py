@@ -23,6 +23,7 @@ from finance_server.api.analytics import router as analytics_router
 from finance_server.api.allocation import router as allocation_router
 from finance_server.api.sync import router as sync_router
 from finance_server.api.budgets import router as budgets_router
+from finance_server.api.liquidity import router as liquidity_router
 from finance_server.api.notifications import router as notifications_router
 from finance_server.api.keys import router as keys_router
 from finance_server.api.account_flow import router as account_flow_router
@@ -99,6 +100,7 @@ app.include_router(allocation_router, prefix="/api")
 app.include_router(analytics_router, prefix="/api")
 app.include_router(sync_router, prefix="/api")
 app.include_router(budgets_router, prefix="/api")
+app.include_router(liquidity_router, prefix="/api")
 app.include_router(notifications_router, prefix="/api")
 app.include_router(keys_router, prefix="/api")
 app.include_router(account_flow_router, prefix="/api")
