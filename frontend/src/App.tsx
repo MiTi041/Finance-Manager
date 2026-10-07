@@ -16,6 +16,7 @@ const AccountFlowPage = lazy(() => import("@/pages/account-flow/account-flow-pag
 const AllocationPage = lazy(() => import("@/pages/allocation/allocation-page"));
 const BudgetsPage = lazy(() => import("@/pages/budgets/budgets-page"));
 const AssistantPage = lazy(() => import("@/pages/assistant/assistant-page"));
+const LiquidityPage = lazy(() => import("@/pages/liquidity/liquidity-page"));
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8112/api";
 
@@ -118,6 +119,14 @@ export default function App() {
                 element={
                   <ErrorBoundary pageName="Budgets">
                     <BudgetsPage />
+                  </ErrorBoundary>
+                }
+              />
+              <Route
+                path="/liquidity"
+                element={
+                  <ErrorBoundary pageName="Liquiditätscheck">
+                    <LiquidityPage />
                   </ErrorBoundary>
                 }
               />

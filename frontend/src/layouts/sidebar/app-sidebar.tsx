@@ -1,5 +1,5 @@
 import * as React from "react";
-import { FileText, Gauge, Repeat, Sparkles, Target, Wallet, Waypoints } from "lucide-react";
+import { FileText, Gauge, PiggyBank, Repeat, Sparkles, Target, Wallet, Waypoints } from "lucide-react";
 
 import { buildAccountOptions, buildBankSyncOptions, resolveAccountSelection } from "@/lib/utils/accounts";
 import { useAssistantConfig } from "@/hooks/use-assistant-config";
@@ -52,6 +52,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     { title: "Kontenfluss", url: "/account-flow", icon: Waypoints },
     { title: "Finanzplan", url: "/finance-plan", icon: Wallet },
     { title: "Budgets", url: "/budgets", icon: Target },
+    { title: "Liquiditätscheck", url: "/liquidity", icon: PiggyBank },
     ...(assistantConfig?.configured
       ? [{ title: "KI-Assistent", url: "/assistant", icon: Sparkles }]
       : []),
