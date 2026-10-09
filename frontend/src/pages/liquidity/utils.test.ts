@@ -1,7 +1,15 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 
-import { computeLiquidity } from "./utils.ts";
+import { computeLiquidity, parseHiddenEntries } from "./utils.ts";
+
+test("parseHiddenEntries tolerates junk and keeps only ids", () => {
+  assert.deepEqual(parseHiddenEntries(null), []);
+  assert.deepEqual(parseHiddenEntries("not json"), []);
+  assert.deepEqual(parseHiddenEntries('{"a":1}'), []);
+  assert.deepEqual(parseHiddenEntries("[1,2,3]"), [1, 2, 3]);
+  assert.deepEqual(parseHiddenEntries('[1,"x",2,null]'), [1, 2]);
+});
 
 test("covered: shows the surplus when balance is positive", () => {
   const result = computeLiquidity({

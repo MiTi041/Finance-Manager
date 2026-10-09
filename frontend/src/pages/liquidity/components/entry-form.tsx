@@ -21,7 +21,7 @@ function Segmented<T extends string>({
     <div
       role="radiogroup"
       aria-label={label}
-      className="inline-flex h-9 items-center rounded-md bg-muted p-0.5 text-xs"
+      className="inline-flex h-10 items-center rounded-md bg-muted p-1 text-xs"
     >
       {options.map((option) => {
         const active = option.value === value;
@@ -119,8 +119,7 @@ export function EntryForm({
             <span className="text-destructive">Ungültiger Ausdruck</span>
           ) : (
             <span>
-              ={" "}
-              <span className="font-mono font-medium text-foreground">{formatAmount(value)}</span>
+              = <span className="font-mono font-medium text-foreground">{formatAmount(value)}</span>
             </span>
           )}
         </div>

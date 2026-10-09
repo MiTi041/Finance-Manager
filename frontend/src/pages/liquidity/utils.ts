@@ -1,5 +1,15 @@
 import type { LiquidityEntry } from "@/lib/liquidity";
 
+export function parseHiddenEntries(raw: string | null): number[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((id): id is number => typeof id === "number") : [];
+  } catch {
+    return [];
+  }
+}
+
 export type LiquidityStatus = "covered" | "shortfall";
 
 export type LiquidityResult = {
