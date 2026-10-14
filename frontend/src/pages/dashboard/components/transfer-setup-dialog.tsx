@@ -19,6 +19,9 @@ import { PayoutSlider } from "@/pages/allocation/components/payout-slider";
 import { formatAmount } from "@/lib/utils/format";
 import { isValidIban } from "@/lib/transfer-utils";
 import { type RecipientAccountRecord } from "@/lib/recipient-accounts";
+import { RecipientCombobox } from "@/components/recipient-combobox";
+import { buildRecipientOptions, type RecipientOption } from "@/lib/recipient-options";
+import { type ZahlungspartnerRecord } from "@/lib/zahlungspartner";
 
 export type SenderAccount = {
   iban: string;
@@ -64,6 +67,7 @@ type Props = {
   senderAccount?: SenderAccount;
   recipientAccounts: RecipientAccountRecord[];
   ownAccounts: OwnAccount[];
+  zahlungspartner: ZahlungspartnerRecord[];
   onConfirm: (result: TransferSetupResult) => void;
 };
 
@@ -79,6 +83,7 @@ export function TransferSetupDialog({
   senderAccount,
   recipientAccounts,
   ownAccounts,
+  zahlungspartner,
   onConfirm,
 }: Props) {
   const [recipientValue, setRecipientValue] = useState<string>("");
@@ -138,6 +143,25 @@ export function TransferSetupDialog({
         })),
     ],
     [recipientAccounts, ownAccounts, sender, recipientLogos],
+  );
+
+  const recipientGroups = useMemo(
+    () =>
+      buildRecipientOptions({
+        ownAccounts: ownAccounts.map((a) => ({
+          accountIban: a.iban,
+          accountName: a.name,
+          bankName: a.bankName,
+          bankLogo: a.bankLogo,
+          bankLogoDark: a.bankLogoDark,
+          logoPadding: a.logoPadding,
+          isPrimary: a.isPrimary,
+          scope: "",
+        })),
+        recipientAccounts,
+        zahlungspartner,
+      }),
+    [ownAccounts, recipientAccounts, zahlungspartner],
   );
 
   const selectedRecipient = useMemo(() => {
@@ -349,13 +373,20 @@ export function TransferSetupDialog({
               <Label htmlFor="manual-name">
                 Empfänger <span className="text-destructive">*</span>
               </Label>
-              <Input
+              <RecipientCombobox
                 id="manual-name"
                 value={manualName}
-                onChange={(e) => {
-                  setManualName(e.target.value);
+                onValueChange={(value) => {
+                  setManualName(value);
                   if (recipientValue !== MANUAL) setRecipientValue(MANUAL);
                 }}
+                onSelect={(option: RecipientOption) => {
+                  setRecipientValue(MANUAL);
+                  setManualName(option.name || option.label);
+                  setManualIban(option.iban);
+                  setManualBic(option.bic ?? "");
+                }}
+                groups={recipientGroups}
                 placeholder="Name des Kontoinhabers"
               />
             </div>

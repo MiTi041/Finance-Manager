@@ -25,6 +25,10 @@ import {
   createRecipientAccount,
   type RecipientAccountRecord,
 } from "@/lib/recipient-accounts";
+import {
+  fetchZahlungspartnerReferenceData,
+  type ZahlungspartnerRecord,
+} from "@/lib/zahlungspartner";
 import { executeDirectTransfer } from "@/lib/direct-transfer";
 import { VopRequiredError, type VopRequiredInfo } from "@/lib/allocation";
 import { VopConfirmDialog } from "@/components/vop-confirm-dialog";
@@ -44,7 +48,10 @@ import { MonthlyChart } from "./components/monthly-chart";
 import { SavingsRateChart } from "./components/savings-rate-chart";
 import { WeekdayChart } from "./components/weekday-chart";
 import { AccountDistributionChart } from "./components/account-distribution-chart";
+import { BucketsByAccount } from "./components/buckets-by-account";
 import { AnalyticsCharts } from "./components/analytics-charts";
+import { fetchAllocationStatus, type AllocationStatus } from "@/lib/allocation";
+import { groupBucketsByAccount } from "@/lib/buckets-by-account";
 import { DashboardSkeleton } from "./components/dashboard-skeleton";
 
 function computeDateFooter(dateFilter: DateFilterValue) {
@@ -80,6 +87,8 @@ export default function DashboardPage() {
   const [canTransferMap, setCanTransferMap] = useState<Map<string, boolean>>(new Map());
   const [sepaExpressMap, setSepaExpressMap] = useState<Map<string, boolean>>(new Map());
   const [recipientAccounts, setRecipientAccounts] = useState<RecipientAccountRecord[]>([]);
+  const [allocationStatus, setAllocationStatus] = useState<AllocationStatus | null>(null);
+  const [zahlungspartner, setZahlungspartner] = useState<ZahlungspartnerRecord[]>([]);
   const [setupOpen, setSetupOpen] = useState(false);
   const [presetSenderIban, setPresetSenderIban] = useState<string | undefined>(undefined);
   const [vopState, setVopState] = useState<{
@@ -95,9 +104,38 @@ export default function DashboardPage() {
     void fetchRecipientAccountsReferenceData().then((data) =>
       setRecipientAccounts(data.recipient_accounts ?? []),
     );
+    void fetchZahlungspartnerReferenceData().then((data) =>
+      setZahlungspartner(data.zahlungspartner ?? []),
+    );
+    // ponytail: reuses /allocation/status (force-recalculates the current run,
+    // same as the Finanzplan page) to get per-bucket saved totals.
+    void fetchAllocationStatus()
+      .then(setAllocationStatus)
+      .catch(() => {});
   }, []);
 
   const dateFooter = useMemo(() => computeDateFooter(dateFilter), [dateFilter]);
+
+  const bucketGroups = useMemo(() => {
+    if (!allocationStatus) return [];
+    const recipientIbansById = new Map(recipientAccounts.map((r) => [r.id, r.iban]));
+    const nameByIban = new Map<string, string>();
+    for (const acc of accountBalances) {
+      const iban = normalizeIban(acc.accountIban);
+      if (iban) nameByIban.set(iban, acc.accountName || acc.bankName);
+    }
+    for (const r of recipientAccounts) {
+      const iban = normalizeIban(r.iban);
+      if (iban && !nameByIban.has(iban)) nameByIban.set(iban, r.account_name);
+    }
+    return groupBucketsByAccount(
+      allocationStatus.buckets,
+      allocationStatus.config,
+      recipientIbansById,
+      nameByIban,
+      allocationStatus.savings_plans,
+    );
+  }, [allocationStatus, recipientAccounts, accountBalances]);
 
   const canTransferByIban = useMemo(() => {
     const map = new Map<string, boolean>();
@@ -335,6 +373,14 @@ export default function DashboardPage() {
             />
           </div>
 
+          {transactions.length > 0 && (
+            <BalanceChart
+              transactions={transactions}
+              allTransactions={allTransactions}
+              currentBalance={totalBalance}
+            />
+          )}
+
           {activeAccountIban === "all" && accountBalances.length > 0 && (
             <>
               <AccountCards
@@ -347,16 +393,12 @@ export default function DashboardPage() {
                 onToggleExclude={handleToggleExclude}
               />
               <AccountDistributionChart accountBalances={accountBalances} />
+              <BucketsByAccount groups={bucketGroups} />
             </>
           )}
 
           {transactions.length > 0 && (
             <>
-              <BalanceChart
-                transactions={transactions}
-                allTransactions={allTransactions}
-                currentBalance={totalBalance}
-              />
               <MonthlyChart transactions={transactions} />
               <WeekdayChart transactions={transactions} />
               <SavingsRateChart transactions={transactions} />
@@ -372,6 +414,7 @@ export default function DashboardPage() {
         senderAccount={activeSenderAccount}
         recipientAccounts={recipientAccounts}
         ownAccounts={ownAccounts}
+        zahlungspartner={zahlungspartner}
         onConfirm={confirmSetup}
       />
 

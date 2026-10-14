@@ -2,12 +2,15 @@ import { useMemo, useState } from "react";
 
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { BankLogo, RecipientLogo } from "@/components/bank-logo";
+import { BankLogo, BrandIcon, RecipientLogo } from "@/components/bank-logo";
+import {
+  logoBackgroundClass,
+  resolveZahlungspartnerLogoSrc,
+} from "@/lib/bank/zahlungspartner-logo";
 import { useRecipientAccountLogos } from "@/hooks/use-recipient-account-logos";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import {
   Command,
-  CommandEmpty,
   CommandGroup,
   CommandItem,
   CommandList,
@@ -25,7 +28,6 @@ type RecipientComboboxProps = {
   onSelect: (option: RecipientOption) => void;
   groups: RecipientOptionGroup[];
   placeholder?: string;
-  emptyText?: string;
 };
 
 export function RecipientCombobox({
@@ -35,19 +37,19 @@ export function RecipientCombobox({
   onSelect,
   groups,
   placeholder,
-  emptyText = "Keine Treffer – Text wird frei übernommen",
 }: RecipientComboboxProps) {
   const [open, setOpen] = useState(false);
   const recipientLogos = useRecipientAccountLogos();
   const filtered = useMemo(() => filterRecipientOptions(groups, value), [groups, value]);
+  const hasResults = filtered.some((group) => group.options.length > 0);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open && hasResults} onOpenChange={setOpen}>
       <PopoverAnchor asChild>
         <Input
           id={id}
           role="combobox"
-          aria-expanded={open}
+          aria-expanded={open && hasResults}
           aria-autocomplete="list"
           value={value}
           placeholder={placeholder}
@@ -95,7 +97,6 @@ export function RecipientCombobox({
               el.scrollTop += event.deltaY;
             }}
           >
-            <CommandEmpty>{emptyText}</CommandEmpty>
             {filtered.map((group) => (
               <CommandGroup key={group.kind} heading={group.label}>
                 {group.options.map((option) => (
@@ -121,7 +122,20 @@ export function RecipientCombobox({
                         logo={recipientLogos.get(Number(option.id.split(":")[1]))}
                         alt={option.label || option.name}
                       />
-                    ) : null}
+                    ) : (
+                      <BrandIcon
+                        src={resolveZahlungspartnerLogoSrc(
+                          option.logoUrl,
+                          option.partnerId,
+                          option.localLogoPath,
+                        )}
+                        alt={option.label || option.name}
+                        sizeClassName="size-9"
+                        backgroundClassName={logoBackgroundClass(option.logoBackground)}
+                        kind={option.isCompany === false ? "person" : "company"}
+                        imgNoPadding={!option.partnerLogoPadding}
+                      />
+                    )}
                     <span className="flex min-w-0 flex-1 flex-col">
                       <span className="flex min-w-0 items-center gap-1.5">
                         <span className="truncate">{option.label}</span>

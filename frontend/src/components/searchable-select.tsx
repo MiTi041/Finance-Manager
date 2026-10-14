@@ -154,7 +154,9 @@ export function SearchableSelect({
             }}>
             <CommandEmpty>{emptyText}</CommandEmpty>
             <CommandGroup>
-              {showNoneOption && (
+              {/* ponytail: hide while searching so cmdk's "select first item"
+                  lands on the match instead of this never-unmounting row. */}
+              {showNoneOption && !query.trim() && (
                 <CommandItem
                   value={noneLabel}
                   onSelect={() => {

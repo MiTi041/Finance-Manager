@@ -107,7 +107,9 @@ export function CategoryCombobox({
           <CommandList className="max-h-80">
             <CommandEmpty>Keine Kategorie gefunden</CommandEmpty>
             <CommandGroup className="[&_[cmdk-item]]:my-1">
-              {showNoneOption && (
+              {/* ponytail: hide while searching so cmdk's "select first item"
+                  lands on the match instead of this never-unmounting row. */}
+              {showNoneOption && !query.trim() && (
                 <CommandItem
                   value={noneLabel}
                   onSelect={() => {

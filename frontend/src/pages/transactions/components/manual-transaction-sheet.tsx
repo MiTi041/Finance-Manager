@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/sheet";
 import { CategoryCombobox } from "@/components/category-combobox";
 import { DatePicker } from "@/components/date-picker";
-import { RecipientCombobox } from "./recipient-combobox";
+import { RecipientCombobox } from "@/components/recipient-combobox";
 import { buildRecipientOptions } from "@/lib/recipient-options";
 import { type BankAccountOption } from "@/lib/utils/accounts";
 import { type RecipientAccountRecord } from "@/lib/recipient-accounts";

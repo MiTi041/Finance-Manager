@@ -20,6 +20,7 @@ const groups = buildRecipientOptions({
       id: 1,
       account_name: "Miete",
       iban: "DE02120300000000202051",
+      bic: "BYLADEM1001",
       recipient_name: "Vermieter GmbH",
       is_donation_account: false,
     },
@@ -33,8 +34,9 @@ const groups = buildRecipientOptions({
   ],
   zahlungspartner: [
     { id: 5, name: "Giro", is_company: false, is_own_account: true, ibans: ["DE89 3704 0044 0532 0130 00"] },
-    { id: 6, name: "Strom", is_company: true, is_own_account: false, ibans: ["DE88 1009 0000 1234 5678 92"] },
+    { id: 6, name: "Strom", is_company: true, is_own_account: false, ibans: ["DE88 1009 0000 1234 5678 92"], logo_url: "https://cdn.example/strom.png", logo_padding: true },
     { id: 7, name: "Ohne IBAN", is_company: true, is_own_account: false, ibans: [] },
+    { id: 8, name: "PayPal", is_company: true, is_own_account: false, ibans: ["PAYPAL:max@example.com"] },
   ],
 });
 
@@ -61,12 +63,27 @@ assert.equal(groups[1].options[0].label, "Vermieter GmbH");
 assert.equal(groups[1].options[0].subtitle, "DE02120300000000202051");
 assert.equal(groups[1].options[1].name, "Ohne Empfängername");
 
-// Dedupe über normalisierte IBAN: Zahlungspartner "Giro" (DE89…) fällt weg,
-// "Ohne IBAN" (leer) bleibt erhalten.
+// BIC wird nur bei Empfängerkonten durchgereicht, eigene Konten/Partner haben keinen
+assert.equal(groups[1].options[0].bic, "BYLADEM1001");
+assert.equal(groups[1].options[1].bic, undefined);
+assert.equal(groups[0].options[0].bic, undefined);
+assert.equal(groups[2].options[0].bic, undefined);
+
+// Dedupe über normalisierte IBAN: Zahlungspartner "Giro" (DE89…) fällt weg.
+// "Ohne IBAN" wird gefiltert – nur Einträge mit gültiger IBAN bleiben.
 assert.deepEqual(
   groups[2].options.map((o) => o.name),
-  ["Strom", "Ohne IBAN"],
+  ["Strom"],
 );
+
+// Pseudo-IBANs (PAYPAL:…) werden ebenfalls herausgefiltert
+assert.equal(groups[2].options.some((o) => o.name === "PayPal"), false);
+
+// Zahlungspartner-Logo-Metadaten werden für die Dropdown-Anzeige durchgereicht
+assert.equal(groups[2].options[0].logoUrl, "https://cdn.example/strom.png");
+assert.equal(groups[2].options[0].partnerLogoPadding, true);
+assert.equal(groups[2].options[0].isCompany, true);
+assert.equal(groups[2].options[0].partnerId, 6);
 
 // Filter über Name, case-insensitive
 const byName = filterRecipientOptions(groups, "strom");

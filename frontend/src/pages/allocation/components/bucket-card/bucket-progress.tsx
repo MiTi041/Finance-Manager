@@ -52,12 +52,14 @@ export function BucketProgress(props: Props) {
         ? bucket.target_amount
         : 1;
   const segTotalEinz = bucket.saved_einzahlungen ?? 0;
-  const segMonthEinz = bucket.month_einzahlungen ?? 0;
-  const segBeforeMonthEinz = Math.max(0, segTotalEinz - segMonthEinz);
-  const segTotalEntnahmen = bucket.saved_entnahmen ?? 0;
+  // ponytail: Notgroschen-Entnahmen werden nicht ausgewiesen, sondern zehren
+  // zuerst den laufenden, dann frühere Monate auf → der Balken schrumpft nur.
+  let remainingEntnahme = bucket.saved_entnahmen ?? 0;
+  const segMonthEinz = Math.max(0, (bucket.month_einzahlungen ?? 0) - remainingEntnahme);
+  remainingEntnahme -= (bucket.month_einzahlungen ?? 0) - segMonthEinz;
+  const segBeforeMonthEinz = Math.max(0, segTotalEinz - (bucket.month_einzahlungen ?? 0) - remainingEntnahme);
   const segBeforeMonthPct = Math.min(100, Math.max(0, (segBeforeMonthEinz / segSafeTarget) * 100));
   const segMonthPct = Math.min(100, Math.max(0, (segMonthEinz / segSafeTarget) * 100));
-  const segEntnahmenPct = Math.min(100, Math.max(0, (segTotalEntnahmen / segSafeTarget) * 100));
 
   const bafoegAvailablePct = Math.min(
     100,
@@ -206,24 +208,6 @@ export function BucketProgress(props: Props) {
               <TooltipContent side="top">
                 <span className="font-mono">{formatAmount(segMonthEinz)}</span> eingezahlt
                 (diesen Monat)
-              </TooltipContent>
-            </Tooltip>
-          )}
-          {segEntnahmenPct > 0 && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div
-                  className="h-full rounded-full cursor-pointer bg-orange-500/20"
-                  style={
-                    {
-                      width: `${segEntnahmenPct}%`,
-                      minWidth: segEntnahmenPct > 0 ? "8px" : undefined,
-                    } as React.CSSProperties
-                  }
-                />
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                <span className="font-mono">{formatAmount(segTotalEntnahmen)}</span> entnommen
               </TooltipContent>
             </Tooltip>
           )}

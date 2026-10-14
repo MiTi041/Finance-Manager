@@ -1,7 +1,8 @@
 import { normalizeIban } from "./iban.ts";
+import { isValidIban } from "./transfer-utils.ts";
 import type { BankAccountOption } from "./utils/accounts";
 import type { RecipientAccountRecord } from "./recipient-accounts";
-import type { ZahlungspartnerRecord } from "./zahlungspartner";
+import type { ZahlungspartnerRecord, LogoBackground } from "./zahlungspartner";
 
 export type RecipientOptionKind = "own" | "recipient" | "partner";
 
@@ -12,10 +13,17 @@ export type RecipientOption = {
   label: string;
   subtitle: string;
   iban: string;
+  bic?: string;
   isPrimary?: boolean;
   bankLogo?: string;
   bankLogoDark?: string;
   logoPadding?: number;
+  logoUrl?: string;
+  localLogoPath?: string;
+  logoBackground?: LogoBackground;
+  partnerLogoPadding?: boolean;
+  isCompany?: boolean;
+  partnerId?: number;
 };
 
 export type RecipientOptionGroup = {
@@ -60,6 +68,7 @@ export function buildRecipientOptions(input: {
           label: name,
           subtitle: account.iban,
           iban: account.iban,
+          bic: account.bic ?? undefined,
         };
       }),
     },
@@ -75,6 +84,12 @@ export function buildRecipientOptions(input: {
           label: partner.name,
           subtitle: iban,
           iban,
+          logoUrl: partner.logo_url ?? undefined,
+          localLogoPath: partner.local_logo_path ?? undefined,
+          logoBackground: partner.logo_background ?? undefined,
+          partnerLogoPadding: partner.logo_padding,
+          isCompany: partner.is_company,
+          partnerId: partner.id,
         };
       }),
     },
@@ -86,7 +101,9 @@ export function buildRecipientOptions(input: {
       ...group,
       options: group.options.filter((option) => {
         const iban = normalizeIban(option.iban);
-        if (!iban) return true;
+        // Nur echte, gültige IBANs – Pseudo-Schlüssel (PAYPAL:…) und leere
+        // Einträge gehören nicht in die Auswahl.
+        if (!iban || !isValidIban(iban)) return false;
         if (seen.has(iban)) return false;
         seen.add(iban);
         return true;

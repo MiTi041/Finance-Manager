@@ -1,5 +1,6 @@
 import datetime
 import logging
+import threading
 from typing import Any, Iterable
 
 from finance_server.db import (
@@ -193,11 +194,24 @@ def _fetch_account_transactions(
     return [], tan_value
 
 
+def _run_auto_categorize() -> None:
+    try:
+        from finance_server.services.auto_categorize import build_combined_predictions
+
+        build_combined_predictions()
+    except Exception:
+        logging.exception("Auto-Kategorisierung nach Sync fehlgeschlagen")
+
+
 def store_transactions_in_local_db(transactions: list[dict[str, Any]]) -> int:
     if not transactions:
         return 0
     result = insert_local_transactions(transactions)
-    return int(result.get("inserted", 0))
+    inserted = int(result.get("inserted", 0))
+    if inserted > 0:
+        # ponytail: globaler Lauf über alle unkategorisierten, bei Bedarf auf neue IDs eingrenzen
+        threading.Thread(target=_run_auto_categorize, daemon=True).start()
+    return inserted
 
 
 def store_pending_in_local_db(

@@ -10,6 +10,7 @@ import { VirtualizedList, type VirtualizedListRef } from "@/components/virtualiz
 
 import { useGlobalDateFilter } from "@/hooks/use-global-date-filter";
 import { useFinanceData } from "@/hooks/use-finance-data";
+import { useRefresh } from "@/hooks/use-refresh";
 
 import { fetchCategories } from "@/lib/categories/api";
 import { triggerAutoCategorize } from "@/lib/categories/auto-categorize";
@@ -63,6 +64,7 @@ import { isUnknownIban, normalizeIban } from "@/lib/iban";
 
 export default function TransactionsPage() {
   const { dateFilter, setDateFilter } = useGlobalDateFilter();
+  const { refreshVersion } = useRefresh();
 
   const {
     loading,
@@ -195,7 +197,7 @@ export default function TransactionsPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [refreshVersion]);
 
   useEffect(() => {
     let active = true;
