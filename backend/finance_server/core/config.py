@@ -38,11 +38,6 @@ class Settings(BaseSettings):
     fints_rate_limit_fetch_balance: int = 60
     fints_rate_limit_sync_all: int = 300
 
-    sync_r2_account_id: str = ""
-    sync_r2_access_key_id: str = ""
-    sync_r2_secret_access_key: str = ""
-    sync_r2_bucket: str = "finance-sync"
-
     resend_api_key: str = ""
     resend_from: str = ""
 

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from finance_server.core.config import settings
 from finance_server.db.settings import get_setting, set_setting
 
@@ -19,17 +17,4 @@ def update_external_key(key: str, value: str) -> None:
     if key not in EXTERNAL_KEYS:
         raise ValueError(f"Unknown external key: {key}")
     value = (value or "").strip()
-    previous = get_setting(key)
     set_setting(key, value)
-    from finance_server.services.sync_logger import log_crud_event
-
-    log_crud_event(
-        "app_settings",
-        None,
-        "INSERT" if previous is None else "UPDATE",
-        {
-            "key": key,
-            "value": value,
-            "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-        },
-    )

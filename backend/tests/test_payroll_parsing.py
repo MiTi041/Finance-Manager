@@ -1,10 +1,5 @@
 from __future__ import annotations
 
-import json
-import sqlite3
-from unittest.mock import patch
-
-from finance_server.db.sync import apply_sync_op
 from finance_server.db.transactions import to_row_payload
 from finance_server.services.payroll_parsing import (
     enrich_adyen_merchant,
@@ -197,22 +192,3 @@ class TestToRowPayload:
         assert payload["applicant_iban"] == "PAYPAL:DEICHMANN SE"
         assert payload["gvc_applicant_iban"] == "LU89751000135104200E"
         assert payload["gvc_applicant_bic"] == "PPLXLUL2"
-
-
-def _op(data: dict) -> dict:
-    return {
-        "table_name": "umsaetze",
-        "row_id": 1,
-        "op_type": "INSERT",
-        "data": json.dumps({"id": 1, **data}),
-    }
-
-
-class TestApplySyncOp:
-    def test_deichmann_enriched_on_device_sync(self, test_db: sqlite3.Connection):
-        with patch("finance_server.db.sync.get_connection", return_value=test_db):
-            ok = apply_sync_op(_op(dict(DEICHMANN)))
-        assert ok
-        row = test_db.execute("SELECT * FROM umsaetze").fetchone()
-        assert row["applicant_name"] == "PAYPAL Deichmann SE"
-        assert row["applicant_iban"] == "PAYPAL:DEICHMANN SE"

@@ -4,7 +4,6 @@ from datetime import datetime, timezone
 from typing import Any
 
 from finance_server.core.database import get_connection
-from finance_server.services.sync_logger import log_crud_event
 
 _KINDS = {"income", "expense"}
 _CERTAINTIES = {"certain", "expected"}
@@ -77,10 +76,7 @@ def create_entry(label: str, amount: float, kind: str, certainty: str) -> dict[s
             (label, amount, kind, certainty),
         )
         entry_id = int(cursor.lastrowid)
-    result = _get_entry(entry_id)
-    if result:
-        log_crud_event("liquidity_entries", entry_id, "INSERT", result)
-    return result
+    return _get_entry(entry_id)
 
 
 def update_entry(
@@ -121,16 +117,10 @@ def update_entry(
         )
         if cursor.rowcount <= 0:
             return None
-    result = _get_entry(entry_id)
-    if result:
-        log_crud_event("liquidity_entries", entry_id, "UPDATE", result)
-    return result
+    return _get_entry(entry_id)
 
 
 def delete_entry(entry_id: int) -> bool:
-    entry = _get_entry(entry_id)
-    if entry:
-        log_crud_event("liquidity_entries", entry_id, "DELETE", entry)
     with get_connection() as conn:
         cursor = conn.execute("DELETE FROM liquidity_entries WHERE id = ?", (entry_id,))
     return cursor.rowcount > 0

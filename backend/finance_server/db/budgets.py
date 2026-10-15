@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 from typing import Any
 
 from finance_server.core.database import get_connection
-from finance_server.services.sync_logger import log_crud_event
 
 
 def _now() -> str:
@@ -237,10 +236,7 @@ def create_budget(
             (name, json.dumps(category_ids), json.dumps(hashtags), amount, period),
         )
         budget_id = int(cursor.lastrowid)
-    result = _get_budget(budget_id)
-    if result:
-        log_crud_event("budgets", budget_id, "INSERT", result)
-    return result
+    return _get_budget(budget_id)
 
 
 def update_budget(
@@ -301,10 +297,7 @@ def update_budget(
         )
         if cursor.rowcount <= 0:
             return None
-    result = _get_budget(budget_id)
-    if result:
-        log_crud_event("budgets", budget_id, "UPDATE", result)
-    return result
+    return _get_budget(budget_id)
 
 
 def list_hashtag_suggestions() -> list[str]:
@@ -317,9 +310,6 @@ def list_hashtag_suggestions() -> list[str]:
 
 
 def delete_budget(budget_id: int) -> bool:
-    budget = _get_budget(budget_id)
-    if budget:
-        log_crud_event("budgets", budget_id, "DELETE", budget)
     with get_connection() as conn:
         cursor = conn.execute("DELETE FROM budgets WHERE id = ?", (budget_id,))
     return cursor.rowcount > 0

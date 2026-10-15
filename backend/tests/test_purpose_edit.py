@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import json
 import sqlite3
 from unittest.mock import patch
 
 from finance_server.db.savings import get_saved_breakdown
-from finance_server.db.sync import apply_sync_op
 from finance_server.db.transactions import row_to_dict, update_transaction_purpose
 from finance_server.db.utils import build_transaction_hash
 
@@ -69,20 +67,6 @@ def _insert_local_tx(conn: sqlite3.Connection, tx_id: int = 10, purpose: str = "
         },
     )
     return p
-
-
-def _op(table: str, row_id: int | None, op_type: str, data: dict | None) -> dict:
-    return {
-        "table_name": table,
-        "row_id": row_id,
-        "op_type": op_type,
-        "data": json.dumps(data) if data else None,
-    }
-
-
-def _apply(conn: sqlite3.Connection, op: dict) -> bool:
-    with patch("finance_server.db.sync.get_connection", return_value=conn):
-        return apply_sync_op(op)
 
 
 class TestPurposeEditDb:
@@ -162,51 +146,3 @@ class TestPurposeEditDb:
             breakdown = get_saved_breakdown("notfallfonds")
         assert breakdown["einzahlungen"] == 100.0
         assert breakdown["saldo"] == 100.0
-
-
-class TestPurposeEditSync:
-    def test_purpose_edit_update_op_applies(self, test_db):
-        _insert_local_tx(test_db)
-
-        ok = _apply(
-            test_db,
-            _op(
-                "umsaetze",
-                10,
-                "UPDATE",
-                {
-                    "id": 10,
-                    "purpose_edit": "Miete Juli",
-                    "updated_at": "2026-08-01T10:00:00+00:00",
-                },
-            ),
-        )
-        assert ok
-        row = test_db.execute(
-            "SELECT purpose, purpose_edit, transaction_hash FROM umsaetze WHERE id = 10"
-        ).fetchone()
-        assert row["purpose"] == "Abschlag"
-        assert row["purpose_edit"] == "Miete Juli"
-        assert row["transaction_hash"]
-
-    def test_bank_insert_does_not_overwrite_purpose_edit_or_note(self, test_db):
-        payload = _insert_local_tx(test_db)
-        test_db.execute(
-            "UPDATE umsaetze SET purpose_edit = ?, note = ?, updated_at = ? WHERE id = 10",
-            ("Miete Juli", "wichtig", "2026-07-10T10:00:00+00:00"),
-        )
-
-        remote = dict(payload)
-        remote["id"] = 99
-        remote["purpose_edit"] = None
-        remote["note"] = None
-        remote["splits"] = None
-        remote["kategorie"] = None
-        remote["updated_at"] = "2026-08-01T10:00:00+00:00"
-        ok = _apply(test_db, _op("umsaetze", 99, "INSERT", remote))
-
-        assert ok
-        assert test_db.execute("SELECT COUNT(*) FROM umsaetze").fetchone()[0] == 1
-        row = test_db.execute("SELECT * FROM umsaetze WHERE id = 10").fetchone()
-        assert row["purpose_edit"] == "Miete Juli"
-        assert row["note"] == "wichtig"

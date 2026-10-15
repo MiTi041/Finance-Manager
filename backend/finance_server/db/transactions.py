@@ -11,11 +11,6 @@ from finance_server.core.database import get_connection
 from .utils import build_transaction_hash, normalize_local_amount, normalize_text
 
 
-def _log(table_name: str, row_id: int | None, op_type: str, data: Any = None, connection: sqlite3.Connection | None = None) -> None:
-    from finance_server.services.sync_logger import log_crud_event
-    log_crud_event(table_name, row_id, op_type, data, connection)
-
-
 def to_row_payload(tx: dict[str, Any]) -> dict[str, Any]:
     data = tx.get("data", {}) if isinstance(tx.get("data"), dict) else {}
     account = tx.get("account", {}) if isinstance(tx.get("account"), dict) else {}
@@ -285,10 +280,6 @@ def insert_transactions(rows: Iterable[dict[str, Any]]) -> dict[str, int]:
 
                 ensure_card_mappings(connection, card_ibans)
 
-    if inserted > 0:
-        for new_row in new_rows:
-            _log("umsaetze", new_row["id"], "INSERT", dict(new_row))
-
     return {
         "received": received,
         "inserted": inserted,
@@ -349,33 +340,6 @@ def replace_pending_transactions(
             scope_clause = f"REPLACE(UPPER(account_iban), ' ', '') IN ({placeholders})"
             params = list(scoped_ibans)
 
-        old_query = (
-            "SELECT id, transaction_hash FROM vorgemerkte_umsaetze "
-            "WHERE transaction_hash IS NOT NULL"
-        )
-        if scope_clause:
-            old_query += f" AND {scope_clause}"
-        old_rows = connection.execute(old_query, params).fetchall()
-        old_by_hash = {row["transaction_hash"]: row["id"] for row in old_rows}
-        # Vergleich gegen ALLE vorher vorhandenen Hashes (auch fremder Banken),
-        # sonst würden Vorgemerkte anderer Banken erneut als INSERT geloggt.
-        all_old_hashes = {
-            row["transaction_hash"]
-            for row in connection.execute(
-                "SELECT transaction_hash FROM vorgemerkte_umsaetze "
-                "WHERE transaction_hash IS NOT NULL"
-            ).fetchall()
-        }
-        new_hashes = set(row["transaction_hash"] for row in normalized_rows)
-
-        # ponytail: per-row delta instead of a global clear — a transiently empty
-        # fetch must not wipe pending that still exists on the other device.
-        for gone_hash in sorted(set(old_by_hash) - new_hashes):
-            _log(
-                "vorgemerkte_umsaetze", old_by_hash[gone_hash], "DELETE",
-                {"transaction_hash": gone_hash}, connection=connection,
-            )
-
         delete_query = "DELETE FROM vorgemerkte_umsaetze"
         if scope_clause:
             delete_query += f" WHERE {scope_clause}"
@@ -387,13 +351,6 @@ def replace_pending_transactions(
             normalized_rows,
         )
         count = cursor.rowcount if cursor.rowcount >= 0 else 0
-        if count > 0:
-            for new_row in connection.execute(
-                "SELECT * FROM vorgemerkte_umsaetze ORDER BY id"
-            ).fetchall():
-                if new_row["transaction_hash"] in all_old_hashes:
-                    continue
-                _log("vorgemerkte_umsaetze", new_row["id"], "INSERT", dict(new_row), connection=connection)
 
     return count
 
@@ -649,20 +606,6 @@ def migrate_transactions_to_account(
                     row["id"],
                 ),
             )
-            _log(
-                "umsaetze",
-                row["id"],
-                "UPDATE",
-                {
-                    "account_iban": target,
-                    "transaction_hash": transaction_hash,
-                    "origin_account_iban": source,
-                    "origin_bank_name": normalize_text(origin_bank_name) or None,
-                    "migrated_at": migrated_at,
-                    "migration_batch_id": batch_id,
-                },
-                connection=connection,
-            )
 
         return {
             "batch_id": batch_id,
@@ -810,15 +753,11 @@ def delete_transaction(transaction_id: int) -> bool:
             "DELETE FROM refund_links WHERE refund_transaction_id = ? OR expense_transaction_id = ?",
             (transaction_id, transaction_id),
         )
-        for link in link_rows:
-            _log("refund_links", link["id"], "DELETE", connection=connection)
         for expense_id in set(r["expense_transaction_id"] for r in link_rows):
             if expense_id != transaction_id:
                 _recalc_refund_total(expense_id, connection)
         cursor = connection.execute("DELETE FROM umsaetze WHERE id = ?", (transaction_id,))
-        result = cursor.rowcount > 0
-        _log("umsaetze", transaction_id, "DELETE", connection=connection)
-        return result
+        return cursor.rowcount > 0
 
 
 def delete_transactions_batch(transaction_ids: list[int]) -> int:
@@ -834,15 +773,11 @@ def delete_transactions_batch(transaction_ids: list[int]) -> int:
             f"DELETE FROM refund_links WHERE refund_transaction_id IN ({placeholders}) OR expense_transaction_id IN ({placeholders})",
             transaction_ids + transaction_ids,
         )
-        for link in link_rows:
-            _log("refund_links", link["id"], "DELETE", connection=connection)
         cursor = connection.execute(
             f"DELETE FROM umsaetze WHERE id IN ({placeholders})",
             transaction_ids,
         )
         result = cursor.rowcount
-        for tid in transaction_ids:
-            _log("umsaetze", tid, "DELETE", connection=connection)
         for expense_id in set(r["expense_transaction_id"] for r in link_rows):
             if expense_id not in transaction_ids:
                 _recalc_refund_total(expense_id, connection)
@@ -858,9 +793,7 @@ def update_transaction_note(transaction_id: int, note: str | None) -> bool:
             "UPDATE umsaetze SET note = ? WHERE id = ?",
             (stored_note, transaction_id),
         )
-        result = cursor.rowcount > 0
-        _log("umsaetze", transaction_id, "UPDATE", {"id": transaction_id, "note": note, "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat()}, connection=connection)
-        return result
+        return cursor.rowcount > 0
 
 
 def update_transaction_purpose(transaction_id: int, purpose_edit: str | None) -> bool:
@@ -880,13 +813,7 @@ def update_transaction_purpose(transaction_id: int, purpose_edit: str | None) ->
             "UPDATE umsaetze SET purpose_edit = ? WHERE id = ?",
             (stored, transaction_id),
         )
-        result = cursor.rowcount > 0
-        _log(
-            "umsaetze", transaction_id, "UPDATE",
-            {"id": transaction_id, "purpose_edit": stored, "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat()},
-            connection=connection,
-        )
-        return result
+        return cursor.rowcount > 0
 
 
 def update_transaction_splits(transaction_id: int, splits: list[dict[str, Any]] | None) -> bool:
@@ -897,9 +824,7 @@ def update_transaction_splits(transaction_id: int, splits: list[dict[str, Any]] 
             "UPDATE umsaetze SET splits = ? WHERE id = ?",
             (stored_splits, transaction_id),
         )
-        result = cursor.rowcount > 0
-        _log("umsaetze", transaction_id, "UPDATE", {"id": transaction_id, "splits": splits, "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat()}, connection=connection)
-        return result
+        return cursor.rowcount > 0
 
 
 def update_manual_transaction(
@@ -939,20 +864,7 @@ def update_manual_transaction(
                 transaction_id,
             ),
         )
-        result = cursor.rowcount > 0
-        _log(
-            "umsaetze",
-            transaction_id,
-            "UPDATE",
-            {
-                "id": transaction_id,
-                "date": date,
-                "amount": amount,
-                "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-            },
-            connection=connection,
-        )
-        return result
+        return cursor.rowcount > 0
 
 
 def _recalc_refund_total(tx_id: int, connection: sqlite3.Connection) -> None:
@@ -1023,11 +935,6 @@ def add_refund_link(
             "expense_transaction_id": expense_transaction_id,
             "amount": round(amount, 2),
         }
-        _log(
-            "refund_links", link_id, "INSERT",
-            {"id": link_id, "refund_transaction_id": refund_transaction_id, "expense_transaction_id": expense_transaction_id, "amount": round(amount, 2)},
-            connection=connection,
-        )
         _recalc_refund_total(expense_transaction_id, connection)
         return link
 
@@ -1041,6 +948,5 @@ def delete_refund_link(link_id: int) -> bool:
         if row is None:
             return False
         cursor = connection.execute("DELETE FROM refund_links WHERE id = ?", (link_id,))
-        _log("refund_links", link_id, "DELETE", connection=connection)
         _recalc_refund_total(row["expense_transaction_id"], connection)
         return cursor.rowcount > 0

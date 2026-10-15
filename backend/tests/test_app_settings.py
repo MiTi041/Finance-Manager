@@ -17,15 +17,10 @@ def test_default_false(test_db):
         assert app_settings.get_app_settings() == {"hide_pending_transactions": False}
 
 
-def test_persist_and_log(test_db):
-    with _patch_conn(test_db), patch(
-        "finance_server.api.app_settings.log_crud_event"
-    ) as mocked:
+def test_persist(test_db):
+    with _patch_conn(test_db):
         result = app_settings.update_app_settings({"hide_pending_transactions": True})
         assert result == {"hide_pending_transactions": True}
-        assert mocked.call_args.args[0] == "app_settings"
-        assert mocked.call_args.args[2] == "INSERT"
-        assert mocked.call_args.args[3]["value"] == "true"
         assert app_settings.get_app_settings() == {"hide_pending_transactions": True}
 
 

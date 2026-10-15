@@ -22,8 +22,7 @@ def _make_db() -> sqlite3.Connection:
 
 
 def _run(conn: sqlite3.Connection, fn):
-    with patch("finance_server.db.liquidity.get_connection", return_value=conn), \
-         patch("finance_server.db.liquidity.log_crud_event"):
+    with patch("finance_server.db.liquidity.get_connection", return_value=conn):
         return fn()
 
 

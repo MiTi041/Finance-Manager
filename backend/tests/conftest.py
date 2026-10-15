@@ -14,8 +14,7 @@ def _isolate_global_db(monkeypatch, tmp_path):
     """Redirect the global DB path so tests never write into the real prod DB.
 
     Code paths that call get_connection() from finance_server.core.database
-    (e.g. the sync logger's log_sync_op) otherwise hit the production
-    finance.db and leak test data into the prod system via sync ops.
+    otherwise hit the production finance.db and leak test data.
     """
     from finance_server.core import database
     from finance_server.core.config import settings

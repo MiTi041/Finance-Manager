@@ -46,8 +46,7 @@ def _insert_transaction(connection, account_iban, transaction_hash, entry_date):
 
 
 def _run(connection, callback):
-    with patch("finance_server.db.transactions.get_connection", return_value=connection), \
-         patch("finance_server.db.transactions._log"):
+    with patch("finance_server.db.transactions.get_connection", return_value=connection):
         return callback()
 
 

@@ -17,9 +17,7 @@ def _insert(conn, *, dummy_entry: int) -> int:
 
 
 def _run(conn, fn):
-    with patch("finance_server.db.transactions.get_connection", return_value=conn), patch(
-        "finance_server.db.transactions._log"
-    ):
+    with patch("finance_server.db.transactions.get_connection", return_value=conn):
         return fn()
 
 

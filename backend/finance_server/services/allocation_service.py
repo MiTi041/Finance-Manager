@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import math
 import re
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from typing import Any
 
 from fastapi import HTTPException
@@ -23,7 +23,6 @@ from finance_server.db.savings import (
     sender_filter,
 )
 from finance_server.db.settings import get_setting, set_setting, delete_setting, get_holiday_state
-from finance_server.services.sync_logger import log_crud_event
 
 
 BUCKET_TAGS: dict[str, str] = {
@@ -106,23 +105,12 @@ class AllocationService:
         if "bafoeg_enabled" in payload:
             was_enabled = get_setting("bafoeg_enabled") == "true"
             if was_enabled != payload["bafoeg_enabled"]:
-                previous = get_setting("bafoeg_enabled")
                 value = "true" if payload["bafoeg_enabled"] else "false"
                 set_setting("bafoeg_enabled", value)
                 db.set_bucket_active_by_type("bafoeg", payload["bafoeg_enabled"])
-                # ponytail: runs aren't synced, so dropping the current month's run
-                # just makes the next /status fetch recreate it with the new setting
+                # ponytail: dropping the current month's run just makes the next
+                # /status fetch recreate it with the new setting
                 db.delete_run(datetime.now().strftime("%Y-%m"))
-                log_crud_event(
-                    "app_settings",
-                    None,
-                    "INSERT" if previous is None else "UPDATE",
-                    {
-                        "key": "bafoeg_enabled",
-                        "value": value,
-                        "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-                    },
-                )
         if "holiday_state" in payload:
             state = payload["holiday_state"]
             if state not in BUNDESLAENDER:

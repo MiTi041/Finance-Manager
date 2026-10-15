@@ -6,7 +6,6 @@ import {
   Database,
   Fingerprint,
   PiggyBank,
-  RefreshCw,
   Tags,
   UserCheck,
   Bell,
@@ -27,7 +26,6 @@ import { BankAccessTab } from "./tabs/bank/bank-access-tab";
 import { ZahlungspartnerTab } from "./tabs/zahlungspartner/zahlungspartner-tab";
 import { RecipientAccountsTab } from "./tabs/recipient-accounts/recipient-accounts-tab";
 import { CategoriesTab } from "./tabs/categories/categories-tab";
-import { SyncTab } from "./tabs/sync-tab";
 import { NotificationsTab } from "./tabs/notifications-tab";
 import { ApiKeysTab } from "./tabs/api-keys-tab";
 import { AllocationSettingsTab } from "./tabs/allocation/allocation-settings-tab";
@@ -38,7 +36,6 @@ const SETTINGS_TAB_VALUES = [
   "recipients",
   "categories",
   "allocation",
-  "sync",
   "notifications",
   "keys",
   "assistant",
@@ -57,7 +54,6 @@ const tabs = [
   { value: "recipients" as const, label: "Empfängerkonten", icon: UserCheck },
   { value: "categories" as const, label: "Kategorien", icon: Tags },
   { value: "allocation" as const, label: "Allokation", icon: PiggyBank },
-  { value: "sync" as const, label: "Sync", icon: RefreshCw },
   { value: "notifications" as const, label: "Benachrichtigungen", icon: Bell },
   { value: "keys" as const, label: "API-Schlüssel", icon: KeyRound },
   { value: "assistant" as const, label: "KI", icon: Sparkles },
@@ -71,7 +67,6 @@ const tabComponents: Record<SettingsTabValue, () => React.ReactNode> = {
   recipients: () => <RecipientAccountsTab />,
   categories: () => <CategoriesTab />,
   allocation: () => <AllocationSettingsTab />,
-  sync: () => <SyncTab />,
   notifications: () => <NotificationsTab />,
   keys: () => <ApiKeysTab />,
   assistant: () => <AssistantTab />,

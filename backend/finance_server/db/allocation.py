@@ -45,11 +45,7 @@ def update_bucket(bucket_id: int, payload: dict[str, Any], set_null: list[str] |
             f"UPDATE allocation_buckets SET {set_clause} WHERE id = ?",
             values,
         )
-    result = get_bucket(bucket_id)
-    if result:
-        from finance_server.services.sync_logger import log_crud_event
-        log_crud_event("allocation_buckets", bucket_id, "UPDATE", result)
-    return result
+    return get_bucket(bucket_id)
 
 
 def get_bafoeg_config() -> dict[str, Any] | None:
@@ -83,12 +79,7 @@ def upsert_bafoeg_config(payload: dict[str, Any]) -> dict[str, Any]:
                 f"INSERT INTO allocation_bafoeg_config ({keys}) VALUES ({placeholders})",
                 list(payload.values()),
             )
-    result = get_bafoeg_config()
-    if result:
-        from finance_server.services.sync_logger import log_crud_event
-        op = "INSERT" if not existing else "UPDATE"
-        log_crud_event("allocation_bafoeg_config", result["id"], op, result)
-    return result
+    return get_bafoeg_config()
 
 
 def create_run(month: str, net_income: float, total_allocated: float) -> int:
@@ -183,12 +174,6 @@ def set_bucket_active_by_type(bucket_type: str, is_active: bool) -> None:
             "UPDATE allocation_buckets SET is_active = ?, updated_at = ? WHERE bucket_type = ?",
             (1 if is_active else 0, now, bucket_type),
         )
-        row = connection.execute(
-            "SELECT * FROM allocation_buckets WHERE bucket_type = ?", (bucket_type,)
-        ).fetchone()
-    if row:
-        from finance_server.services.sync_logger import log_crud_event
-        log_crud_event("allocation_buckets", row["id"], "UPDATE", dict(row))
 
 
 def get_active_buckets_sum_percentage() -> float:

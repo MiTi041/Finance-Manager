@@ -14,13 +14,6 @@ from finance_server.core.database import get_connection
 from .utils import normalize_text
 
 
-def _log(table_name: str, row_id: int | None, op_type: str, data: Any = None, connection=None) -> None:
-    from finance_server.services.sync_logger import log_crud_event
-    if data and "ibans" in data:
-        data = {k: v for k, v in data.items() if k != "ibans"}
-    log_crud_event(table_name, row_id, op_type, data, connection=connection)
-
-
 def _coerce_bool(value: Any, default: bool = True) -> int:
     if value is None:
         return 1 if default else 0
@@ -269,7 +262,6 @@ def create_zahlungspartner_record(payload: dict[str, Any]) -> dict[str, Any]:
             "ibans": [],
         }
 
-    _log("zahlungspartner", zahlungspartner_id, "INSERT", record)
     return record
 
 
@@ -358,7 +350,6 @@ def update_zahlungspartner_record(zahlungspartner_id: int, payload: dict[str, An
         )
         updated = get_zahlungspartner_record(zahlungspartner_id)
 
-    _log("zahlungspartner", zahlungspartner_id, "UPDATE", updated)
     return updated
 
 
@@ -371,11 +362,6 @@ def delete_zahlungspartner_record(zahlungspartner_id: int) -> bool:
         if owner is None:
             return False
 
-        iban_rows = connection.execute(
-            "SELECT iban FROM ibans WHERE f_zahlungspartner_id = ?",
-            (zahlungspartner_id,),
-        ).fetchall()
-
         connection.execute(
             "DELETE FROM ibans WHERE f_zahlungspartner_id = ?",
             (zahlungspartner_id,),
@@ -385,16 +371,6 @@ def delete_zahlungspartner_record(zahlungspartner_id: int) -> bool:
             (zahlungspartner_id,),
         )
 
-        for row in iban_rows:
-            _log(
-                "ibans",
-                row["iban"],
-                "DELETE",
-                {"iban": row["iban"], "f_zahlungspartner_id": zahlungspartner_id},
-                connection=connection,
-            )
-
-    _log("zahlungspartner", zahlungspartner_id, "DELETE")
     return True
 
 
@@ -574,7 +550,6 @@ def create_empfaengerkonto_record(payload: dict[str, Any]) -> dict[str, Any]:
             "local_logo_path": local_logo_path,
         }
 
-    _log("empfaengerkonten", empfaengerkonto_id, "INSERT", record)
     return record
 
 
@@ -650,23 +625,17 @@ def update_empfaengerkonto_record(
         if cursor.rowcount <= 0:
             return None
 
-    record = get_empfaengerkonto_record(empfaengerkonto_id)
-    _log("empfaengerkonten", empfaengerkonto_id, "UPDATE", record)
-    return record
+    return get_empfaengerkonto_record(empfaengerkonto_id)
 
 
 def delete_empfaengerkonto_record(empfaengerkonto_id: int) -> bool:
-    record = get_empfaengerkonto_record(empfaengerkonto_id)
     with get_connection() as connection:
         cursor = connection.execute(
             "DELETE FROM empfaengerkonten WHERE id = ?",
             (empfaengerkonto_id,),
         )
 
-    result = cursor.rowcount > 0
-    if result:
-        _log("empfaengerkonten", empfaengerkonto_id, "DELETE", record)
-    return result
+    return cursor.rowcount > 0
 
 
 def update_zahlungspartner_iban_mapping(iban: str, zahlungspartner_id: int) -> bool:
@@ -682,11 +651,6 @@ def update_zahlungspartner_iban_mapping(iban: str, zahlungspartner_id: int) -> b
         if owner is None:
             return False
 
-        existing = connection.execute(
-            "SELECT 1 FROM ibans WHERE iban = ?",
-            (normalized_iban,),
-        ).fetchone()
-
         connection.execute(
             """
             INSERT INTO ibans (iban, f_zahlungspartner_id)
@@ -695,15 +659,6 @@ def update_zahlungspartner_iban_mapping(iban: str, zahlungspartner_id: int) -> b
                 f_zahlungspartner_id = excluded.f_zahlungspartner_id
             """,
             (normalized_iban, zahlungspartner_id),
-        )
-
-        op_type = "UPDATE" if existing else "INSERT"
-        _log(
-            "ibans",
-            normalized_iban,
-            op_type,
-            {"iban": normalized_iban, "f_zahlungspartner_id": zahlungspartner_id},
-            connection=connection,
         )
         return True
 
